@@ -3,22 +3,19 @@ import json
 import os
 import tempfile
 from typing import Any, Generator
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
 from pydantic import FilePath
 import pytest
 import yaml
 
 from holmes.core.tools import (
-    Toolset,
-    ToolsetStatusEnum,
     ToolsetTag,
     ToolsetType,
     YAMLToolset,
 )
 from holmes.core.toolset_manager import ToolsetManager
 from holmes.plugins.toolsets import load_builtin_toolsets
-from tests.plugins.prompt.test_toolsets_instructions import MockToolset
 
 
 @pytest.fixture
@@ -89,7 +86,9 @@ def test_toolset_manager_loading_builtin_toolsets_only(toolset_manager: ToolsetM
 #     os.remove(tmpfile_path)
 
 
-def test_refresh_toolset_status_creates_file(mock_load_builtin_toolsets, toolset_manager):
+def test_refresh_toolset_status_creates_file(
+    mock_load_builtin_toolsets, toolset_manager
+):
     with tempfile.TemporaryDirectory() as tmpdir:
         cache_path = os.path.join(tmpdir, "toolsets_status.json")
         toolset_manager._toolset_status_location = cache_path
@@ -101,12 +100,15 @@ def test_refresh_toolset_status_creates_file(mock_load_builtin_toolsets, toolset
             assert data["toolsets"]["test"]["name"] == "test"
 
 
-
-def test_load_toolset_with_status_reads_cache(mock_load_builtin_toolsets, toolset_manager):
+def test_load_toolset_with_status_reads_cache(
+    mock_load_builtin_toolsets, toolset_manager
+):
     with tempfile.TemporaryDirectory() as tmpdir:
         cache_path = os.path.join(tmpdir, "toolsets_status.json")
         toolset_manager.toolset_status_location = cache_path
-        toolset_manager._save_toolset_status_to_cache(mock_load_builtin_toolsets.return_value)
+        toolset_manager._save_toolset_status_to_cache(
+            mock_load_builtin_toolsets.return_value
+        )
 
         result = toolset_manager.list_console_toolsets()
         assert result[0].name == "test"
