@@ -62,7 +62,7 @@ class ToolsetManager:
         self._custom_toolset_file_paths = custom_toolset_file_paths or []
         self._global_fast_model = global_fast_model
 
-        #  uses holmes containerCUSTOM_TOOLSET_LOCATION to load custom toolsets
+        #  uses holmes container CUSTOM_TOOLSET_LOCATION to load custom toolsets
         # TODO: add depection message and load from custom toolset directory if CUSTOM_TOOLSET_LOCATION is not set
         if os.path.isfile(CUSTOM_TOOLSET_LOCATION):
             self._custom_toolset_file_paths.append(FilePath(CUSTOM_TOOLSET_LOCATION))
@@ -209,7 +209,7 @@ class ToolsetManager:
     def _save_toolset_status_to_cache(self, toolsets: List[Toolset]) -> None:
         toolset_cache = ToolsetCache.from_toolsets(toolsets)
         with open(self._toolset_status_location, "w+") as f:
-            json.dump(toolset_cache, f, indent=2)
+            json.dump(toolset_cache.model_dump(), f, indent=2)
 
     def _list_all_toolsets(
         self,

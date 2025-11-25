@@ -1,11 +1,13 @@
 from pathlib import Path
 from typing import Any, Optional
+from unittest.mock import patch
 import pytest
 import yaml
 
 from holmes.config import Config
 from holmes.core.llm import LLM, TokenCountMetadata
-from holmes.core.tools import ToolInvokeContext
+from holmes.core.tools import ToolInvokeContext, ToolsetTag
+from tests.plugins.prompt.test_toolsets_instructions import MockToolset
 
 DEFAULT_ROBUSTA_MODEL = "Robusta/gpt-5-mini preview (minimal reasoning)"
 ROBUSTA_SONNET_4_MODEL = "Robusta/sonnet-4 preview"
@@ -45,6 +47,16 @@ def clear_all_caches():
         rc.fetch_holmes_info.cache_clear()
     except Exception:
         pass
+
+@pytest.fixture(autouse=False)
+def mock_load_builtin_toolsets():
+    with patch(
+        "holmes.core.toolset_manager.load_builtin_toolsets"
+    ) as mock_load_builtin_toolsets:
+        mock_load_builtin_toolsets.return_value = [
+            MockToolset(config={"name": "test", "tags": [ToolsetTag.CORE]})
+        ]
+        yield mock_load_builtin_toolsets
 
 
 @pytest.fixture(autouse=False)

@@ -18,6 +18,7 @@ from holmes.core.tools import (
 )
 from holmes.core.toolset_manager import ToolsetManager
 from holmes.plugins.toolsets import load_builtin_toolsets
+from tests.plugins.prompt.test_toolsets_instructions import MockToolset
 
 
 @pytest.fixture
@@ -88,85 +89,29 @@ def test_toolset_manager_loading_builtin_toolsets_only(toolset_manager: ToolsetM
 #     os.remove(tmpfile_path)
 
 
-@patch("holmes.core.toolset_manager.ToolsetManager._list_all_toolsets")
-def test_refresh_toolset_status_creates_file(mock_list_all_toolsets, toolset_manager):
-    toolset = MagicMock(spec=Toolset)
-    toolset.name = "test"
-    toolset.status = ToolsetStatusEnum.ENABLED
-    toolset.enabled = True
-    toolset.type = ToolsetType.BUILTIN
-    toolset.path = None
-    toolset.error = None
-    toolset.model_dump_json.return_value = json.dumps(
-        {
-            "name": "test",
-            "status": "ENABLED",
-            "enabled": True,
-            "type": "BUILTIN",
-            "path": None,
-            "error": None,
-        }
-    )
-    mock_list_all_toolsets.return_value = [toolset]
+def test_refresh_toolset_status_creates_file(mock_load_builtin_toolsets, toolset_manager):
     with tempfile.TemporaryDirectory() as tmpdir:
         cache_path = os.path.join(tmpdir, "toolsets_status.json")
         toolset_manager._toolset_status_location = cache_path
-        toolset_manager.refresh_toolset_status()
+        toolset_manager.list_console_toolsets(refresh_status=True)
         assert os.path.exists(cache_path)
         with open(cache_path) as f:
             data = json.load(f)
-            assert data[0]["name"] == "test"
+            print(data)
+            assert data["toolsets"]["test"]["name"] == "test"
 
 
-@patch("holmes.core.toolset_manager.ToolsetManager._list_all_toolsets")
-def test_load_toolset_with_status_reads_cache(mock_list_all_toolsets, toolset_manager):
-    toolset = MagicMock(spec=Toolset)
-    toolset.name = "test"
-    toolset.tags = [ToolsetTag.CORE]
-    toolset.enabled = True
-    toolset.status = ToolsetStatusEnum.ENABLED
-    toolset.type = ToolsetType.BUILTIN
-    toolset.path = None
-    toolset.error = None
-    mock_list_all_toolsets.return_value = [toolset]
+
+def test_load_toolset_with_status_reads_cache(mock_load_builtin_toolsets, toolset_manager):
     with tempfile.TemporaryDirectory() as tmpdir:
         cache_path = os.path.join(tmpdir, "toolsets_status.json")
-        cache_data = [
-            {
-                "name": "test",
-                "status": "enabled",
-                "enabled": True,
-                "type": "built-in",
-                "path": None,
-                "error": None,
-            }
-        ]
-        with open(cache_path, "w") as f:
-            json.dump(cache_data, f)
         toolset_manager.toolset_status_location = cache_path
-        result = toolset_manager.load_toolset_with_status()
+        toolset_manager._save_toolset_status_to_cache(mock_load_builtin_toolsets.return_value)
+
+        result = toolset_manager.list_console_toolsets()
         assert result[0].name == "test"
         assert result[0].enabled is True
-
-
-@patch("holmes.core.toolset_manager.ToolsetManager.load_toolset_with_status")
-def test_list_console_toolsets(mock_load_toolset_with_status, toolset_manager):
-    toolset = MagicMock(spec=Toolset)
-    toolset.tags = [ToolsetTag.CORE, ToolsetTag.CLI]
-    toolset.enabled = True
-    mock_load_toolset_with_status.return_value = [toolset]
-    result = toolset_manager.list_console_toolsets()
-    assert toolset in result
-
-
-@patch("holmes.core.toolset_manager.ToolsetManager._list_all_toolsets")
-def test_list_server_toolsets(mock_list_all_toolsets, toolset_manager):
-    toolset = MagicMock(spec=Toolset)
-    toolset.tags = [ToolsetTag.CORE, ToolsetTag.CLUSTER]
-    toolset.enabled = True
-    mock_list_all_toolsets.return_value = [toolset]
-    result = toolset_manager.list_server_toolsets()
-    assert toolset in result
+        assert result[0].is_loaded_from_cache is True
 
 
 # class TestToolsetManagerMCPServers:
@@ -220,15 +165,15 @@ def test_mcp_servers_from_config(toolset_manager):
         custom_toolset_file_paths=None,
         custom_toolsets_from_cli=None,
     )
-    assert len(toolset_manager.toolsets_settings) == 1
-    assert "mcp1" in toolset_manager.toolsets_settings
+    assert len(toolset_manager._toolsets_settings) == 1
+    assert "mcp1" in toolset_manager._toolsets_settings
     assert toolset_manager.toolsets_settings["mcp1"]["type"] == ToolsetType.MCP.value
 
 
 # Tests for transformer config merging functionality
 
 
-def test_inject_fast_model_with_existing_transformers():
+def test_inject_fast_model_with_existing_transformers(mock_load_builtin_toolsets):
     """Test that global fast model is injected into existing transformer configs."""
     from holmes.core.transformers import Transformer
 
@@ -246,9 +191,9 @@ def test_inject_fast_model_with_existing_transformers():
             )
         ],
     )
-
+    mock_load_builtin_toolsets.return_value = [toolset]
     manager = ToolsetManager(global_fast_model=global_fast_model)
-    manager._inject_fast_model_into_transformers([toolset])
+    manager._load_toolsets_definitions()
 
     # Verify injection occurred
     assert toolset.transformers is not None
@@ -260,7 +205,7 @@ def test_inject_fast_model_with_existing_transformers():
     assert config_dict["llm_summarize"]["prompt"] == "Custom"  # Original
 
 
-def test_no_injection_when_no_transformers():
+def test_no_injection_when_no_transformers(mock_load_builtin_toolsets):
     """Test that no injection occurs when toolset has no transformers (new behavior)."""
 
     global_fast_model = "gpt-4o-mini"
@@ -270,8 +215,9 @@ def test_no_injection_when_no_transformers():
         name="test_toolset", tags=[ToolsetTag.CORE], description="Test toolset"
     )
 
+    mock_load_builtin_toolsets.return_value = [toolset]
     manager = ToolsetManager(global_fast_model=global_fast_model)
-    manager._inject_fast_model_into_transformers([toolset])
+    manager._load_toolsets_definitions()
 
     # No injection should occur when toolset has no transformers
     assert toolset.transformers is None
@@ -292,14 +238,14 @@ def test_no_injection_when_no_global_fast_model():
     original_transformers = toolset.transformers
 
     manager = ToolsetManager()  # No global fast model
-    manager._inject_fast_model_into_transformers([toolset])
+    manager._inject_fast_model_into_transformers()
 
     # Toolset configs should remain unchanged (no injection)
     assert toolset.transformers == original_transformers
     assert "global_fast_model" not in toolset.transformers[0].config
 
 
-def test_injection_only_affects_llm_summarize_transformers():
+def test_injection_only_affects_llm_summarize_transformers(mock_load_builtin_toolsets):
     """Test that injection only affects llm_summarize transformers, not others."""
     from holmes.core.transformers import Transformer
 
@@ -314,13 +260,14 @@ def test_injection_only_affects_llm_summarize_transformers():
             Transformer(name="custom_transformer", config={"param": "value"}),
         ],
     )
+    mock_load_builtin_toolsets.return_value = [toolset]
 
     manager = ToolsetManager(global_fast_model=global_fast_model)
-    manager._inject_fast_model_into_transformers([toolset])
+    manager._load_toolsets_definitions()
 
     # Check that only llm_summarize got injection
     config_dict = {t.name: t.config for t in toolset.transformers}
-
+    print(config_dict)
     assert "llm_summarize" in config_dict
     assert "custom_transformer" in config_dict
     assert config_dict["llm_summarize"]["global_fast_model"] == "gpt-4o-mini"

@@ -227,7 +227,7 @@ class Tool(ABC, BaseModel):
         else:
             logger.debug(f"Tool '{self.name}' has no transformers")
             self._transformer_instances = None
-        self.transformers = valid_transformers
+        self.transformers = valid_transformers if valid_transformers else None
 
     def get_openai_format(self, target_model: str):
         return format_tool_to_open_ai_standard(
@@ -869,7 +869,6 @@ class ToolsetCacheEntry(BaseModel):
 
 class ToolsetCache(BaseModel):
     toolsets: dict[str, ToolsetCacheEntry]
-    created_at: datetime = Field(default_factory=datetime.now)
 
     @classmethod
     def from_toolsets(self, toolsets: List[Toolset]) -> "ToolsetCache":
