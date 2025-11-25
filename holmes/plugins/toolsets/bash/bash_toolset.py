@@ -219,7 +219,6 @@ class BashExecutorToolset(BaseBashExecutorToolset):
     def __init__(self):
         super().__init__(
             name="bash",
-            enabled=False,
             description=(
                 "Toolset for executing arbitrary bash commands on the system where Holmes is running. "
                 "WARNING: This toolset provides powerful capabilities and should be "
@@ -234,13 +233,9 @@ class BashExecutorToolset(BaseBashExecutorToolset):
             is_default=False,
         )
 
-        self._reload_llm_instructions()
-
-    def _reload_llm_instructions(self):
-        template_file_path = os.path.abspath(
-            os.path.join(os.path.dirname(__file__), "bash_instructions.jinja2")
+        self._load_llm_instructions_from_file(
+            os.path.dirname(__file__), "bash_instructions.jinja2"
         )
-        self._load_llm_instructions(jinja_template=f"file://{template_file_path}")
 
     def prerequisites_callable(self, config: dict[str, Any]) -> tuple[bool, str]:
         if config:
