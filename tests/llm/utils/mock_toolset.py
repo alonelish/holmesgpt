@@ -10,6 +10,8 @@ import urllib
 import threading
 from pydantic import BaseModel
 import pytest
+
+from tests.llm.utils.env_vars import should_replace_kubectl_tools_with_bash
 from tests.llm.utils.mock_dal import load_mock_dal
 from pathlib import Path
 
@@ -669,6 +671,21 @@ class MockToolsetManager:
             # Merge: custom definitions override defaults for same toolset names
             # Add default definitions for toolsets not in custom
             custom_names = {d.name for d in custom_definitions}
+
+            if should_replace_kubectl_tools_with_bash():
+                for definition in custom_definitions:
+                    if (
+                        definition.name.startswith("kubernetes/")
+                        and not definition.enabled
+                    ):
+                        raise RuntimeError(
+                            f"Tool '{definition.name}' is not enabled but REPLACE_KUBECTL_TOOLS_WITH_BASH is on"
+                        )
+                    elif definition.name.startswith("bash/"):
+                        raise RuntimeError(
+                            "REPLACE_KUBECTL_TOOLS_WITH_BASH is on but bash toolset is explicitly defined in the custom definitions"
+                        )
+
             merged_definitions = list(custom_definitions)
             for default_def in default_definitions:
                 if default_def.name not in custom_names:
@@ -710,6 +727,15 @@ class MockToolsetManager:
             generate_mocks=self.mock_generation_config.generate_mocks,
             initialize_base=False,
         )
+
+        if (
+            should_replace_kubectl_tools_with_bash()
+            and sum(ts.name == "bash" for ts in builtin_toolsets) != 1
+        ):
+            raise RuntimeError(
+                "REPLACE_KUBECTL_TOOLS_WITH_BASH is on but 'bash' toolset does not exist."
+            )
+
         for toolset in builtin_toolsets:
             # Replace RunbookToolset with one that has test folder search path
             if toolset.name == "runbook":
@@ -768,6 +794,12 @@ if [ "{{ kind }}" = "secret" ] || [ "{{ kind }}" = "secrets" ]; then echo "Not a
                 # toolsets.yaml exists (custom_definitions is non-empty) but this toolset isn't explicitly listed
                 # Disable it to ensure only explicitly enabled toolsets are loaded when toolsets.yaml is present
                 toolset.enabled = False
+
+            if should_replace_kubectl_tools_with_bash():
+                if toolset.name.startswith("kubernetes/"):
+                    toolset.enabled = False
+                elif toolset.name == "bash":
+                    toolset.enabled = True
 
             # Add all toolsets to configured list
             configured.append(toolset)

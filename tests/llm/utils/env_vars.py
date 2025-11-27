@@ -19,3 +19,19 @@ def is_run_live_enabled() -> bool:
         "no",
         "n",
     )
+
+
+def should_replace_kubectl_tools_with_bash() -> bool:
+    """
+    Check if REPLACE_KUBECTL_TOOLS_WITH_BASH environment variable is set.
+
+    When enabled, this replaces kubernetes toolset tools with bash commands
+    for testing purposes.
+
+    Returns:
+        bool: True if REPLACE_KUBECTL_TOOLS_WITH_BASH is set to a true-like value.
+    """
+    # Default to "false" if not set
+    return os.environ.get(
+        "REPLACE_KUBECTL_TOOLS_WITH_BASH", "false"
+    ).strip().lower() in ("true", "1", "t", "yes", "y")
