@@ -97,6 +97,15 @@ mcpAddons:
       readOnlyMode: true   # Set to false to allow write operations (use with caution)
       namespace: ""        # Kubernetes namespace (defaults to release namespace if empty)
 
+    # AWS credentials configuration for profile support
+    # Use this when you need multiple AWS profiles
+    # Note: If using IRSA, credentials are not needed unless you need profile support
+    credentials:
+      # Secret containing AWS credentials file (~/.aws/credentials format)
+      # Leave empty to use IRSA only (no profile support)
+      secretName: ""        # e.g., "aws-mcp-credentials"
+      secretKey: "credentials"  # Key in the secret containing the credentials file content
+
     # Network policy to restrict access to MCP server
     networkPolicy:
       enabled: true  # Enable network isolation (recommended)

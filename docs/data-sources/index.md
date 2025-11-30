@@ -18,4 +18,8 @@ HolmesGPT connects to your monitoring and observability tools to provide compreh
 
     Connect to Model Context Protocol servers for extended capabilities.
 
+-   **[Built-in MCP Servers](builtin-mcp-servers/index.md)**
+
+    Pre-configured MCP servers that can be deployed alongside HolmesGPT using the Helm chart.
+
 </div>

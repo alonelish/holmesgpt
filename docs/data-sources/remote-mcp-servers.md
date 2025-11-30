@@ -2,6 +2,9 @@
 
 HolmesGPT can integrate with MCP (Model Context Protocol) servers to access external data sources and tools in real time. This guide provides step-by-step instructions for configuring HolmesGPT to connect with MCP servers.
 
+!!! tip "Built-in MCP Servers"
+    HolmesGPT includes [built-in MCP servers](builtin-mcp-servers/index.md) that can be deployed alongside HolmesGPT using the Helm chart. These servers are pre-configured and automatically integrated when enabled. For example, the [AWS MCP Server](builtin-mcp-servers/aws.md) provides direct access to AWS APIs.
+
 ## Transport Modes
 
 HolmesGPT supports three MCP transport modes:

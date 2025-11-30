@@ -93,6 +93,29 @@ aws cloudtrail lookup-events --lookup-attributes AttributeKey=EventName,Attribut
 
 Remember: Your goal is to gather evidence from AWS, not to instruct the user to gather it. Use the MCP server proactively to build a complete picture of what happened.
 
+## AWS Profile Support
+
+{{- if .Values.mcpAddons.aws.credentials.secretName }}
+**This MCP server supports multiple AWS profiles.** When you need to access resources in different AWS accounts or use assume role, specify the profile using the `--profile` flag.
+
+### Using Profiles:
+- To use a specific profile, add `--profile PROFILE_NAME` to your AWS CLI commands
+- Example: `aws ec2 describe-instances --profile production --instance-ids i-1234567890abcdef0`
+- Example: `aws logs filter-log-events --profile staging --log-group-name /aws/lambda/my-function --start-time $(date -d '1 hour ago' +%s)000`
+
+### When to Use Profiles:
+- **Cross-account access**: When investigating resources in multiple AWS accounts
+- **Assume role**: When you need to assume a role defined in the AWS config file
+- **Different regions/accounts**: When resources span multiple AWS accounts or require different credentials
+
+### Profile Best Practices:
+- Always specify the profile when the user mentions a specific account or environment (e.g., "production account", "staging environment")
+- If unsure which profile to use, start with the default profile (no --profile flag) or ask the user
+- When investigating cross-account issues, use the appropriate profile for each account
+{{- else }}
+**Note**: This MCP server is configured with IRSA (IAM Roles for Service Accounts) and does not support AWS profiles. All AWS commands will use the service account's IAM role credentials.
+{{- end }}
+
 Some of the available operations include: (there are many other operations, everything included in the aws cli)
 - CloudWatch: Query logs, metrics, alarms, and insights
 - EC2: Describe instances, security groups, VPCs, networking

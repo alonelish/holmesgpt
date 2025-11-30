@@ -75,6 +75,12 @@ spec:
       affinity:
         {{- toYaml .Values.mcpAddons.aws.affinity | nindent 8 }}
       {{- end }}
+      {{- if .Values.mcpAddons.aws.credentials.secretName }}
+      volumes:
+      - name: aws-credentials
+        secret:
+          secretName: {{ .Values.mcpAddons.aws.credentials.secretName }}
+      {{- end }}
       containers:
       - name: aws-mcp
         image: "{{ .Values.mcpAddons.aws.registry }}/{{ .Values.mcpAddons.aws.image }}"
@@ -99,6 +105,15 @@ spec:
             configMapKeyRef:
               name: {{ .Release.Name }}-aws-mcp-config
               key: READ_OPERATIONS_ONLY
+        {{- if .Values.mcpAddons.aws.credentials.secretName }}
+        - name: AWS_SHARED_CREDENTIALS_FILE
+          value: "/root/.aws/credentials"
+        volumeMounts:
+        - name: aws-credentials
+          mountPath: /root/.aws/credentials
+          subPath: {{ .Values.mcpAddons.aws.credentials.secretKey }}
+          readOnly: true
+        {{- end }}
         resources:
           {{- toYaml .Values.mcpAddons.aws.resources | nindent 10 }}
         readinessProbe:

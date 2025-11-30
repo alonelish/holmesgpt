@@ -3,4 +3,5 @@ nav:
   - Built-in Toolsets: builtin-toolsets
   - Custom Toolsets: custom-toolsets.md
   - MCP Servers: remote-mcp-servers.md
+  - Built-in MCP Servers: builtin-mcp-servers
   - Adding Permissions for Additional Resources: permissions.md
