@@ -4,6 +4,10 @@ Define the LLM instructions for AWS MCP
 {{- define "holmes.awsMcp.llmInstructions" -}}
 {{- if .Values.mcpAddons.aws.llmInstructions -}}
 {{ .Values.mcpAddons.aws.llmInstructions }}
+{{- if .Values.mcpAddons.aws.additionalInstructions }}
+
+{{ .Values.mcpAddons.aws.additionalInstructions }}
+{{- end }}
 {{- else -}}
 IMPORTANT: When investigating issues related to AWS resources or Kubernetes workloads running on AWS, you MUST actively use this MCP server to gather data rather than providing manual instructions to the user.
 
@@ -263,6 +267,10 @@ Pagination Strategy:
 2. Process each page before fetching next
 3. Stop when you find what you need
 4. If investigating trends, sample pages instead of fetching all
+
+{{- if .Values.mcpAddons.aws.additionalInstructions }}
+{{ .Values.mcpAddons.aws.additionalInstructions }}
+{{- end }}
 
 {{- end -}}
 {{- end -}}

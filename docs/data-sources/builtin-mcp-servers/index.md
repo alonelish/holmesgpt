@@ -24,4 +24,3 @@ When enabled, the Helm chart automatically:
 - Sets up network policies for security (if enabled)
 
 The MCP server appears as a toolset in HolmesGPT, allowing it to use the server's capabilities during investigations.
-

@@ -27,7 +27,11 @@ The MCP server runs in a separate pod and communicates with HolmesGPT via Kubern
 
 ## Configuration
 
-The AWS MCP server is configured through the `mcpAddons.aws` section in your Helm values file. **No additional Holmes configuration is needed** - the Helm chart automatically configures HolmesGPT to connect to the MCP server when enabled.
+The AWS MCP server is configured through the `mcpAddons.aws` section in your Helm values file. **No additional Holmes configuration is needed** - the Helm chart automatically:
+
+- Creates the `mcp_servers` configuration in the Holmes ConfigMap
+- Registers the AWS MCP server as `aws_api` toolset
+- Configures HolmesGPT to connect to the MCP server at `http://<release-name>-aws-mcp-server.<namespace>.svc.cluster.local:8000`
 
 !!! tip "IRSA vs Profiles"
     Use IRSA for single AWS account access on EKS (credential-free). Use Profiles for multiple accounts or when IRSA isn't available.
@@ -41,36 +45,9 @@ The AWS MCP server is configured through the `mcpAddons.aws` section in your Hel
         mcpAddons:
           aws:
             enabled: true
-            
-            # Service account configuration for IRSA
             serviceAccount:
-              create: true
-              name: "aws-api-mcp-sa"
               annotations:
                 eks.amazonaws.com/role-arn: "arn:aws:iam::<account-id>:role/aws-mcp-server-role"
-            
-            # Container image configuration
-            image: "aws-api-mcp-server:1.0.1"
-            registry: "us-central1-docker.pkg.dev/genuine-flight-317411/devel"
-            
-            # AWS configuration
-            config:
-              region: "us-east-1"
-              readOnlyMode: true
-              namespace: ""  # Defaults to release namespace if empty
-            
-            # Resource limits
-            resources:
-              requests:
-                memory: "512Mi"
-                cpu: "250m"
-              limits:
-                memory: "1Gi"
-                cpu: "500m"
-            
-            # Network policy (recommended)
-            networkPolicy:
-              enabled: true
         ```
 
     === "Config File"
@@ -96,25 +73,6 @@ The AWS MCP server is configured through the `mcpAddons.aws` section in your Hel
         aws_secret_access_key = je7MtGbClwBF/2Zp9Utk/h3yCo8nvbEXAMPLEKEY
         ```
 
-        **2. Create config secret (optional, for assume role):**
-
-        ```bash
-        kubectl create secret generic aws-mcp-config-file \
-          --from-file=config=~/.aws/config \
-          -n <namespace>
-        ```
-
-        Example config file (`~/.aws/config`):
-        ```ini
-        [default]
-        region = us-east-1
-
-        [profile production]
-        role_arn = arn:aws:iam::123456789012:role/ProductionRole
-        source_profile = default
-        region = us-west-2
-        ```
-
         **Then configure Helm values:**
 
         ```yaml
@@ -122,34 +80,16 @@ The AWS MCP server is configured through the `mcpAddons.aws` section in your Hel
         mcpAddons:
           aws:
             enabled: true
-            
-            # Service account (optional when using profiles)
-            serviceAccount:
-              create: false  # Set to false if not using IRSA
-            
-            image: "aws-api-mcp-server:1.0.1"
-            registry: "us-central1-docker.pkg.dev/genuine-flight-317411/devel"
-            
-            config:
-              region: "us-east-1"
-              readOnlyMode: true
-              namespace: ""
-            
-            # AWS credentials for profile support
             credentials:
-              secretName: "aws-mcp-credentials"  # Kubernetes secret name
-              secretKey: "credentials"  # Key in secret containing credentials file
-            
-            resources:
-              requests:
-                memory: "512Mi"
-                cpu: "250m"
-              limits:
-                memory: "1Gi"
-                cpu: "500m"
-            
-            networkPolicy:
-              enabled: true
+              secretName: "aws-mcp-credentials"
+              secretKey: "credentials"
+            # Optional: Add profile-specific instructions for the LLM
+            # additionalInstructions: |
+            #   ## Profile Usage Guidelines
+            #   - Use --profile production for production account resources
+            #   - Use --profile staging for staging environment queries
+            #   - Use --profile dev for development resources
+            #   - Default profile should be used for shared services
         ```
 
 === "Robusta Helm Chart"
@@ -162,36 +102,9 @@ The AWS MCP server is configured through the `mcpAddons.aws` section in your Hel
           mcpAddons:
             aws:
               enabled: true
-              
-              # Service account configuration for IRSA
               serviceAccount:
-                create: true
-                name: "aws-api-mcp-sa"
                 annotations:
                   eks.amazonaws.com/role-arn: "arn:aws:iam::<account-id>:role/aws-mcp-server-role"
-              
-              # Container image configuration
-              image: "aws-api-mcp-server:1.0.1"
-              registry: "us-central1-docker.pkg.dev/genuine-flight-317411/devel"
-              
-              # AWS configuration
-              config:
-                region: "us-east-1"
-                readOnlyMode: true
-                namespace: ""  # Defaults to release namespace if empty
-              
-              # Resource limits
-              resources:
-                requests:
-                  memory: "512Mi"
-                  cpu: "250m"
-                limits:
-                  memory: "1Gi"
-                  cpu: "500m"
-              
-              # Network policy (recommended)
-              networkPolicy:
-                enabled: true
         ```
 
     === "Config File"
@@ -223,34 +136,16 @@ The AWS MCP server is configured through the `mcpAddons.aws` section in your Hel
           mcpAddons:
             aws:
               enabled: true
-              
-              # Service account (optional when using profiles)
-              serviceAccount:
-                create: false  # Set to false if not using IRSA
-              
-              image: "aws-api-mcp-server:1.0.1"
-              registry: "us-central1-docker.pkg.dev/genuine-flight-317411/devel"
-              
-              config:
-                region: "us-east-1"
-                readOnlyMode: true
-                namespace: ""
-              
-              # AWS credentials for profile support
               credentials:
-                secretName: "aws-mcp-credentials"  # Kubernetes secret name
-                secretKey: "credentials"  # Key in secret containing credentials file
-              
-              resources:
-                requests:
-                  memory: "512Mi"
-                  cpu: "250m"
-                limits:
-                  memory: "1Gi"
-                  cpu: "500m"
-              
-              networkPolicy:
-                enabled: true
+                secretName: "aws-mcp-credentials"
+                secretKey: "credentials"
+              # Optional: Add profile-specific instructions for the LLM
+              # additionalInstructions: |
+              #   ## Profile Usage Guidelines
+              #   - Use --profile production for production account resources
+              #   - Use --profile staging for staging environment queries
+              #   - Use --profile dev for development resources
+              #   - Default profile should be used for shared services
         ```
 
 ## Configuration Parameters
@@ -275,7 +170,8 @@ All available configuration parameters under `mcpAddons.aws` (or `holmes.mcpAddo
 | `resources.limits.memory` | string | `"1Gi"` | Memory limit |
 | `resources.limits.cpu` | string | `"500m"` | CPU limit |
 | `networkPolicy.enabled` | boolean | `true` | Enable network policy to restrict access to Holmes pods only |
-| `llmInstructions` | string | `""` | Custom LLM instructions (empty uses defaults) |
+| `llmInstructions` | string | `""` | Custom LLM instructions (empty uses defaults, completely overrides if set) |
+| `additionalInstructions` | string | `""` | Additional LLM instructions appended to default instructions (useful for profile-specific or custom guidelines) |
 | `nodeSelector` | object | `{}` | Node selector for pod scheduling |
 | `tolerations` | array | `[]` | Tolerations for pod scheduling |
 | `affinity` | object | `{}` | Affinity rules for pod scheduling |
@@ -328,4 +224,3 @@ kubectl get svc -l app=holmes-aws-mcp
 # View logs
 kubectl logs -l app=holmes-aws-mcp --tail=50
 ```
-

@@ -114,6 +114,11 @@ mcpAddons:
     # Leave empty to use default comprehensive instructions
     # Set to override the default investigation patterns and guidelines
     llmInstructions: ""
+    
+    # Additional LLM instructions (optional)
+    # Appended to default instructions (or llmInstructions if set)
+    # Useful for adding profile-specific instructions or custom guidelines
+    additionalInstructions: ""
 
     nodeSelector: {}
     tolerations: []
