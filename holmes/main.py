@@ -29,7 +29,7 @@ from holmes.config import (
     SourceFactory,
     SupportedTicketSources,
 )
-from holmes.core.prompt import build_initial_ask_messages
+from holmes.core.prompt import build_initial_ask_messages, generate_user_prompt
 from holmes.core.resource_instruction import ResourceInstructionDocument
 from holmes.core.tools import pretty_print_toolset_status
 from holmes.core.tracing import SpanType, TracingFactory
@@ -669,7 +669,8 @@ def ticket(
         + f" for issue '{issue_to_investigate.name}' with description:'{issue_to_investigate.description}'"
     )
 
-    result = ai.prompt_call(system_prompt, prompt, post_processing_prompt)
+    ticket_user_prompt = generate_user_prompt(prompt, context={})
+    result = ai.prompt_call(system_prompt, ticket_user_prompt, post_processing_prompt)
 
     console.print(Rule())
     console.print(
@@ -690,14 +691,14 @@ def github(
     ),
     github_owner: Optional[str] = typer.Option(
         None,
-        help="The GitHub repository Owner, eg: if the repository url is https://github.com/robusta-dev/holmesgpt, the owner is robusta-dev",
+        help="The GitHub repository Owner, eg: if the repository url is https://github.com/HolmesGPT/holmesgpt, the owner is HolmesGPT",
     ),
     github_pat: str = typer.Option(
         None,
     ),
     github_repository: Optional[str] = typer.Option(
         None,
-        help="The GitHub repository name, eg: if the repository url is https://github.com/robusta-dev/holmesgpt, the repository name is holmesgpt",
+        help="The GitHub repository name, eg: if the repository url is https://github.com/HolmesGPT/holmesgpt, the repository name is holmesgpt",
     ),
     update: Optional[bool] = typer.Option(False, help="Update GitHub with AI results"),
     github_query: Optional[str] = typer.Option(
