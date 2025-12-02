@@ -11,7 +11,7 @@ import threading
 from pydantic import BaseModel
 import pytest
 
-from tests.llm.utils.env_vars import should_replace_kubectl_tools_with_bash
+from tests.llm.utils.env_vars import replace_kubectl_tools_with_bash
 from tests.llm.utils.mock_dal import load_mock_dal
 from pathlib import Path
 
@@ -586,12 +586,14 @@ class MockToolsetManager:
         mock_policy: str = "inherit",
         mock_overrides: Optional[Dict[str, str]] = None,
         allow_toolset_failures: bool = False,
+        model: Optional[str] = None,
     ):
         self.test_case_folder = test_case_folder
         self.request = request
         self.mock_overrides = mock_overrides or {}
         self.mock_generation_config = mock_generation_config
         self.allow_toolset_failures = allow_toolset_failures
+        self.model = model
 
         # Coerce mock_policy string to MockPolicy enum, falling back to INHERIT for unknown values
         if isinstance(mock_policy, str):
@@ -628,6 +630,9 @@ class MockToolsetManager:
 
         # Load and configure toolsets
         self._initialize_toolsets()
+
+    def _should_replace_kubectl_toolset_with_bash(self):
+        return replace_kubectl_tools_with_bash() or "replace-kubectl-bash" in self.model
 
     def _get_toolset_mode(self, toolset_name: str) -> MockMode:
         """Get the mock mode for a specific toolset, considering overrides."""
@@ -672,7 +677,7 @@ class MockToolsetManager:
             # Add default definitions for toolsets not in custom
             custom_names = {d.name for d in custom_definitions}
 
-            if should_replace_kubectl_tools_with_bash():
+            if self._should_replace_kubectl_toolset_with_bash():
                 for definition in custom_definitions:
                     if (
                         definition.name.startswith("kubernetes/")
@@ -729,7 +734,7 @@ class MockToolsetManager:
         )
 
         if (
-            should_replace_kubectl_tools_with_bash()
+            self._should_replace_kubectl_toolset_with_bash()
             and sum(ts.name == "bash" for ts in builtin_toolsets) != 1
         ):
             raise RuntimeError(
@@ -795,7 +800,7 @@ if [ "{{ kind }}" = "secret" ] || [ "{{ kind }}" = "secrets" ]; then echo "Not a
                 # Disable it to ensure only explicitly enabled toolsets are loaded when toolsets.yaml is present
                 toolset.enabled = False
 
-            if should_replace_kubectl_tools_with_bash():
+            if self._should_replace_kubectl_toolset_with_bash():
                 if toolset.name.startswith("kubernetes/"):
                     toolset.enabled = False
                 elif toolset.name == "bash":

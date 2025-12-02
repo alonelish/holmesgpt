@@ -183,6 +183,7 @@ def ask_holmes(
             mock_policy=test_case.mock_policy,
             mock_overrides=test_case.mock_overrides,
             allow_toolset_failures=getattr(test_case, "allow_toolset_failures", False),
+            model=model,
         )
 
     tool_executor = ToolExecutor(toolset_manager.toolsets)

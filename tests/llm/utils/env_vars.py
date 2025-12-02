@@ -21,7 +21,7 @@ def is_run_live_enabled() -> bool:
     )
 
 
-def should_replace_kubectl_tools_with_bash() -> bool:
+def replace_kubectl_tools_with_bash() -> bool:
     """
     Check if REPLACE_KUBECTL_TOOLS_WITH_BASH environment variable is set.
 
