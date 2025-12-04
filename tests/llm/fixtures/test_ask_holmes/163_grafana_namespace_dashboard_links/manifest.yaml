@@ -47,4 +47,3 @@ spec:
     secret:
       secretName: payment-service-script
       defaultMode: 0755
-

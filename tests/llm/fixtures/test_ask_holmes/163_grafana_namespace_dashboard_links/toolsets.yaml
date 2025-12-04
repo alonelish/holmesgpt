@@ -8,4 +8,5 @@ toolsets:
       url: "http://localhost:11630"
   kubernetes/logs:
     enabled: true
-
+  runbook:
+    enabled: false

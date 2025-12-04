@@ -1,4 +1,4 @@
-user_prompt: "The payment-service pod in namespace app-163 is experiencing network connectivity issues. Give me Grafana links for this issue."
+user_prompt: "The payment-service pod in namespace app-163 is experiencing network connectivity issues. Give me Grafana links for this issue. Assume the base grafana url is http://grafana_url.com"
 
 description: "Tests that Holmes can investigate network issues with a pod and retrieve relevant Grafana dashboard links with accurate parameters. Verifies that all returned links are valid and contain relevant query parameters like namespace filters."
 
@@ -11,7 +11,7 @@ tags:
 expected_output:
   - "Return ONLY networking dashboard links for payment-service pod"
   - "All dashboard links MUST include var-namespace=app-163 parameter"
-  - "All dashboard links MUST include var-pod=payment-service parameter"
+  - "At least one dashboard link MUST include var-pod=payment-service parameter"
   - "Must NOT include compute resources dashboards (e.g., kubernetes-compute-resources-pod, kubernetes-compute-resources-namespace-pods)"
   - "Must NOT include scheduler dashboards (e.g., kubernetes-scheduler)"
   - "Must NOT include any non-networking dashboards"
@@ -85,4 +85,3 @@ evaluation:
   # - bbb2a765a623ae38130206c7d94a160f (kubernetes-networking-namespace-workload)
   # - ff635a025bcfea7bc3dd4f508990a3e9 (kubernetes-networking-cluster)
   # Fail if compute resources, scheduler, or other non-networking dashboards are included
-

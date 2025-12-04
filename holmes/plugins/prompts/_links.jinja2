@@ -1,12 +1,20 @@
 # Guidelines on adding links
 
-Links MUST go to user-visible pages that a user can open in the browser (and see something meaningful)
+Links MUST go to user-visible pages (not raw HTTP APIs unless there's no better option and users can open them to see data).
 
-Do NOT link to a raw HTTP API that holmes used when users can't open that page in the URL and see something meaningful
+## CRITICAL: Links MUST be relevant and properly scoped
 
-You MAY link to a raw API if all the following are true:
-- there is no better url
-- all the tool parameters are GET parameters and a user is actually capable of opening the url in their browser and seeing the data from the tool (even in ugly text/json format)
+Links MUST match BOTH:
+1. **Investigation topic**: Network issues → network dashboards, CPU issues → CPU dashboards, NOT mismatched topics
+2. **Issue level**: Pod issues → pod-level dashboards, namespace issues → namespace-level, NOT wrong scope
 
-If there is no external link that satisfies these requirements, don't generate a link!
+## CRITICAL: Links MUST include all relevant query parameters
 
+Include ALL relevant query parameters (namespace, pod, service, cluster, time range, etc.) in the URL. For Grafana, include all variables (var-namespace, var-pod, etc.). DO NOT generate links without parameters and tell users to "filter by X".
+
+**CORRECT:** `http://grafana_url.com/d/abc123/pod-network?orgId=1&var-namespace=app-163&var-pod=payment-service-abc123`
+
+**INCORRECT:** 
+- `http://grafana_url.com/d/abc123/namespace-overview?orgId=1&var-namespace=app-163` (wrong scope)
+- `http://grafana_url.com/d/abc123/pod-cpu?orgId=1&var-namespace=app-163&var-pod=payment-service-abc123` (wrong topic for network investigation)
+- `http://grafana_url.com/d/ff635a025bcfea7bc3dd4f508990a3e9/kubernetes-networking-cluster` (out of scope when a more scoped relevant dashboard exists like pod or namespace)

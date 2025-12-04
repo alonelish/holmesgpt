@@ -29,4 +29,3 @@ while true; do
   attempt=$((attempt + 1))
   sleep 10
 done
-
