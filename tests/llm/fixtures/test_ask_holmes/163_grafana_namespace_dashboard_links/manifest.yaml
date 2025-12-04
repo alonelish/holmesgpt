@@ -1,0 +1,50 @@
+# ConfigMap for network service configuration
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: network-config
+  namespace: app-163
+data:
+  service_url: "http://backend-service:8080"
+  timeout: "5"
+  retry_count: "3"
+  log_level: "INFO"
+---
+# Pod with network connectivity issues
+apiVersion: v1
+kind: Pod
+metadata:
+  name: payment-service
+  namespace: app-163
+  labels:
+    app: payment-service
+    component: backend
+spec:
+  containers:
+  - name: payment-service
+    image: busybox:1.35
+    command: ["/bin/sh"]
+    args: ["/scripts/network_test.sh"]
+    volumeMounts:
+    - name: config-volume
+      mountPath: /config
+      readOnly: true
+    - name: script-volume
+      mountPath: /scripts
+      readOnly: true
+    resources:
+      requests:
+        memory: "64Mi"
+        cpu: "10m"
+      limits:
+        memory: "128Mi"
+        cpu: "50m"
+  volumes:
+  - name: config-volume
+    configMap:
+      name: network-config
+  - name: script-volume
+    secret:
+      secretName: payment-service-script
+      defaultMode: 0755
+

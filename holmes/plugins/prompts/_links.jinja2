@@ -1,0 +1,12 @@
+# Guidelines on adding links
+
+Links MUST go to user-visible pages that a user can open in the browser (and see something meaningful)
+
+Do NOT link to a raw HTTP API that holmes used when users can't open that page in the URL and see something meaningful
+
+You MAY link to a raw API if all the following are true:
+- there is no better url
+- all the tool parameters are GET parameters and a user is actually capable of opening the url in their browser and seeing the data from the tool (even in ugly text/json format)
+
+If there is no external link that satisfies these requirements, don't generate a link!
+

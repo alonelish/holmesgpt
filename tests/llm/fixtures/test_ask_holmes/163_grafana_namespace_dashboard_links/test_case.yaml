@@ -1,0 +1,88 @@
+user_prompt: "The payment-service pod in namespace app-163 is experiencing network connectivity issues. Give me Grafana links for this issue."
+
+description: "Tests that Holmes can investigate network issues with a pod and retrieve relevant Grafana dashboard links with accurate parameters. Verifies that all returned links are valid and contain relevant query parameters like namespace filters."
+
+tags:
+  - kubernetes
+  - network
+  - medium
+  - links
+
+expected_output:
+  - "Return ONLY networking dashboard links for payment-service pod"
+  - "All dashboard links MUST include var-namespace=app-163 parameter"
+  - "All dashboard links MUST include var-pod=payment-service parameter"
+  - "Must NOT include compute resources dashboards (e.g., kubernetes-compute-resources-pod, kubernetes-compute-resources-namespace-pods)"
+  - "Must NOT include scheduler dashboards (e.g., kubernetes-scheduler)"
+  - "Must NOT include any non-networking dashboards"
+
+# Port forward configuration for Grafana
+port_forwards:
+  - namespace: default
+    service: robusta-grafana
+    local_port: 11630
+    remote_port: 80
+
+before_test: |
+  set -e
+  # Validate required environment variable
+  [ -n "${GRAFANA_API_KEY:-}" ] || { echo "ERROR: Missing required environment variable: GRAFANA_API_KEY"; exit 1; }
+  
+  echo "📁 Creating namespace..."
+  kubectl create namespace app-163 || true
+  
+  echo "🔐 Creating secret with payment service script..."
+  kubectl create secret generic payment-service-script \
+    --from-file=network_test.sh=./network_test.sh \
+    -n app-163 --dry-run=client -o yaml | kubectl apply -f -
+  
+  echo "📁 Creating resources..."
+  kubectl apply -f ./manifest.yaml
+  
+  echo "⏳ Waiting for pod to be ready..."
+  kubectl wait --for=condition=Ready pod/payment-service -n app-163 --timeout=120s
+  
+  echo "⏳ Verifying pod is running and has network issues..."
+  # Verify pod is actually running (not Pending)
+  for i in {1..30}; do
+    POD_STATUS=$(kubectl get pod payment-service -n app-163 -o jsonpath='{.status.phase}' 2>/dev/null || echo "NotFound")
+    if [ "$POD_STATUS" = "Running" ]; then
+      echo "✓ Pod is running"
+      break
+    fi
+    [ $i -eq 30 ] && { echo "ERROR: Pod failed to start running"; kubectl get pod payment-service -n app-163; exit 1; }
+    sleep 2
+  done
+  
+  # Verify pod has IP address
+  POD_IP=$(kubectl get pod payment-service -n app-163 -o jsonpath='{.status.podIP}' 2>/dev/null || echo "")
+  [ -z "$POD_IP" ] && { echo "ERROR: Pod has no IP address"; kubectl get pod payment-service -n app-163; exit 1; }
+  echo "✓ Pod has IP: $POD_IP"
+  
+  # Verify network errors are being logged
+  for i in {1..20}; do
+    if kubectl logs payment-service -n app-163 2>/dev/null | grep -q "ERROR.*Network\|ERROR.*connection"; then
+      echo "✓ Network connectivity errors detected in logs"
+      break
+    fi
+    [ $i -eq 20 ] && { echo "WARNING: No network errors found in logs yet"; }
+    sleep 2
+  done
+
+after_test: |
+  kubectl delete -f ./manifest.yaml --wait=false || true
+  kubectl delete secret payment-service-script -n app-163 --ignore-not-found || true
+  kubectl delete namespace app-163 --wait=false || true
+
+include_tool_calls: true
+
+evaluation:
+  correctness: 1
+  # Fail if any non-networking dashboards are returned
+  # Only these networking dashboard UIDs are allowed:
+  # - 7a18067ce943a40ae25454675c19ff5c (kubernetes-networking-pod)
+  # - 8b7a8b326d7a6f1f04244066368c67af (kubernetes-networking-namespace-pods)
+  # - bbb2a765a623ae38130206c7d94a160f (kubernetes-networking-namespace-workload)
+  # - ff635a025bcfea7bc3dd4f508990a3e9 (kubernetes-networking-cluster)
+  # Fail if compute resources, scheduler, or other non-networking dashboards are included
+

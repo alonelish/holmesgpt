@@ -6,6 +6,49 @@ from datetime import datetime, timezone
 
 THIS_DIR = os.path.abspath(os.path.dirname(__file__))
 
+# Toolsets that enable link generation
+LINK_ENABLED_TOOLSETS = {
+    "coralogix/logs",
+    "datadog/logs",
+    "datadog/metrics",
+    "datadog/traces",
+    "datadog/general",
+    "datadog/rds",
+    "grafana/tempo",
+    "grafana/loki",
+    "newrelic",
+    "grafana/dashboards",
+}
+
+
+def _check_links_enabled(toolsets) -> bool:
+    """
+    Check if links should be enabled based on enabled toolsets.
+
+    Args:
+        toolsets: List of Toolset objects
+
+    Returns:
+        True if any link-enabled toolset is enabled, False otherwise
+    """
+    if not toolsets:
+        return False
+
+    for toolset in toolsets:
+        # Check if toolset has status attribute and it's enabled
+        if hasattr(toolset, "status"):
+            from holmes.core.tools import ToolsetStatusEnum
+
+            if toolset.status == ToolsetStatusEnum.ENABLED:
+                if hasattr(toolset, "name") and toolset.name in LINK_ENABLED_TOOLSETS:
+                    return True
+        # Fallback: check if toolset has enabled attribute
+        elif hasattr(toolset, "enabled") and toolset.enabled:
+            if hasattr(toolset, "name") and toolset.name in LINK_ENABLED_TOOLSETS:
+                return True
+
+    return False
+
 
 def load_prompt(prompt: str) -> str:
     """
@@ -41,6 +84,11 @@ def load_and_render_prompt(prompt: str, context: Optional[dict] = None) -> str:
 
     if context is None:
         context = {}
+
+    # Check if links_enabled should be set based on toolsets
+    if "links_enabled" not in context:
+        toolsets = context.get("toolsets", [])
+        context["links_enabled"] = _check_links_enabled(toolsets)
 
     now = datetime.now(timezone.utc)
     context.update(
