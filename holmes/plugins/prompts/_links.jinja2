@@ -1,20 +1,24 @@
 # Guidelines on adding links
 
-Links MUST go to user-visible pages (not raw HTTP APIs unless there's no better option and users can open them to see data).
+Always include a relevant link to the issue.
 
-## CRITICAL: Links MUST be relevant and properly scoped
+Links MUST go to user-visible pages (not raw HTTP APIs unless there's no better option).
 
-Links MUST match BOTH:
-1. **Investigation topic**: Network issues → network dashboards, CPU issues → CPU dashboards, NOT mismatched topics
-2. **Issue level**: Pod issues → pod-level dashboards, namespace issues → namespace-level, NOT wrong scope
+## CRITICAL: Generate EXACTLY ONE comprehensive link per resource
 
-## CRITICAL: Links MUST include all relevant query parameters
+**For ALL link types (logs, traces, dashboards):**
+- Generate EXACTLY ONE comprehensive link that shows ALL relevant information together
+- DO NOT create multiple fragmented links (e.g., separate links for different log levels, error types, or dashboard panels)
+- Links MUST match investigation topic and issue level (pod issues → pod-level, network issues → network dashboards)
+- Include all query parameters: namespace, pod, service, cluster, time range, etc.
+- Users can filter/search within the single link - you don't need separate links for each filter
 
-Include ALL relevant query parameters (namespace, pod, service, cluster, time range, etc.) in the URL. For Grafana, include all variables (var-namespace, var-pod, etc.). DO NOT generate links without parameters and tell users to "filter by X".
-
-**CORRECT:** `http://grafana_url.com/d/abc123/pod-network?orgId=1&var-namespace=app-163&var-pod=payment-service-abc123`
+**CORRECT:** 
+- Dashboard: `http://grafana_url.com/d/abc123/pod-network?orgId=1&var-namespace=app-163&var-pod=payment-service`
+- Logs: `http://grafana_url.com/explore?orgId=1&left={"datasource":"loki","queries":[{"expr":"{namespace=\"app-164\",pod_name=~\"payment-service.*\"}"}]}`
+- Traces: Single link showing all traces for the pod/service
 
 **INCORRECT:** 
-- `http://grafana_url.com/d/abc123/namespace-overview?orgId=1&var-namespace=app-163` (wrong scope)
-- `http://grafana_url.com/d/abc123/pod-cpu?orgId=1&var-namespace=app-163&var-pod=payment-service-abc123` (wrong topic for network investigation)
-- `http://grafana_url.com/d/ff635a025bcfea7bc3dd4f508990a3e9/kubernetes-networking-cluster` (out of scope when a more scoped relevant dashboard exists like pod or namespace)
+- Multiple links for same resource (e.g., separate ERROR/WARN log links, multiple dashboard links)
+- Wrong scope (namespace or cluster level when pod-level exists) or wrong topic (CPU dashboards for network issues)
+- Links without query parameters

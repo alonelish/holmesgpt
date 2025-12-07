@@ -1,0 +1,159 @@
+user_prompt: "The payment-service pod in namespace app-164 is experiencing errors. Assume the base grafana url is http://grafana_url.com"
+
+description: "Tests that Holmes can investigate pod errors and retrieve relevant Loki log links with accurate query parameters. Verifies that all returned links are valid and contain relevant query parameters like namespace and pod filters."
+
+tags:
+  - kubernetes
+  - logs
+  - medium
+  - links
+
+setup_timeout: 600  # Increased to handle Datadog init containers and Loki startup
+
+expected_output:
+  - "Return EXACTLY ONE comprehensive Loki log link for payment-service pod"
+  - "The single link MUST include namespace=app-164 parameter"
+  - "The single link MUST include pod=payment-service parameter (or pod_name filter)"
+  - "The single link MUST include proper time range parameters"
+  - "Must NOT generate multiple fragmented links (e.g., separate links for ERROR, WARN, specific errors)"
+  - "Must NOT include links for other pods or namespaces"
+  - "The link should show ALL logs for the pod (errors, warnings, info) in one place, not split into multiple links"
+
+# Port forward configuration for Loki
+port_forwards:
+  - namespace: app-164
+    service: loki
+    local_port: 3112
+    remote_port: 3100
+
+before_test: |
+  set -e
+  # Create namespace with label to exclude from Datadog admission controller
+  echo "📁 Creating namespace..."
+  kubectl create namespace app-164 || true
+  kubectl label namespace app-164 admission.datadoghq.com/enabled=false --overwrite
+  
+  # Deploy Loki infrastructure from shared config
+  echo "🔧 Deploying Loki..."
+  kubectl apply -f ../../shared/loki.yaml -n app-164
+  
+  # Create secret for payment-service with log generation script
+  echo "🔐 Creating secret with payment service script..."
+  kubectl create secret generic payment-service-164-script \
+    --from-file=app-logs.py=./app-logs.py \
+    -n app-164 --dry-run=client -o yaml | kubectl apply -f -
+  
+  # Wait for Loki to be ready
+  echo "⏳ Waiting for Loki pod to be ready (timeout 300s)"
+  LOKI_POD_READY=false
+  for i in {1..60}; do
+    if kubectl wait --for=condition=ready pod -l app=loki -n app-164 --timeout=5s 2>/dev/null; then
+      echo "✅ Loki pod is ready!"
+      LOKI_POD_READY=true
+      break
+    else
+      echo "⏳ Attempt $i/60: Loki pod not ready yet, waiting 5s..."
+      sleep 5
+    fi
+  done
+  
+  if [ "$LOKI_POD_READY" = false ]; then
+    echo "❌ Loki pod failed to become ready after 300 seconds"
+    kubectl get pods -n app-164 -l app=loki
+    exit 1
+  fi
+  
+  # Wait for Loki ingester to be ready
+  echo "⏳ Waiting for Loki ingester to be ready"
+  for i in {1..60}; do
+    if kubectl exec -n app-164 deployment/loki -- wget -q -O- http://localhost:3100/ready 2>/dev/null | grep -q "ready"; then
+      echo "✅ Loki ingester is ready!"
+      break
+    fi
+    [ $i -eq 60 ] && echo "ERROR: Loki ingester not ready" && exit 1
+    sleep 1
+  done
+  
+  # Deploy payment-service with log generation
+  echo "📁 Creating resources..."
+  kubectl apply -f ./manifest.yaml
+  
+  # Wait for payment-service deployment to be progressing
+  echo "⏳ Waiting for deployment to be progressing..."
+  kubectl wait --for=condition=progressing deployment/payment-service -n app-164 --timeout=120s
+  
+  # Wait for payment-service pod to be ready (increased timeout for ContainerCreating)
+  echo "⏳ Waiting for pod to be ready..."
+  kubectl wait --for=condition=ready pod -l app=payment-service -n app-164 --timeout=300s
+  
+  # Verify pod is actually running
+  POD_NAME=$(kubectl get pod -l app=payment-service -n app-164 -o jsonpath='{.items[0].metadata.name}' 2>/dev/null || echo "")
+  if [ -z "$POD_NAME" ]; then
+    echo "ERROR: Could not find payment-service pod"
+    kubectl get pods -n app-164
+    exit 1
+  fi
+  echo "✓ Found pod: $POD_NAME"
+  
+  # Verify pod is running (not Pending or Error)
+  for i in {1..30}; do
+    POD_STATUS=$(kubectl get pod "$POD_NAME" -n app-164 -o jsonpath='{.status.phase}' 2>/dev/null || echo "NotFound")
+    if [ "$POD_STATUS" = "Running" ]; then
+      echo "✓ Pod is running"
+      break
+    fi
+    [ $i -eq 30 ] && { echo "ERROR: Pod failed to start running. Status: $POD_STATUS"; kubectl get pod "$POD_NAME" -n app-164; kubectl logs "$POD_NAME" -n app-164 --tail=50 || true; exit 1; }
+    sleep 2
+  done
+  
+  # Wait for logs to appear in Loki
+  echo "⏳ Waiting for logs to appear in Loki..."
+  sleep 10  # Let pod start and logs initialize
+  START_TIME=$(date +%s)
+  while [ $(($(date +%s) - START_TIME)) -lt 240 ]; do
+    # First check if any logs exist in the namespace
+    NAMESPACE_LOG_COUNT=$(kubectl exec -n app-164 deployment/loki -- wget -q -O- 'http://localhost:3100/loki/api/v1/query_range?query={namespace="app-164"}&limit=1' 2>/dev/null | grep -o '"values"' | wc -l)
+    
+    # Then check for pod-specific logs
+    LOG_COUNT=$(kubectl exec -n app-164 deployment/loki -- wget -q -O- "http://localhost:3100/loki/api/v1/query_range?query={namespace=\"app-164\",pod_name=~\"payment-service.*\"}&limit=1" 2>/dev/null | grep -o '"values"' | wc -l)
+    ERROR_COUNT=$(kubectl exec -n app-164 deployment/loki -- wget -q -O- "http://localhost:3100/loki/api/v1/query_range?query={namespace=\"app-164\",pod_name=~\"payment-service.*\",level=\"ERROR\"}&limit=1" 2>/dev/null | grep -o '"values"' | wc -l)
+    
+    if [ "$LOG_COUNT" -gt "0" ] && [ "$ERROR_COUNT" -gt "0" ]; then
+      echo "✅ Logs ready in Loki (including ERROR logs)"
+      exit 0
+    fi
+    
+    # Provide progress feedback
+    echo "Waiting for logs: NAMESPACE_LOG_COUNT=$NAMESPACE_LOG_COUNT, LOG_COUNT=$LOG_COUNT, ERROR_COUNT=$ERROR_COUNT"
+    
+    # If namespace has logs but pod doesn't, show what labels exist
+    if [ "$NAMESPACE_LOG_COUNT" -gt "0" ] && [ "$LOG_COUNT" -eq "0" ]; then
+      echo "⚠️  Namespace has logs but pod-specific query returned none. Checking available labels..."
+      kubectl exec -n app-164 deployment/loki -- wget -q -O- 'http://localhost:3100/loki/api/v1/labels' 2>/dev/null | head -20 || true
+    fi
+    
+    sleep 2
+  done
+  
+  echo "ERROR: Logs not found in Loki after 240s"
+  echo "Final counts: NAMESPACE_LOG_COUNT=$NAMESPACE_LOG_COUNT, LOG_COUNT=$LOG_COUNT, ERROR_COUNT=$ERROR_COUNT"
+  echo "Checking pod logs directly..."
+  kubectl logs "$POD_NAME" -n app-164 --tail=20 || true
+  exit 1
+
+after_test: |
+  kubectl delete -f ./manifest.yaml --wait=false || true
+  kubectl delete secret payment-service-164-script -n app-164 --ignore-not-found || true
+  kubectl delete namespace app-164 --wait=false || true
+
+include_tool_calls: true
+
+evaluation:
+  correctness: 1
+  # CRITICAL: Must generate EXACTLY ONE link, not multiple links
+  # Fail if more than one Loki link is presented
+  # The single link must include proper namespace and pod filters
+  # Links should be to Grafana Explore or Loki UI, not raw API endpoints
+  # Links must include query parameters for namespace and pod
+  # The link should show all logs (errors, warnings, info) together, not fragmented
+
