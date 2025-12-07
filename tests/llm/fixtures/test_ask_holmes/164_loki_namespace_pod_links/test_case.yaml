@@ -156,4 +156,3 @@ evaluation:
   # Links should be to Grafana Explore or Loki UI, not raw API endpoints
   # Links must include query parameters for namespace and pod
   # The link should show all logs (errors, warnings, info) together, not fragmented
-

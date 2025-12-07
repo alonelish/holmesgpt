@@ -1,0 +1,158 @@
+user_prompt: "The payment-service pod in namespace app-165 is experiencing high latency. Give me Tempo trace links for this issue. Assume the base grafana url is http://grafana_url.com"
+
+description: "Tests that Holmes can investigate latency issues with a pod and retrieve relevant Tempo trace links with accurate query parameters. Verifies that all returned links are valid and contain relevant query parameters like namespace and pod filters."
+
+tags:
+  - kubernetes
+  - traces
+  - medium
+  - links
+
+setup_timeout: 600  # Increased to handle Tempo startup and trace ingestion
+
+expected_output:
+  - "Return EXACTLY ONE comprehensive Tempo trace link for payment-service pod"
+  - "The single link MUST include namespace=app-165 parameter (or k8s.namespace.name filter)"
+  - "The single link MUST include pod=payment-service parameter (or k8s.pod.name filter)"
+  - "The single link MUST include proper time range parameters"
+  - "Must NOT generate multiple fragmented links (e.g., separate links for different trace IDs, error traces, slow traces)"
+  - "Must NOT include links for other pods or namespaces"
+  - "The link should show ALL traces for the pod in one place, not split into multiple links"
+  - "Link should be to Grafana Explore with Tempo datasource, not raw Tempo API endpoints"
+
+# Port forward configuration for Tempo
+port_forwards:
+  - namespace: app-165
+    service: tempo
+    local_port: 3115
+    remote_port: 3200
+
+before_test: |
+  set -e
+  # Create namespace with label to exclude from Datadog admission controller
+  echo "📁 Creating namespace..."
+  kubectl create namespace app-165 || true
+  kubectl label namespace app-165 admission.datadoghq.com/enabled=false --overwrite
+  
+  # Deploy Tempo infrastructure from shared config
+  echo "🔧 Deploying Tempo..."
+  kubectl apply -f ../../shared/tempo.yaml -n app-165
+  
+  # Create secret for payment-service with trace generation script
+  echo "🔐 Creating secret with payment service script..."
+  kubectl create secret generic payment-service-165-script \
+    --from-file=app-traces.py=./app-traces.py \
+    -n app-165 --dry-run=client -o yaml | kubectl apply -f -
+  
+  # Wait for Tempo to be ready
+  echo "⏳ Waiting for Tempo pod to be ready (timeout 300s)"
+  TEMPO_POD_READY=false
+  for i in {1..60}; do
+    if kubectl wait --for=condition=ready pod -l app=tempo -n app-165 --timeout=5s 2>/dev/null; then
+      echo "✅ Tempo pod is ready!"
+      TEMPO_POD_READY=true
+      break
+    else
+      echo "⏳ Attempt $i/60: Tempo pod not ready yet, waiting 5s..."
+      sleep 5
+    fi
+  done
+  
+  if [ "$TEMPO_POD_READY" = false ]; then
+    echo "❌ Tempo pod failed to become ready after 300 seconds"
+    kubectl get pods -n app-165 -l app=tempo
+    exit 1
+  fi
+  
+  # Wait for Tempo to be fully ready
+  echo "⏳ Waiting for Tempo to be fully ready"
+  TEMPO_READY=false
+  for i in {1..60}; do
+    if kubectl exec -n app-165 deployment/tempo -- wget -q -O - http://localhost:3200/ready 2>/dev/null; then
+      echo "✅ Tempo is ready!"
+      TEMPO_READY=true
+      break
+    else
+      echo "⏳ Attempt $i/60: Tempo not ready yet, waiting 5s..."
+      sleep 5
+    fi
+  done
+  
+  if [ "$TEMPO_READY" = false ]; then
+    echo "❌ Tempo failed to become ready after 300 seconds"
+    exit 1
+  fi
+  
+  # Deploy payment-service with trace generation
+  echo "📁 Creating resources..."
+  kubectl apply -f ./manifest.yaml
+  
+  # Wait for payment-service deployment to be progressing
+  echo "⏳ Waiting for deployment to be progressing..."
+  kubectl wait --for=condition=progressing deployment/payment-service -n app-165 --timeout=120s
+  
+  # Wait for payment-service pod to be ready
+  echo "⏳ Waiting for pod to be ready..."
+  kubectl wait --for=condition=ready pod -l app=payment-service -n app-165 --timeout=300s
+  
+  # Verify pod is actually running
+  POD_NAME=$(kubectl get pod -l app=payment-service -n app-165 -o jsonpath='{.items[0].metadata.name}' 2>/dev/null || echo "")
+  if [ -z "$POD_NAME" ]; then
+    echo "ERROR: Could not find payment-service pod"
+    kubectl get pods -n app-165
+    exit 1
+  fi
+  echo "✓ Found pod: $POD_NAME"
+  
+  # Verify pod is running (not Pending or Error)
+  for i in {1..30}; do
+    POD_STATUS=$(kubectl get pod "$POD_NAME" -n app-165 -o jsonpath='{.status.phase}' 2>/dev/null || echo "NotFound")
+    if [ "$POD_STATUS" = "Running" ]; then
+      echo "✓ Pod is running"
+      break
+    fi
+    [ $i -eq 30 ] && { echo "ERROR: Pod failed to start running. Status: $POD_STATUS"; kubectl get pod "$POD_NAME" -n app-165; kubectl logs "$POD_NAME" -n app-165 --tail=50 || true; exit 1; }
+    sleep 2
+  done
+  
+  # Wait for traces to appear in Tempo
+  echo "⏳ Waiting for traces to appear in Tempo..."
+  sleep 10  # Let pod start and traces initialize
+  START_TIME=$(date +%s)
+  while [ $(($(date +%s) - START_TIME)) -lt 240 ]; do
+    # Check if any traces exist for the payment-service
+    PAYMENT_TRACES=$(kubectl run -n app-165 tempo-query-$RANDOM --rm -i --restart=Never --image=curlimages/curl -- -s "http://tempo:3200/api/search?tags=service.name%3Dpayment-service&limit=1" 2>/dev/null | grep -o '"traceID"' | wc -l || echo "0")
+    
+    if [ "$PAYMENT_TRACES" -gt "0" ]; then
+      echo "✅ Traces ready in Tempo for payment-service"
+      exit 0
+    fi
+    
+    # Provide progress feedback
+    echo "Waiting for traces: PAYMENT_TRACES=$PAYMENT_TRACES"
+    
+    sleep 2
+  done
+  
+  echo "ERROR: Traces not found in Tempo after 240s"
+  echo "Final counts: PAYMENT_TRACES=$PAYMENT_TRACES"
+  echo "Checking pod logs directly..."
+  kubectl logs "$POD_NAME" -n app-165 --tail=20 || true
+  exit 1
+
+after_test: |
+  kubectl delete -f ./manifest.yaml --wait=false || true
+  kubectl delete secret payment-service-165-script -n app-165 --ignore-not-found || true
+  kubectl delete namespace app-165 --wait=false || true
+
+include_tool_calls: true
+
+evaluation:
+  correctness: 1
+  # CRITICAL: Must generate EXACTLY ONE link, not multiple links
+  # Fail if more than one Tempo trace link is presented
+  # The single link must include proper namespace and pod filters
+  # Links should be to Grafana Explore with Tempo datasource, not raw API endpoints
+  # Links must include query parameters for namespace and pod
+  # The link should show all traces together, not fragmented
+
