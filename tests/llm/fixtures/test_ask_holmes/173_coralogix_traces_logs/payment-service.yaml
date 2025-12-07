@@ -1,0 +1,181 @@
+apiVersion: v1
+kind: Secret
+metadata:
+  name: payment-app
+type: Opaque
+stringData:
+  app.py: |
+    import os
+    import time
+    import random
+    from flask import Flask, request, jsonify
+    import logging
+    import requests
+
+    # OpenTelemetry imports
+    from opentelemetry import trace
+    from opentelemetry.sdk.resources import Resource
+    from opentelemetry.sdk.trace import TracerProvider
+    from opentelemetry.sdk.trace.export import BatchSpanProcessor
+    from opentelemetry.exporter.otlp.proto.http.trace_exporter import OTLPSpanExporter
+    from opentelemetry.trace import Status, StatusCode
+
+    # Configure OpenTelemetry
+    resource = Resource.create({
+        "service.name": "payment-service",
+        "k8s.namespace.name": os.environ.get("K8S_NAMESPACE", "app-173"),
+        "k8s.pod.name": os.environ.get("K8S_POD_NAME", "unknown"),
+    })
+    
+    # FIXED: Send traces to local OpenTelemetry collector, not directly to Coralogix
+    # The collector will forward them to Coralogix
+    K8S_NODE_IP = os.environ.get("K8S_NODE_IP", "192.168.13.204")
+    otlp_endpoint = f"http://{K8S_NODE_IP}:4318/v1/traces"
+    
+    otlp_exporter = OTLPSpanExporter(
+        endpoint=otlp_endpoint,
+        # No authentication needed - the collector handles Coralogix auth
+    )
+    
+    provider = TracerProvider(resource=resource)
+    provider.add_span_processor(BatchSpanProcessor(otlp_exporter))
+    trace.set_tracer_provider(provider)
+
+    app = Flask(__name__)
+    tracer = trace.get_tracer(__name__)
+    
+    # Configure logging
+    logging.basicConfig(
+        level=logging.INFO,
+        format='%(levelname)s: %(message)s'
+    )
+    logger = logging.getLogger(__name__)
+
+    @app.route('/health')
+    def health():
+        return 'OK'
+
+    @app.route('/payment', methods=['POST'])
+    def payment():
+        with tracer.start_as_current_span("process_payment") as span:
+            data = request.json or {}
+            user_id = data.get('user_id', 'guest')
+            amount = data.get('amount', 0)
+            
+            span.set_attribute("payment.user_id", user_id)
+            span.set_attribute("payment.amount", float(amount))
+            
+            logger.info(f"Processing payment request for user {user_id}, amount: ${amount}")
+            
+            # Simulate database query that sometimes times out
+            with tracer.start_as_current_span("database_query") as db_span:
+                db_span.set_attribute("db.system", "postgresql")
+                db_span.set_attribute("db.operation", "SELECT")
+                
+                query_time = random.uniform(0.1, 0.3)
+                if random.random() < 0.3:  # 30% chance of slow query
+                    query_time = random.uniform(2.5, 5.0)
+                    logger.warning(f"Slow database query detected: {query_time:.2f}s")
+                    db_span.set_attribute("db.query.duration", f"{query_time:.2f}s")
+                    db_span.set_attribute("db.slow_query", True)
+                
+                time.sleep(query_time)
+                
+                # Simulate connection pool exhaustion errors
+                if random.random() < 0.2:  # 20% chance of error
+                    error_msg = "Database connection timeout after 30s - MaxConnectionsReached"
+                    logger.error(error_msg)
+                    db_span.set_status(Status(StatusCode.ERROR, error_msg))
+                    db_span.set_attribute("error", True)
+                    db_span.set_attribute("error.type", "connection_timeout")
+                    span.set_status(Status(StatusCode.ERROR, error_msg))
+                    span.set_attribute("error", True)
+                    return jsonify({"error": "Payment processing failed"}), 500
+            
+            response = {
+                "payment_id": f"pay-{random.randint(1000, 9999)}",
+                "user_id": user_id,
+                "amount": amount,
+                "status": "completed"
+            }
+            
+            span.set_attribute("payment.payment_id", response["payment_id"])
+            span.set_attribute("payment.status", "completed")
+            logger.info(f"Payment completed successfully: {response['payment_id']}")
+            return jsonify(response)
+
+    if __name__ == '__main__':
+        logger.info("Starting payment service on port 8080")
+        app.run(host='0.0.0.0', port=8080)
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: payment
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: payment
+  template:
+    metadata:
+      labels:
+        app: payment
+    spec:
+      containers:
+      - name: payment
+        image: python:3.9-slim
+        command:
+        - sh
+        - -c
+        - |
+          pip install flask opentelemetry-api opentelemetry-sdk opentelemetry-exporter-otlp-proto-http opentelemetry-instrumentation --quiet
+          python /app/app.py
+        volumeMounts:
+        - name: app
+          mountPath: /app
+        ports:
+        - containerPort: 8080
+        env:
+        - name: PYTHONUNBUFFERED
+          value: "1"
+        - name: K8S_NAMESPACE
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.namespace
+        - name: K8S_POD_NAME
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.name
+        - name: K8S_NODE_IP
+          valueFrom:
+            fieldRef:
+              fieldPath: status.hostIP
+        - name: CORALOGIX_DOMAIN
+          value: "${CORALOGIX_DOMAIN}"
+        - name: CORALOGIX_API_KEY
+          value: "${CORALOGIX_API_KEY}"
+        resources:
+          requests:
+            memory: "64Mi"
+            cpu: "50m"
+          limits:
+            memory: "256Mi"
+            cpu: "500m"
+      volumes:
+      - name: app
+        secret:
+          secretName: payment-app
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: payment
+spec:
+  selector:
+    app: payment
+  ports:
+  - port: 8080
+    targetPort: 8080
+

@@ -1,0 +1,87 @@
+apiVersion: v1
+kind: Secret
+metadata:
+  name: traffic-generator-app
+type: Opaque
+stringData:
+  generate_traffic.py: |
+    import requests
+    import time
+    import random
+    import sys
+
+    PAYMENT_SERVICE_URL = "http://payment:8080"
+
+    def generate_payment_request():
+        """Generate a payment request with random data"""
+        user_id = f"user-{random.randint(1000, 9999)}"
+        amount = round(random.uniform(10.0, 500.0), 2)
+        
+        payload = {
+            "user_id": user_id,
+            "amount": amount
+        }
+        
+        try:
+            response = requests.post(
+                f"{PAYMENT_SERVICE_URL}/payment",
+                json=payload,
+                timeout=10
+            )
+            if response.status_code == 200:
+                print(f"✓ Payment successful: {payload}")
+            else:
+                print(f"✗ Payment failed: {response.status_code} - {payload}")
+        except Exception as e:
+            print(f"✗ Request error: {e}")
+
+    if __name__ == "__main__":
+        print("Starting traffic generator for payment service...")
+        print(f"Target: {PAYMENT_SERVICE_URL}")
+        
+        # Generate traffic for 2 minutes
+        end_time = time.time() + 120
+        request_count = 0
+        
+        while time.time() < end_time:
+            generate_payment_request()
+            request_count += 1
+            # Random delay between requests (0.5 to 2 seconds)
+            time.sleep(random.uniform(0.5, 2.0))
+        
+        print(f"\nTraffic generation complete. Sent {request_count} requests.")
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: traffic-generator
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: traffic-generator
+  template:
+    metadata:
+      labels:
+        app: traffic-generator
+    spec:
+      containers:
+      - name: traffic-generator
+        image: python:3.9-slim
+        command: 
+        - sh
+        - -c
+        - |
+          pip install requests -q
+          python /app/generate_traffic.py
+        volumeMounts:
+        - name: app
+          mountPath: /app
+        env:
+        - name: PYTHONUNBUFFERED
+          value: "1"
+      volumes:
+      - name: app
+        secret:
+          secretName: traffic-generator-app
+

@@ -1,0 +1,131 @@
+user_prompt:
+  - "The payment service in namespace app-173 is experiencing issues. Investigate what's wrong using Coralogix logs and traces."
+
+expected_output:
+  - The answer must identify that database connection timeouts are occurring
+  - The answer must mention that slow database queries are causing the issues
+  - The answer should reference logs from Coralogix
+  - The answer may reference traces if the Coralogix traces toolset is available
+
+tags:
+  - kubernetes
+  - hard
+  - chain-of-causation
+  - traces
+  - logs
+
+setup_timeout: 900  # 15 minutes to handle pod scheduling delays
+
+before_test: |
+  echo "🚀 Setting up test 163 - Creating namespace app-173"
+  kubectl create namespace app-173 || true
+  echo "✅ Namespace app-173 created successfully!"
+
+  echo "💳 Deploying payment service"
+  kubectl apply -f payment-service.yaml -n app-173
+
+  echo "⏳ Waiting for payment pod to exist"
+  for i in {1..60}; do
+    if kubectl get pod -l app=payment -n app-173 2>/dev/null | grep -q payment; then
+      echo "✅ Payment pod exists"
+      break
+    fi
+    echo "Waiting for payment pod to be created... ($i/60)"
+    sleep 2
+  done
+
+  echo "⏳ Waiting for payment pod to be ready (timeout 780s)"
+  PAYMENT_POD_READY=false
+  for i in {1..156}; do
+    if kubectl wait --for=condition=ready pod -l app=payment -n app-173 --timeout=5s 2>/dev/null; then
+      echo "✅ Payment pod is ready!"
+      PAYMENT_POD_READY=true
+      break
+    else
+      echo "⏳ Attempt $i/156: Payment pod not ready yet, waiting 5s..."
+      sleep 5
+    fi
+  done
+
+  if [ "$PAYMENT_POD_READY" = false ]; then
+    echo "❌ Payment pod failed to become ready after 780 seconds"
+    kubectl get pods -n app-173 -l app=payment
+    exit 1
+  fi
+
+  echo "🔍 Checking payment deployment status"
+  kubectl get pods -n app-173 -l app=payment
+
+  echo "🚦 Deploying traffic generator"
+  kubectl apply -f traffic-generator.yaml -n app-173
+
+  echo "⏳ Waiting for traffic generator pod to exist"
+  for i in {1..60}; do
+    if kubectl get pod -l app=traffic-generator -n app-173 2>/dev/null | grep -q traffic-generator; then
+      echo "✅ Traffic generator pod exists"
+      break
+    fi
+    echo "Waiting for traffic generator pod to be created... ($i/60)"
+    sleep 2
+  done
+
+  echo "⏳ Waiting for traffic generator pod to be ready (timeout 780s)"
+  TRAFFIC_POD_READY=false
+  for i in {1..156}; do
+    if kubectl wait --for=condition=ready pod -l app=traffic-generator -n app-173 --timeout=5s 2>/dev/null; then
+      echo "✅ Traffic generator pod is ready!"
+      TRAFFIC_POD_READY=true
+      break
+    else
+      echo "⏳ Attempt $i/156: Traffic generator pod not ready yet, waiting 5s..."
+      sleep 5
+    fi
+  done
+
+  if [ "$TRAFFIC_POD_READY" = false ]; then
+    echo "❌ Traffic generator pod failed to become ready after 780 seconds"
+    kubectl get pods -n app-173 -l app=traffic-generator
+    exit 1
+  fi
+
+  echo "🔍 Checking all pods status"
+  kubectl get pods -n app-173
+
+  echo "⏰ Waiting for traffic generator to produce requests and errors..."
+  TRAFFIC_READY=false
+  for i in {1..90}; do
+    PAYMENT_LOGS=$(kubectl logs -n app-173 -l app=payment --tail=100 2>/dev/null | grep -c "Processing payment request" || echo "0")
+    ERROR_LOGS=$(kubectl logs -n app-173 -l app=payment --tail=100 2>/dev/null | grep -c "ERROR\|WARN" || echo "0")
+
+    if [ "$PAYMENT_LOGS" -gt "10" ] && [ "$ERROR_LOGS" -gt "0" ]; then
+      echo "✅ Found required logs after $i seconds:"
+      echo "   - Payment processing logs: $PAYMENT_LOGS"
+      echo "   - Error/Warning logs: $ERROR_LOGS"
+      TRAFFIC_READY=true
+      sleep 10
+      break
+    fi
+
+    echo "⏳ Attempt $i/90: PAYMENT=$PAYMENT_LOGS, ERRORS=$ERROR_LOGS"
+    sleep 1
+  done
+
+  if [ "$TRAFFIC_READY" = false ]; then
+    echo "❌ Failed to generate required traffic patterns"
+    exit 1
+  fi
+
+  echo "📤 Sending logs and traces to Coralogix..."
+  bash send_coralogix_data.sh app-173
+
+  echo "⏰ Waiting for data to be indexed in Coralogix (30 seconds)..."
+  sleep 30
+
+  # Delete Traffic generator so the ai won't cheat
+  kubectl delete -f traffic-generator.yaml -n app-173
+
+  echo "✅ Test setup complete!"
+
+after_test: |
+  kubectl delete namespace app-173 || true
+
