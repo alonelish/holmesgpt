@@ -8,9 +8,7 @@ import pytest
 
 from holmes.core.tools import StructuredToolResultStatus
 from holmes.plugins.toolsets.coralogix.api import health_check
-from holmes.plugins.toolsets.coralogix.toolset_coralogix_logs import (
-    CoralogixLogsToolset,
-)
+from holmes.plugins.toolsets.coralogix.toolset_coralogix import CoralogixToolset
 from holmes.plugins.toolsets.coralogix.utils import CoralogixConfig
 from holmes.plugins.toolsets.logging_utils.logging_api import FetchPodLogsParams
 
@@ -58,9 +56,9 @@ def coralogix_config() -> CoralogixConfig:
 
 
 @pytest.fixture
-def coralogix_logs_toolset(coralogix_config) -> CoralogixLogsToolset:
-    """Create an OpenSearchLogsToolset with the test configuration"""
-    toolset = CoralogixLogsToolset()
+def coralogix_logs_toolset(coralogix_config) -> CoralogixToolset:
+    """Create a CoralogixToolset with the test configuration"""
+    toolset = CoralogixToolset()
     toolset.config = coralogix_config
     return toolset
 
@@ -82,7 +80,7 @@ def test_health_check_api_invalid_key():
 
 
 def test_integration_toolset_prerequisites(coralogix_config):
-    toolset = CoralogixLogsToolset()
+    toolset = CoralogixToolset()
     ready, message = toolset.prerequisites_callable(coralogix_config.model_dump())
     assert ready, f"Toolset prerequisites failed: {message}"
     assert not message

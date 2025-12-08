@@ -84,4 +84,3 @@ spec:
       - name: app
         secret:
           secretName: traffic-generator-app
-

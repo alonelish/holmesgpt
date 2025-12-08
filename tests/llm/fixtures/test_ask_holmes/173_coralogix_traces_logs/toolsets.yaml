@@ -12,4 +12,3 @@ toolsets:
     enabled: false  # Disable default Kubernetes logging to use Coralogix
   kubernetes/core:
     enabled: true
-

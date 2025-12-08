@@ -3,9 +3,7 @@ import pytest
 from pathlib import Path
 
 from holmes.plugins.toolsets.coralogix.api import build_query_string
-from holmes.plugins.toolsets.coralogix.toolset_coralogix_logs import (
-    CoralogixLogsToolset,
-)
+from holmes.plugins.toolsets.coralogix.toolset_coralogix import CoralogixToolset
 from holmes.plugins.toolsets.coralogix.utils import (
     CoralogixConfig,
     build_coralogix_link_to_logs,
@@ -62,7 +60,7 @@ def coralogix_config():
 
 @pytest.fixture
 def coralogix_toolset(coralogix_config):
-    toolset = CoralogixLogsToolset()
+    toolset = CoralogixToolset()
     # Mock prerequisites check for unit tests
     toolset.config = coralogix_config
     return toolset

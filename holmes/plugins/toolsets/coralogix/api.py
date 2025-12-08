@@ -1,6 +1,6 @@
 from enum import Enum
 import logging
-from typing import Any, Tuple
+from typing import Any, Optional, Tuple
 from urllib.parse import urljoin
 
 import requests  # type: ignore
@@ -40,6 +40,55 @@ def execute_http_query(domain: str, api_key: str, query: dict[str, Any]):
     }
 
     return requests.post(url, headers=headers, json=query)
+
+
+def execute_dataprime_query(
+    domain: str,
+    api_key: str,
+    dataprime_query: str,
+    start_date: Optional[str] = None,
+    end_date: Optional[str] = None,
+    tier: Optional[CoralogixTier] = None,
+) -> Tuple[Optional[str], Optional[str]]:
+    """
+    Execute an arbitrary DataPrime query against Coralogix.
+
+    Args:
+        domain: Coralogix domain (e.g., "eu2.coralogix.com")
+        api_key: Coralogix API key
+        dataprime_query: The DataPrime query string to execute
+        start_date: Optional start date in RFC3339 format
+        end_date: Optional end date in RFC3339 format
+        tier: Optional tier to query (FREQUENT_SEARCH or ARCHIVE)
+
+    Returns:
+        Tuple of (response_text, error_message). If successful, error_message is None.
+    """
+    query_dict: dict[str, Any] = {"query": dataprime_query}
+
+    metadata: dict[str, Any] = {"syntax": "QUERY_SYNTAX_DATAPRIME"}
+    if start_date:
+        metadata["startDate"] = start_date
+    if end_date:
+        metadata["endDate"] = end_date
+    if tier:
+        metadata["tier"] = tier.value
+
+    if metadata:
+        query_dict["metadata"] = metadata
+
+    try:
+        response = execute_http_query(domain=domain, api_key=api_key, query=query_dict)
+        if response.status_code == 200:
+            return response.text, None
+        else:
+            return (
+                None,
+                f"Failed with status_code={response.status_code}. {response.text}",
+            )
+    except Exception as e:
+        logging.error("Failed to execute DataPrime query", exc_info=True)
+        return None, str(e)
 
 
 def health_check(domain: str, api_key: str) -> Tuple[bool, str]:
