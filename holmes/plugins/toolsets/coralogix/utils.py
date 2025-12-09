@@ -1,4 +1,3 @@
-from enum import Enum
 import json
 import logging
 import urllib.parse
@@ -26,22 +25,11 @@ class CoralogixLabelsConfig(BaseModel):
     timestamp: str = "logRecord.attributes.time"
 
 
-class CoralogixLogsMethodology(str, Enum):
-    FREQUENT_SEARCH_ONLY = "FREQUENT_SEARCH_ONLY"
-    ARCHIVE_ONLY = "ARCHIVE_ONLY"
-    ARCHIVE_FALLBACK = "ARCHIVE_FALLBACK"
-    FREQUENT_SEARCH_FALLBACK = "FREQUENT_SEARCH_FALLBACK"
-    BOTH_FREQUENT_SEARCH_AND_ARCHIVE = "BOTH_FREQUENT_SEARCH_AND_ARCHIVE"
-
-
 class CoralogixConfig(BaseModel):
     team_hostname: str
     domain: str
     api_key: str
     labels: CoralogixLabelsConfig = CoralogixLabelsConfig()
-    logs_retrieval_methodology: CoralogixLogsMethodology = (
-        CoralogixLogsMethodology.ARCHIVE_FALLBACK
-    )
 
 
 def parse_json_lines(raw_text) -> List[Dict[str, Any]]:

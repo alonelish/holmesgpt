@@ -2,7 +2,6 @@ import os
 import pytest
 from pathlib import Path
 
-from holmes.plugins.toolsets.coralogix.api import build_query_string
 from holmes.plugins.toolsets.coralogix.toolset_coralogix import CoralogixToolset
 from holmes.plugins.toolsets.coralogix.utils import (
     CoralogixConfig,
@@ -12,7 +11,6 @@ from holmes.plugins.toolsets.coralogix.utils import (
     stringify_flattened_logs,
     extract_field,
 )
-from holmes.plugins.toolsets.logging_utils.logging_api import FetchPodLogsParams
 
 THIS_DIR = os.path.dirname(__file__)
 FIXTURES_DIR = os.path.join(THIS_DIR, "fixtures")
@@ -104,39 +102,6 @@ def test_format_logs(raw_logs_result, formatted_logs, coralogix_config):
 )
 def test_normalize_datetime_valid_inputs(input_date, expected_output):
     assert normalize_datetime(input_date) == expected_output
-
-
-@pytest.mark.parametrize(
-    "params, expected_query_part",
-    [
-        (
-            {"namespace": "application", "pod_name": "my-app"},
-            'source logs | lucene \'kubernetes.namespace_name:"application" AND kubernetes.pod_name:"my-app"\' | limit 100',
-        ),
-        (
-            {
-                "pod_name": "web",
-                "namespace": "staging",
-                "limit": 20,
-            },
-            'source logs | lucene \'kubernetes.namespace_name:"staging" AND kubernetes.pod_name:"web"\' | limit 20',
-        ),
-        (
-            {
-                "pod_name": "web",
-                "namespace": "staging",
-                "limit": 30,
-                "filter": "foo bar",
-            },
-            'source logs | lucene \'kubernetes.namespace_name:"staging" AND kubernetes.pod_name:"web" AND log:"foo bar"\' | limit 30',
-        ),
-    ],
-)
-def test_build_query_string(coralogix_config, params, expected_query_part):
-    query = build_query_string(coralogix_config, FetchPodLogsParams(**params))
-    print(f"** EXPECTED: {expected_query_part}")
-    print(f"** ACTUAL: {query}")
-    assert query == expected_query_part
 
 
 def test_build_coralogix_link_to_logs(coralogix_config):

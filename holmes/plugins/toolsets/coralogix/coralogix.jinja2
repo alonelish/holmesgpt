@@ -1,13 +1,9 @@
-Coralogix provides logs, traces, metrics, and other telemetry through DataPrime queries. Use `coralogix_execute_dataprime_query` to run DataPrime queries.
+Coralogix DataPrime (tool: coralogix_execute_dataprime_query) is for logs/traces (sources: logs, spans).
 
-**DataPrime** query language supports:
-- **logs**: `source logs | lucene 'error' | limit 100`
-- **traces**: `source traces | filter serviceName == "my-service" | limit 100`
-- **metrics**: `source metrics | filter metricName == "cpu_usage" | limit 100`
-
-**Important:**
-- Always include a `limit` clause (start with `limit 100`)
-- Use `lucene` for text searches, `filter` for exact field matches
-- Specify `start_date` and `end_date` (RFC3339 format) when investigating specific incidents
-- Use `FREQUENT_SEARCH` for recent data or `ARCHIVE` for historical data
-- The `fetch_pod_logs` tool is available for backward compatibility but prefer DataPrime queries
+Critical rules:
+- Always set explicit time ranges: start_date/end_date.
+- Include `| limit 100` on every query.
+- Log search: `source logs | lucene 'text'`.
+- Never assume labels: start with plain text (e.g., `source logs | lucene 'app-173'`); only use label equality after you’ve seen the exact field path in a result.
+- Traces: use `source spans`.
+- Order chronologically: `| orderby $m.timestamp desc`.
