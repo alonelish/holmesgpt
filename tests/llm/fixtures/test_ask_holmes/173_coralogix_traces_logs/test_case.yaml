@@ -21,6 +21,16 @@ before_test: |
   kubectl create namespace app-173 || true
   echo "✅ Namespace app-173 created successfully!"
 
+  echo "🔐 Creating payment-app secret from coralogix_app.py"
+  kubectl create secret generic payment-app \
+    --from-file=app.py=coralogix_app.py \
+    -n app-173 --dry-run=client -o yaml | kubectl apply -f -
+
+  echo "🔐 Creating user-signup secret from user_signup.py"
+  kubectl create secret generic user-signup-app \
+    --from-file=user_signup.py=user_signup.py \
+    -n app-173 --dry-run=client -o yaml | kubectl apply -f -
+
   echo "💳 Deploying payment service"
   kubectl apply -f payment-service.yaml -n app-173
 
@@ -56,42 +66,42 @@ before_test: |
   echo "🔍 Checking payment deployment status"
   kubectl get pods -n app-173 -l app=payment
 
-  echo "🚦 Deploying traffic generator"
+  echo "🚦 Deploying user-signup generator"
   kubectl apply -f traffic-generator.yaml -n app-173
 
-  echo "⏳ Waiting for traffic generator pod to exist"
+  echo "⏳ Waiting for user-signup pod to exist"
   for i in {1..60}; do
-    if kubectl get pod -l app=traffic-generator -n app-173 2>/dev/null | grep -q traffic-generator; then
-      echo "✅ Traffic generator pod exists"
+    if kubectl get pod -l app=user-signup -n app-173 2>/dev/null | grep -q user-signup; then
+      echo "✅ User-signup pod exists"
       break
     fi
-    echo "Waiting for traffic generator pod to be created... ($i/60)"
+    echo "Waiting for user-signup pod to be created... ($i/60)"
     sleep 2
   done
 
-  echo "⏳ Waiting for traffic generator pod to be ready (timeout 780s)"
+  echo "⏳ Waiting for user-signup pod to be ready (timeout 780s)"
   TRAFFIC_POD_READY=false
   for i in {1..156}; do
-    if kubectl wait --for=condition=ready pod -l app=traffic-generator -n app-173 --timeout=5s 2>/dev/null; then
-      echo "✅ Traffic generator pod is ready!"
+    if kubectl wait --for=condition=ready pod -l app=user-signup -n app-173 --timeout=5s 2>/dev/null; then
+      echo "✅ User-signup pod is ready!"
       TRAFFIC_POD_READY=true
       break
     else
-      echo "⏳ Attempt $i/156: Traffic generator pod not ready yet, waiting 5s..."
+      echo "⏳ Attempt $i/156: User-signup pod not ready yet, waiting 5s..."
       sleep 5
     fi
   done
 
   if [ "$TRAFFIC_POD_READY" = false ]; then
-    echo "❌ Traffic generator pod failed to become ready after 780 seconds"
-    kubectl get pods -n app-173 -l app=traffic-generator
+    echo "❌ User-signup pod failed to become ready after 780 seconds"
+    kubectl get pods -n app-173 -l app=user-signup
     exit 1
   fi
 
   echo "🔍 Checking all pods status"
   kubectl get pods -n app-173
 
-  echo "⏰ Waiting for traffic generator to produce requests and errors..."
+  echo "⏰ Waiting for user-signup generator to produce requests and errors..."
   TRAFFIC_READY=false
   for i in {1..90}; do
     PAYMENT_LOGS=$(kubectl logs -n app-173 -l app=payment --tail=100 2>/dev/null | grep -c "Processing payment request" || echo "0")
@@ -121,7 +131,7 @@ before_test: |
   echo "⏰ Waiting for data to be indexed in Coralogix (30 seconds)..."
   sleep 30
 
-  # Delete Traffic generator so the ai won't cheat
+  # Delete user-signup generator so the ai won't cheat
   kubectl delete -f traffic-generator.yaml -n app-173
 
   echo "✅ Test setup complete!"

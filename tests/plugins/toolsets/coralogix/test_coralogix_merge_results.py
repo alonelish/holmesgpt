@@ -1,8 +1,8 @@
-from holmes.plugins.toolsets.coralogix.api import (
+from holmes.plugins.toolsets.coralogix.utils import (
+    FlattenedLog,
     CoralogixQueryResult,
     merge_log_results,
 )
-from holmes.plugins.toolsets.coralogix.utils import FlattenedLog
 
 
 log1 = FlattenedLog(timestamp="2023-10-26T10:00:00Z", log_message="Log A1")

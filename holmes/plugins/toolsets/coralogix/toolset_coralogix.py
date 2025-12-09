@@ -1,6 +1,6 @@
+import json
 import os
 from typing import Any, Optional, Tuple
-import yaml
 
 from holmes.core.tools import (
     CallablePrerequisite,
@@ -17,6 +17,7 @@ from holmes.plugins.toolsets.coralogix.api import (
     health_check,
     execute_dataprime_query,
     CoralogixTier,
+    _drop_raw_result_lines,
 )
 from holmes.plugins.toolsets.coralogix.utils import CoralogixConfig
 from holmes.plugins.toolsets.utils import toolset_name_for_one_liner
@@ -28,7 +29,6 @@ class ExecuteDataPrimeQuery(Tool):
         super().__init__(
             name="coralogix_execute_dataprime_query",
             description="Execute a DataPrime query against Coralogix to fetch logs, traces, metrics, and other telemetry data. "
-            "DataPrime is Coralogix's query language that provides access to all data types in Coralogix. "
             "Returns the raw query results from Coralogix.",
             parameters={
                 "query": ToolParameter(
@@ -49,12 +49,12 @@ class ExecuteDataPrimeQuery(Tool):
                 "start_date": ToolParameter(
                     description="Optional start date in RFC3339 format (e.g., '2024-01-01T00:00:00Z').",
                     type="string",
-                    required=False,
+                    required=True,
                 ),
                 "end_date": ToolParameter(
                     description="Optional end date in RFC3339 format (e.g., '2024-01-01T23:59:59Z').",
                     type="string",
-                    required=False,
+                    required=True,
                 ),
                 "tier": ToolParameter(
                     description="Optional tier: 'FREQUENT_SEARCH' or 'ARCHIVE'.",
@@ -100,15 +100,28 @@ class ExecuteDataPrimeQuery(Tool):
                 params=params,
             )
 
+        # Parse the JSON string so the final output can embed structured data
+        # instead of an escaped blob. This keeps the response readable and
+        # avoids double-escaping that wastes tokens.
+        parsed_data: Any
+        try:
+            parsed_data = json.loads(result_text) if result_text else None
+            parsed_data = _drop_raw_result_lines(parsed_data)
+        except json.JSONDecodeError:
+            # Fall back to the raw text if JSON decoding fails
+            parsed_data = result_text
+
         result_with_key = {
             "random_key": generate_random_key(),
             "tool_name": self.name,
             "query": params["query"],
-            "data": result_text,
+            "data": parsed_data,
             "domain": self._toolset.coralogix_config.domain,
             "team_hostname": self._toolset.coralogix_config.team_hostname,
         }
-        final_result = yaml.dump(result_with_key, default_flow_style=False)
+
+        # Return a pretty-printed JSON string for readability by the model/user.
+        final_result = json.dumps(result_with_key, indent=2, sort_keys=False)
         return StructuredToolResult(
             status=StructuredToolResultStatus.SUCCESS,
             data=final_result,
@@ -133,7 +146,9 @@ class CoralogixToolset(Toolset):
         )
         template_path = os.path.join(os.path.dirname(__file__), "coralogix.jinja2")
         if os.path.exists(template_path):
-            self._load_llm_instructions(jinja_template=f"file://{os.path.abspath(template_path)}")
+            self._load_llm_instructions(
+                jinja_template=f"file://{os.path.abspath(template_path)}"
+            )
 
     def get_example_config(self):
         example_config = CoralogixConfig(
@@ -155,4 +170,3 @@ class CoralogixToolset(Toolset):
     @property
     def coralogix_config(self) -> Optional[CoralogixConfig]:
         return self.config
-
