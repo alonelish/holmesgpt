@@ -31,7 +31,7 @@ class ExecuteDataPrimeQuery(Tool):
             "Returns the raw query results from Coralogix.",
             parameters={
                 "query": ToolParameter(
-                    description="DataPrime query string. Examples: `source logs | lucene 'error' | limit 70`, `source spans | lucene 'my-service' | limit 70`. Always include a `limit` clause.",
+                    description="DataPrime query string. Examples: `source logs | lucene 'error' | limit 100`, `source spans | lucene 'my-service' | limit 100`. Always include a `limit` clause.",
                     type="string",
                     required=True,
                 ),
