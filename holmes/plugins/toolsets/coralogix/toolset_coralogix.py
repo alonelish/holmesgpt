@@ -17,9 +17,8 @@ from holmes.plugins.toolsets.coralogix.api import (
     health_check,
     execute_dataprime_query,
     CoralogixTier,
-    _drop_raw_result_lines,
 )
-from holmes.plugins.toolsets.coralogix.utils import CoralogixConfig
+from holmes.plugins.toolsets.coralogix.utils import CoralogixConfig, normalize_datetime
 from holmes.plugins.toolsets.utils import toolset_name_for_one_liner
 from holmes.utils.keygen_utils import generate_random_key
 
@@ -84,12 +83,24 @@ class ExecuteDataPrimeQuery(Tool):
                     params=params,
                 )
 
-        result_text, error = execute_dataprime_query(
+        start_time = normalize_datetime(params.get("start_date"))
+        end_time = normalize_datetime(params.get("end_date"))
+        if start_time == "UNKNOWN_TIMESTAMP" or end_time == "UNKNOWN_TIMESTAMP":
+            return StructuredToolResult(
+                status=StructuredToolResultStatus.ERROR,
+                error=f"Invalid start or end date: {params.get('start_date')} or {params.get('end_date')}. Please provide valid dates in RFC3339 format (e.g., '2024-01-01T00:00:00Z').",
+                params=params,
+            )
+
+        if start_time > end_time:
+            start_time, end_time = end_time, start_time
+
+        result, error = execute_dataprime_query(
             domain=self._toolset.coralogix_config.domain,
             api_key=self._toolset.coralogix_config.api_key,
             dataprime_query=params["query"],
-            start_date=params.get("start_date"),
-            end_date=params.get("end_date"),
+            start_date=start_time,
+            end_date=end_time,
             tier=tier,
         )
 
@@ -100,25 +111,16 @@ class ExecuteDataPrimeQuery(Tool):
                 params=params,
             )
 
-        # Parse the JSON string so the final output can embed structured data
-        # instead of an escaped blob. This keeps the response readable and
-        # avoids double-escaping that wastes tokens.
-        parsed_data: Any
-        try:
-            parsed_data = json.loads(result_text) if result_text else None
-            parsed_data = _drop_raw_result_lines(parsed_data)
-        except json.JSONDecodeError:
-            # Fall back to the raw text if JSON decoding fails
-            parsed_data = result_text
-
         result_with_key = {
             "random_key": generate_random_key(),
             "tool_name": self.name,
             "query": params["query"],
-            "data": parsed_data,
-            "domain": self._toolset.coralogix_config.domain,
-            "team_hostname": self._toolset.coralogix_config.team_hostname,
+            "data": result,
         }
+
+        if not result:
+            results_msg = "No results found, it is possible that the query is not correct, using incorrect labels or filters."
+            result_with_key["results_msg"] = results_msg
 
         # Return a pretty-printed JSON string for readability by the model/user.
         final_result = json.dumps(result_with_key, indent=2, sort_keys=False)
