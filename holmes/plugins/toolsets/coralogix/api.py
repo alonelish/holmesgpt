@@ -137,6 +137,8 @@ def execute_dataprime_query(
             return None, f"Empty 200 response from query submission\nURL: {submit_url}"
 
         parsed = _parse_ndjson_response(raw)
+
+        # Usually if someone ran query that returns no results
         if not parsed and response.status_code in [200, 204]:
             return [], None
 
