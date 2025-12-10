@@ -356,6 +356,8 @@ def execute_dataprime_query(
                     body = (getattr(response, "text", "") or "").strip()
                 except Exception:
                     body = ""
+            if "Compiler error" in body and "filter" in dataprime_query:
+                return None, f"Compiler error: {body}\nUse lucene instead of filter and verify that all labels are present before using them."
             return (
                 None,
                 f"Failed to submit query: status_code={response.status_code}, {body}\nURL: {submit_url}",

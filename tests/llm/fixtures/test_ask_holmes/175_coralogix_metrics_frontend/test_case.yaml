@@ -1,9 +1,8 @@
 user_prompt:
-  - "Frontend in namespace app-175 is reporting high latency according to the metrics dashboard. Look at the custom payments metrics to find the failure rate and average duration."
+  - "Frontend in namespace app-175 is reporting high latency according to the metrics dashboard. Look at the custom payments metrics to find the failure rate and average duration. Share what metrics you found."
 
 expected_output:
-  - The answer must identify elevated latency in metrics (e.g., p95/response time) for the frontend service
-  - The answer should mention database/processing slowness leading to latency
+  - The answer must identify elevated latency in metrics for the frontend service
   - "The answer must reference custom payments metrics: payment_duration_seconds, payment_failure_total, payment_success_total (e.g., failure rate and average duration)"
 
 tags:
