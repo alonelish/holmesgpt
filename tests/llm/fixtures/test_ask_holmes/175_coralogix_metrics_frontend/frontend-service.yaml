@@ -1,20 +1,20 @@
-# Secret is created in test_case.yaml setup from coralogix_app.py
+# Secret is created in test_case.yaml setup from ../coralogix_app.py
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: payment
+  name: frontend-service
 spec:
   replicas: 1
   selector:
     matchLabels:
-      app: payment
+      app: frontend-service
   template:
     metadata:
       labels:
-        app: payment
+        app: frontend-service
     spec:
       containers:
-      - name: payment
+      - name: frontend-service
         image: python:3.9-slim
         command:
         - sh
@@ -32,6 +32,14 @@ spec:
           value: "1"
         - name: CORALOGIX_LOGS_ENABLED
           value: "true"
+        - name: CORALOGIX_TRACES_ENABLED
+          value: "false"
+        - name: CORALOGIX_METRICS_ENABLED
+          value: "true"
+        - name: SERVICE_NAME
+          value: "frontend-service"
+        - name: SERVICE_LABEL
+          value: "frontend"
         - name: K8S_NAMESPACE
           valueFrom:
             fieldRef:
@@ -44,10 +52,6 @@ spec:
           valueFrom:
             fieldRef:
               fieldPath: status.hostIP
-        - name: CORALOGIX_DOMAIN
-          value: "${CORALOGIX_DOMAIN}"
-        - name: CORALOGIX_API_KEY
-          value: "${CORALOGIX_API_KEY}"
         resources:
           requests:
             memory: "64Mi"
@@ -58,15 +62,16 @@ spec:
       volumes:
       - name: app
         secret:
-          secretName: payment-app
+          secretName: frontend-service-app
 ---
 apiVersion: v1
 kind: Service
 metadata:
-  name: payment
+  name: frontend-service
 spec:
   selector:
-    app: payment
+    app: frontend-service
   ports:
   - port: 8080
     targetPort: 8080
+
