@@ -1,5 +1,4 @@
 import json
-import logging
 from unittest.mock import Mock, patch
 import pytest
 
@@ -82,44 +81,54 @@ class TestExecuteDataPrimeQuery:
                 "results": [
                     {
                         "metadata": [
-                            {"key": "timestamp", "value": "2025-03-25T07:26:33.577000000"},
+                            {
+                                "key": "timestamp",
+                                "value": "2025-03-25T07:26:33.577000000",
+                            },
                             {"key": "severity", "value": "1"},
                         ],
                         "labels": [
                             {"key": "applicationname", "value": "default"},
                             {"key": "subsystemname", "value": "checkout-service"},
                         ],
-                        "userData": json.dumps({
-                            "kubernetes": {
-                                "namespace_name": "default",
-                                "pod_name": "checkout-service-5bcd6bf54-g8ckl",
-                            },
-                            "log": "Processing payment request",
-                            "time": "2025-03-25T07:26:33.577000000Z",
-                        }),
+                        "userData": json.dumps(
+                            {
+                                "kubernetes": {
+                                    "namespace_name": "default",
+                                    "pod_name": "checkout-service-5bcd6bf54-g8ckl",
+                                },
+                                "log": "Processing payment request",
+                                "time": "2025-03-25T07:26:33.577000000Z",
+                            }
+                        ),
                     },
                     {
                         "metadata": [
-                            {"key": "timestamp", "value": "2025-03-25T07:26:34.123000000"},
+                            {
+                                "key": "timestamp",
+                                "value": "2025-03-25T07:26:34.123000000",
+                            },
                             {"key": "severity", "value": "5"},
                         ],
                         "labels": [
                             {"key": "applicationname", "value": "default"},
                             {"key": "subsystemname", "value": "payment-service"},
                         ],
-                        "userData": json.dumps({
-                            "kubernetes": {
-                                "namespace_name": "default",
-                                "pod_name": "payment-service-abc123",
-                            },
-                            "log": "Payment completed successfully",
-                            "time": "2025-03-25T07:26:34.123000000Z",
-                        }),
+                        "userData": json.dumps(
+                            {
+                                "kubernetes": {
+                                    "namespace_name": "default",
+                                    "pod_name": "payment-service-abc123",
+                                },
+                                "log": "Payment completed successfully",
+                                "time": "2025-03-25T07:26:34.123000000Z",
+                            }
+                        ),
                     },
                 ]
             }
         }
-        
+
         mock_response = Mock()
         mock_response.status_code = 200
         mock_response.text = json.dumps(real_response)
@@ -194,10 +203,14 @@ class TestExecuteDataPrimeQuery:
     @patch("holmes.plugins.toolsets.coralogix.api.execute_coralogix_query")
     def test_userdata_replacement(self, mock_query):
         """Test execute_dataprime_query with userData replacement."""
-        user_data_json = json.dumps({"log": "replaced", "timestamp": "2024-01-01T00:00:00Z"})
+        user_data_json = json.dumps(
+            {"log": "replaced", "timestamp": "2024-01-01T00:00:00Z"}
+        )
         mock_response = Mock()
         mock_response.status_code = 200
-        mock_response.text = json.dumps({"result": {"results": [{"userData": user_data_json}]}})
+        mock_response.text = json.dumps(
+            {"result": {"results": [{"userData": user_data_json}]}}
+        )
         mock_query.return_value = (mock_response, "https://test.com/api")
 
         result, error = execute_dataprime_query(
@@ -279,9 +292,11 @@ class TestExecuteDataPrimeQueryTool:
             "tier": None,
         }
 
-        with patch("holmes.plugins.toolsets.coralogix.toolset_coralogix.execute_dataprime_query") as mock_execute:
+        with patch(
+            "holmes.plugins.toolsets.coralogix.toolset_coralogix.execute_dataprime_query"
+        ) as mock_execute:
             mock_execute.return_value = ([{"result": "test"}], None)
-            result = tool._invoke(params, Mock())
+            _ = tool._invoke(params, Mock())
 
             call_args = mock_execute.call_args
             assert call_args[1]["start_date"] < call_args[1]["end_date"]
@@ -297,7 +312,9 @@ class TestExecuteDataPrimeQueryTool:
             "tier": "FREQUENT_SEARCH",
         }
 
-        with patch("holmes.plugins.toolsets.coralogix.toolset_coralogix.execute_dataprime_query") as mock_execute:
+        with patch(
+            "holmes.plugins.toolsets.coralogix.toolset_coralogix.execute_dataprime_query"
+        ) as mock_execute:
             mock_execute.return_value = ([{"result": "test"}], None)
             result = tool._invoke(params, Mock())
 
@@ -333,10 +350,11 @@ class TestExecuteDataPrimeQueryTool:
             "tier": None,
         }
 
-        with patch("holmes.plugins.toolsets.coralogix.toolset_coralogix.execute_dataprime_query") as mock_execute:
+        with patch(
+            "holmes.plugins.toolsets.coralogix.toolset_coralogix.execute_dataprime_query"
+        ) as mock_execute:
             mock_execute.return_value = (None, "Query failed")
             result = tool._invoke(params, Mock())
 
             assert result.status == StructuredToolResultStatus.ERROR
             assert result.error == "Query failed"
-
