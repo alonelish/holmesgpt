@@ -13,6 +13,10 @@ from holmes.plugins.toolsets.coralogix.utils import CoralogixConfig
 from holmes.plugins.toolsets.logging_utils.logging_api import FetchPodLogsParams
 
 
+RUN_CORALOGIX_INTEGRATION_TESTS = os.environ.get(
+    "RUN_CORALOGIX_INTEGRATION_TESTS", ""
+).lower() in ("1", "true", "yes")
+
 REQUIRED_ENV_VARS = [
     "CORALOGIX_API_KEY",
     "CORALOGIX_DOMAIN",
@@ -23,7 +27,11 @@ missing_vars = [var for var in REQUIRED_ENV_VARS if os.environ.get(var) is None]
 
 # Use pytest.mark.skip (not skipif) to show a single grouped skip line for the entire module
 # Will show: "SKIPPED [6] module.py: reason" instead of 6 separate skip lines
-if missing_vars:
+if not RUN_CORALOGIX_INTEGRATION_TESTS:
+    pytestmark = pytest.mark.skip(
+        reason="Set RUN_CORALOGIX_INTEGRATION_TESTS=1 to run Coralogix integration tests"
+    )
+elif missing_vars:
     pytestmark = pytest.mark.skip(reason=f"{', '.join(missing_vars)} must be set")
 
 CORALOGIX_API_KEY = os.environ.get("CORALOGIX_API_KEY", "")
