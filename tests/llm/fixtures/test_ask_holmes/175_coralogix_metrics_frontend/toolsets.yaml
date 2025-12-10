@@ -3,12 +3,11 @@ toolsets:
   prometheus/metrics:
     enabled: true
     config:
-      prometheus_url: "https://ng-api-http.${CORALOGIX_DOMAIN}/metrics"
+      prometheus_url: "https://ng-api-http.{{env.CORALOGIX_DOMAIN}}/metrics"
       headers:
-        Authorization: "Bearer ${CORALOGIX_METRICS_TOKEN}"
+        Authorization: "Bearer {{env.CORALOGIX_API_KEY}}"
       healthcheck: "api/v1/query?query=up"
   kubernetes/logs:
-    enabled: true
+    enabled: false
   kubernetes/core:
     enabled: true
-

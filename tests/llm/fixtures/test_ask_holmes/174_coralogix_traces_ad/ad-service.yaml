@@ -31,7 +31,7 @@ spec:
         - name: PYTHONUNBUFFERED
           value: "1"
         - name: CORALOGIX_LOGS_ENABLED
-          value: "true"
+          value: "false"
         - name: CORALOGIX_TRACES_ENABLED
           value: "true"
         - name: CORALOGIX_METRICS_ENABLED
@@ -74,4 +74,3 @@ spec:
   ports:
   - port: 8080
     targetPort: 8080
-
