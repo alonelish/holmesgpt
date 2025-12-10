@@ -9,10 +9,13 @@ tags:
   - kubernetes
   - traces
   - coralogix
-  
+
 setup_timeout: 900
 
 before_test: |
+  # Validate required Coralogix environment variables
+  [ -n "${CORALOGIX_API_KEY:-}" ] && [ -n "${CORALOGIX_DOMAIN:-}" ] && [ -n "${CORALOGIX_TEAM_HOSTNAME:-}" ] || { for v in CORALOGIX_API_KEY CORALOGIX_DOMAIN CORALOGIX_TEAM_HOSTNAME; do [ -n "${!v:-}" ] || echo "Missing env var: $v"; done; exit 1; }
+
   echo "🚀 Setting up test 174 - Creating namespace app-174"
   kubectl create namespace app-174 || true
   echo "✅ Namespace app-174 created successfully!"
@@ -97,38 +100,17 @@ before_test: |
   echo "🔍 Checking all pods status"
   kubectl get pods -n app-174
 
-  echo "⏰ Waiting for ad traffic to produce logs and traces..."
+  echo "⏰ Waiting for ad traffic to produce traces..."
   TRAFFIC_READY=false
-  for i in {1..90}; do
-    AD_LOGS=$(kubectl logs -n app-174 -l app=ad-service --tail=100 2>/dev/null | grep -c "Processing ad request" || echo "0")
-    ERROR_LOGS=$(kubectl logs -n app-174 -l app=ad-service --tail=100 2>/dev/null | grep -c "ERROR\\|WARN" || echo "0")
-
-    if [ "$AD_LOGS" -gt "10" ] && [ "$ERROR_LOGS" -gt "0" ]; then
-      echo "✅ Found required logs after $i seconds:"
-      echo "   - Ad processing logs: $AD_LOGS"
-      echo "   - Error/Warning logs: $ERROR_LOGS"
-      TRAFFIC_READY=true
-      sleep 10
-      break
-    fi
-
-    echo "⏳ Attempt $i/90: AD_LOGS=$AD_LOGS, ERRORS=$ERROR_LOGS"
-    sleep 1
-  done
-
-  if [ "$TRAFFIC_READY" = false ]; then
-    echo "❌ Failed to generate required traffic patterns"
-    exit 1
-  fi
 
   echo "⏳ Waiting for at least 10 traces in Coralogix (poll every 5s)"
   TRACES_READY=false
   for i in {1..60}; do
-    TRACE_JSON=$(curl -s -X POST "https://ng-api-http.${CORALOGIX_DOMAIN}/api/v1/dataprime/query" \
+    TRACE_COUNT=$(curl -s -X POST "https://ng-api-http.${CORALOGIX_DOMAIN}/api/v1/dataprime/query" \
       -H "Authorization: Bearer ${CORALOGIX_API_KEY}" \
       -H "Content-Type: application/json" \
-      -d '{"query":"source spans | lucene \"app-174\" | limit 10"}')
-    TRACE_COUNT=$(echo "$TRACE_JSON" | grep -c '"traceID"')
+      -d '{"query": "source spans | lucene '\''app-174 AND ad-service'\'' | limit 50"}' \
+      | grep -o 'traceID' | wc -l)
 
     if [ "$TRACE_COUNT" -ge 10 ]; then
       echo "✅ Found $TRACE_COUNT traces in Coralogix"
