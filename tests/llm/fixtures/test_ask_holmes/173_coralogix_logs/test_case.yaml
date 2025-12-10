@@ -3,8 +3,7 @@ user_prompt:
 
 expected_output:
   - The answer must identify that database connection timeouts are occurring
-  - The answer must mention that slow database queries are causing the issues
-  - The answer should reference logs from Coralogix
+  - The answer must mention Database connection pool exhausted, or MaxConnectionsReached
 
 tags:
   - kubernetes
