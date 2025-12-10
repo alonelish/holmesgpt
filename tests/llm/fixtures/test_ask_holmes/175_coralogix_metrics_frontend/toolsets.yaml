@@ -1,0 +1,14 @@
+# Coralogix metrics + logs for frontend latency scenario
+toolsets:
+  prometheus/metrics:
+    enabled: true
+    config:
+      prometheus_url: "https://ng-api-http.${CORALOGIX_DOMAIN}/metrics"
+      headers:
+        Authorization: "Bearer ${CORALOGIX_METRICS_TOKEN}"
+      healthcheck: "api/v1/query?query=up"
+  kubernetes/logs:
+    enabled: true
+  kubernetes/core:
+    enabled: true
+

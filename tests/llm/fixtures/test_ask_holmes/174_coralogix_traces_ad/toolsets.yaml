@@ -1,0 +1,13 @@
+# Coralogix traces/logs for ad service scenario
+toolsets:
+  coralogix:
+    enabled: true
+    config:
+      api_key: "${CORALOGIX_API_KEY}"
+      domain: "${CORALOGIX_DOMAIN}"
+      team_hostname: "${CORALOGIX_TEAM_HOSTNAME}"
+  kubernetes/logs:
+    enabled: false
+  kubernetes/core:
+    enabled: true
+
