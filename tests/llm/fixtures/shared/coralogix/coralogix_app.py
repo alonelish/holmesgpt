@@ -2,7 +2,6 @@ import os
 import time
 import random
 import logging
-import requests
 from flask import Flask, request, jsonify
 
 # OpenTelemetry imports
@@ -71,9 +70,7 @@ if METRICS_ENABLED:
     meter = meter_provider.get_meter(SERVICE_NAME)
     payment_success_counter = meter.create_counter("payment_success_total")
     payment_failure_counter = meter.create_counter("payment_failure_total")
-    payment_duration_hist = meter.create_histogram(
-        "payment_duration_seconds", unit="s"
-    )
+    payment_duration_hist = meter.create_histogram("payment_duration_seconds", unit="s")
 else:
     payment_success_counter = None
     payment_failure_counter = None
@@ -161,13 +158,13 @@ def payment():
 
         span.set_attribute("payment.payment_id", response["payment_id"])
         span.set_attribute("payment.status", "completed")
-        logger.info(f"{SERVICE_LABEL.title()} completed successfully: {response['payment_id']}")
+        logger.info(
+            f"{SERVICE_LABEL.title()} completed successfully: {response['payment_id']}"
+        )
 
         if METRICS_ENABLED and payment_success_counter:
             duration = time.perf_counter() - start_time
-            payment_success_counter.add(
-                1, attributes={"payment.user_id": user_id}
-            )
+            payment_success_counter.add(1, attributes={"payment.user_id": user_id})
             payment_duration_hist.record(
                 duration,
                 attributes={
@@ -182,4 +179,3 @@ def payment():
 if __name__ == "__main__":
     logger.info("Starting payment service on port 8080")
     app.run(host="0.0.0.0", port=8080)
-

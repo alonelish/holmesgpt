@@ -35,4 +35,3 @@ spec:
       - name: app
         secret:
           secretName: ad-generator-app
-

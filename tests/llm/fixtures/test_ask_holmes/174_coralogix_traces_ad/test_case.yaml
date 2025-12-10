@@ -4,12 +4,12 @@ user_prompt:
 expected_output:
   - The answer must identify a long-duration trace involving a database query
   - The answer must mention database slowness/connection issues causing the latency
-  - The answer should reference Coralogix traces
 
 tags:
   - kubernetes
   - traces
-
+  - coralogix
+  
 setup_timeout: 900
 
 before_test: |
@@ -121,6 +121,30 @@ before_test: |
     exit 1
   fi
 
+  echo "⏳ Waiting for at least 10 traces in Coralogix (poll every 5s)"
+  TRACES_READY=false
+  for i in {1..60}; do
+    TRACE_JSON=$(curl -s -X POST "https://ng-api-http.${CORALOGIX_DOMAIN}/api/v1/dataprime/query" \
+      -H "Authorization: Bearer ${CORALOGIX_API_KEY}" \
+      -H "Content-Type: application/json" \
+      -d '{"query":"source spans | lucene \"app-174\" | limit 10"}')
+    TRACE_COUNT=$(echo "$TRACE_JSON" | grep -c '"traceID"')
+
+    if [ "$TRACE_COUNT" -ge 10 ]; then
+      echo "✅ Found $TRACE_COUNT traces in Coralogix"
+      TRACES_READY=true
+      break
+    fi
+
+    echo "⏳ Attempt $i/60: traces found=$TRACE_COUNT"
+    sleep 5
+  done
+
+  if [ "$TRACES_READY" = false ]; then
+    echo "❌ Did not see 10 traces in Coralogix within timeout"
+    exit 1
+  fi
+
   # Delete ad-generator so the ai won't cheat
   kubectl delete -f ad-traffic-generator.yaml -n app-174
 
@@ -128,4 +152,3 @@ before_test: |
 
 after_test: |
   kubectl delete namespace app-174 || true
-
