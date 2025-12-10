@@ -20,7 +20,6 @@ from holmes.plugins.toolsets.coralogix.api import (
 )
 from holmes.plugins.toolsets.coralogix.utils import CoralogixConfig, normalize_datetime
 from holmes.plugins.toolsets.utils import toolset_name_for_one_liner
-from holmes.utils.keygen_utils import generate_random_key
 
 
 class ExecuteDataPrimeQuery(Tool):
@@ -111,8 +110,7 @@ class ExecuteDataPrimeQuery(Tool):
                 params=params,
             )
 
-        result_with_key = {
-            "random_key": generate_random_key(),
+        result_dict = {
             "tool_name": self.name,
             "query": params["query"],
             "data": result,
@@ -120,10 +118,10 @@ class ExecuteDataPrimeQuery(Tool):
 
         if not result:
             results_msg = "No results found, it is possible that the query is not correct, using incorrect labels or filters."
-            result_with_key["results_msg"] = results_msg
+            result_dict["results_msg"] = results_msg
 
         # Return a pretty-printed JSON string for readability by the model/user.
-        final_result = json.dumps(result_with_key, indent=2, sort_keys=False)
+        final_result = json.dumps(result_dict, indent=2, sort_keys=False)
         return StructuredToolResult(
             status=StructuredToolResultStatus.SUCCESS,
             data=final_result,
