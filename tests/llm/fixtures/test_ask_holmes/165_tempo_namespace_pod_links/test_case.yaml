@@ -1,4 +1,4 @@
-user_prompt: "The payment-service pod in namespace app-165 is experiencing high latency. Give me Tempo trace links for this issue. Assume the base grafana url is http://grafana_url.com"
+user_prompt: "The payment-service pod in namespace app-165 is experiencing high latency. Give me Tempo trace links for this issue."
 
 description: "Tests that Holmes can investigate latency issues with a pod and retrieve relevant Tempo trace links with accurate query parameters. Verifies that all returned links are valid and contain relevant query parameters like namespace and pod filters."
 

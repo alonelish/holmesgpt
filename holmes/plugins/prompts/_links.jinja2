@@ -4,6 +4,13 @@ Always include a relevant link to the issue.
 
 Links MUST go to user-visible pages (not raw HTTP APIs unless there's no better option).
 
+{% if toolset_base_urls %}
+Available base URLs:
+{% for name, url in toolset_base_urls.items() %}
+- {{ name }} url: {{ url }}
+{% endfor %}
+{% endif %}
+
 ## CRITICAL: Generate EXACTLY ONE comprehensive link per resource
 
 **For ALL link types (logs, traces, dashboards):**
@@ -12,6 +19,9 @@ Links MUST go to user-visible pages (not raw HTTP APIs unless there's no better 
 - Links MUST match investigation topic and issue level (pod issues → pod-level, network issues → network dashboards)
 - Include all query parameters: namespace, pod, service, cluster, time range, etc.
 - Users can filter/search within the single link - you don't need separate links for each filter
+{% if toolset_base_urls %}
+- Use the appropriate base URL from the available URLs above
+{% endif %}
 
 **CORRECT:** 
 - Dashboard: `http://grafana_url.com/d/abc123/pod-network?orgId=1&var-namespace=app-163&var-pod=payment-service`

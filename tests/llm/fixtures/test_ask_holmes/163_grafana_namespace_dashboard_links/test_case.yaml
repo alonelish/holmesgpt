@@ -1,4 +1,4 @@
-user_prompt: "The payment-service pod in namespace app-163 is experiencing network connectivity issues. Give me Grafana links for this issue. Assume the base grafana url is http://grafana_url.com"
+user_prompt: "The payment-service pod in namespace app-163 is experiencing network connectivity issues. Give me Grafana links for this issue."
 
 description: "Tests that Holmes can investigate network issues with a pod and retrieve relevant Grafana dashboard links with accurate parameters. Verifies that all returned links are valid and contain relevant query parameters like namespace filters."
 

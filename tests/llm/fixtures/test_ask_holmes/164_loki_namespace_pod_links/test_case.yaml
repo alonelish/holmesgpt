@@ -1,4 +1,4 @@
-user_prompt: "The payment-service pod in namespace app-164 is experiencing errors. Assume the base grafana url is http://grafana_url.com"
+user_prompt: "The payment-service pod in namespace app-164 is experiencing errors."
 
 description: "Tests that Holmes can investigate pod errors and retrieve relevant Loki log links with accurate query parameters. Verifies that all returned links are valid and contain relevant query parameters like namespace and pod filters."
 
