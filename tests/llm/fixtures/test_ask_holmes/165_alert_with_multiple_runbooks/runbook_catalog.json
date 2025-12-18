@@ -15,7 +15,7 @@
   {
     "id": "b2ffd311-f339-46a2-b379-1e53eb0bc1ed",
     "symptom": "",
-    "title": "Check relevant logs & manufests",
+    "title": "Check relevant logs & manifests",
     "alerts": [
       "ProbeFailure"
     ]
