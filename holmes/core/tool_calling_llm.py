@@ -913,19 +913,29 @@ class ToolCallingLLM:
             yield build_stream_event_token_count(metadata=metadata)
 
             tools_to_call = getattr(response_message, "tool_calls", None)
+            reasoning = getattr(response_message, "reasoning_content", None)
+            message = response_message.content
+
+            if reasoning:
+                yield StreamMessage(
+                    event=StreamEvents.AI_REASONING,
+                    data={
+                        "content": reasoning,
+                        "metadata": metadata,
+                    },
+                )
+
             if not tools_to_call:
                 yield StreamMessage(
                     event=StreamEvents.ANSWER_END,
                     data={
-                        "content": response_message.content,
+                        "content": message,
                         "messages": messages,
                         "metadata": metadata,
                     },
                 )
                 return
 
-            reasoning = getattr(response_message, "reasoning_content", None)
-            message = response_message.content
             if reasoning or message:
                 yield StreamMessage(
                     event=StreamEvents.AI_MESSAGE,
