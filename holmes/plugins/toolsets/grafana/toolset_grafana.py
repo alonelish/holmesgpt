@@ -18,6 +18,11 @@ from holmes.plugins.toolsets.grafana.common import (
     build_headers,
 )
 from holmes.plugins.toolsets.utils import toolset_name_for_one_liner
+import jq  # type: ignore
+from jsonpath_ng import parse as jsonpath_parse  # type: ignore
+import logging
+
+logger = logging.getLogger(__name__)
 
 
 class GrafanaDashboardConfig(GrafanaConfig):
@@ -122,6 +127,53 @@ class BaseGrafanaTool(Tool, ABC):
             url=url,
             params=params,
         )
+
+
+def _truncate_to_depth(value: Any, max_depth: Optional[int], current_depth: int = 0):
+    """Recursively truncate dictionaries/lists beyond the requested depth."""
+    if max_depth is None or max_depth < 0:
+        return value
+
+    if current_depth >= max_depth:
+        if isinstance(value, (dict, list)):
+            return f"...truncated at depth {max_depth}"
+        return value
+
+    if isinstance(value, dict):
+        return {
+            key: _truncate_to_depth(sub_value, max_depth, current_depth + 1)
+            for key, sub_value in value.items()
+        }
+    if isinstance(value, list):
+        return [
+            _truncate_to_depth(item, max_depth, current_depth + 1) for item in value
+        ]
+
+    return value
+
+
+def _apply_jsonpath_filter(data: Any, expression: str) -> Tuple[Optional[Any], Optional[str]]:
+    try:
+        jsonpath_expr = jsonpath_parse(expression)
+        matches = [match.value for match in jsonpath_expr.find(data)]
+        if len(matches) == 1:
+            return matches[0], None
+        return matches, None
+    except Exception as exc:  # pragma: no cover - defensive
+        logger.debug("Failed to apply jsonpath filter", exc_info=exc)
+        return None, f"Invalid jsonpath expression: {exc}"
+
+
+def _apply_jq_filter(data: Any, expression: str) -> Tuple[Optional[Any], Optional[str]]:
+    try:
+        compiled = jq.compile(expression)
+        results = compiled.input(data).all()
+        if len(results) == 1:
+            return results[0], None
+        return results, None
+    except Exception as exc:  # pragma: no cover - defensive
+        logger.debug("Failed to apply jq filter", exc_info=exc)
+        return None, f"Invalid jq filter: {exc}"
 
 
 class SearchDashboards(BaseGrafanaTool):
@@ -249,6 +301,21 @@ class GetDashboardByUID(BaseGrafanaTool):
                     type="string",
                     required=True,
                 ),
+                "max_depth": ToolParameter(
+                    description="Maximum nesting depth to return from the dashboard JSON (0 returns only top-level keys). Leave empty for full response.",
+                    type="integer",
+                    required=False,
+                ),
+                "jsonpath": ToolParameter(
+                    description="Optional jsonpath expression to extract specific parts of the dashboard JSON.",
+                    type="string",
+                    required=False,
+                ),
+                "jq": ToolParameter(
+                    description="Optional jq filter to apply to the dashboard JSON.",
+                    type="string",
+                    required=False,
+                ),
             },
         )
 
@@ -256,13 +323,35 @@ class GetDashboardByUID(BaseGrafanaTool):
         uid = params["uid"]
         result = self._make_grafana_request(f"/api/dashboards/uid/{uid}", params)
 
+        data = result.data
+        if params.get("jsonpath"):
+            data, error = _apply_jsonpath_filter(data, params["jsonpath"])
+            if error:
+                return StructuredToolResult(
+                    status=StructuredToolResultStatus.ERROR,
+                    error=error,
+                    params=params,
+                    url=result.url,
+                )
+        if params.get("jq"):
+            data, error = _apply_jq_filter(data, params["jq"])
+            if error:
+                return StructuredToolResult(
+                    status=StructuredToolResultStatus.ERROR,
+                    error=error,
+                    params=params,
+                    url=result.url,
+                )
+
+        data = _truncate_to_depth(data, params.get("max_depth"))
+
         dashboard_url = _build_grafana_dashboard_url(
             self._toolset.grafana_config, uid=uid
         )
 
         return StructuredToolResult(
             status=result.status,
-            data=result.data,
+            data=data,
             params=result.params,
             url=dashboard_url if dashboard_url else result.url,
         )
@@ -277,11 +366,48 @@ class GetHomeDashboard(BaseGrafanaTool):
             toolset=toolset,
             name="grafana_get_home_dashboard",
             description="Get the home dashboard using the /api/dashboards/home endpoint",
-            parameters={},
+            parameters={
+                "max_depth": ToolParameter(
+                    description="Maximum nesting depth to return from the dashboard JSON (0 returns only top-level keys). Leave empty for full response.",
+                    type="integer",
+                    required=False,
+                ),
+                "jsonpath": ToolParameter(
+                    description="Optional jsonpath expression to extract specific parts of the dashboard JSON.",
+                    type="string",
+                    required=False,
+                ),
+                "jq": ToolParameter(
+                    description="Optional jq filter to apply to the dashboard JSON.",
+                    type="string",
+                    required=False,
+                ),
+            },
         )
 
     def _invoke(self, params: dict, context: ToolInvokeContext) -> StructuredToolResult:
         result = self._make_grafana_request("/api/dashboards/home", params)
+        data = result.data
+        if params.get("jsonpath"):
+            data, error = _apply_jsonpath_filter(data, params["jsonpath"])
+            if error:
+                return StructuredToolResult(
+                    status=StructuredToolResultStatus.ERROR,
+                    error=error,
+                    params=params,
+                    url=result.url,
+                )
+        if params.get("jq"):
+            data, error = _apply_jq_filter(data, params["jq"])
+            if error:
+                return StructuredToolResult(
+                    status=StructuredToolResultStatus.ERROR,
+                    error=error,
+                    params=params,
+                    url=result.url,
+                )
+
+        data = _truncate_to_depth(data, params.get("max_depth"))
 
         config = self._toolset.grafana_config
         dashboard_url = None
@@ -292,7 +418,7 @@ class GetHomeDashboard(BaseGrafanaTool):
 
         return StructuredToolResult(
             status=result.status,
-            data=result.data,
+            data=data,
             params=result.params,
             url=dashboard_url if dashboard_url else None,
         )
