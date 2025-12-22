@@ -47,6 +47,7 @@ from holmes.core.tools_utils.tool_context_window_limiter import (
 from holmes.core.truncation.input_context_window_limiter import (
     limit_input_context_window,
 )
+from holmes.core.task_subagent import TaskSubAgent, TaskSubAgentConfig
 from holmes.plugins.prompts import load_and_render_prompt
 from holmes.plugins.runbooks import RunbookCatalog
 from holmes.utils import sentry_helper
@@ -165,12 +166,24 @@ class ToolCallingLLM:
     llm: LLM
 
     def __init__(
-        self, tool_executor: ToolExecutor, max_steps: int, llm: LLM, tracer=None
+        self,
+        tool_executor: ToolExecutor,
+        max_steps: int,
+        llm: LLM,
+        tracer=None,
+        enable_task_subagent: bool = True,
     ):
         self.tool_executor = tool_executor
         self.max_steps = max_steps
         self.tracer = tracer
         self.llm = llm
+        self.task_subagent = TaskSubAgent(
+            llm=self.llm,
+            tool_executor=tool_executor,
+            max_steps=max_steps,
+            config=TaskSubAgentConfig(),
+            enable_task_subagent=enable_task_subagent,
+        )
         self.approval_callback: Optional[
             Callable[[StructuredToolResult], tuple[bool, Optional[str]]]
         ] = None
@@ -319,6 +332,7 @@ class ToolCallingLLM:
         max_steps = self.max_steps
         i = 0
         metadata: Dict[Any, Any] = {}
+        task_subagent_metadata: list[dict] = []
         while i < max_steps:
             i += 1
             logging.debug(f"running iteration {i}")
@@ -450,6 +464,8 @@ class ToolCallingLLM:
             logging.info(
                 f"The AI requested [bold]{len(tools_to_call) if tools_to_call else 0}[/bold] tool call(s)."
             )
+            task_subagent_metadata: list[dict] = []
+
             with concurrent.futures.ThreadPoolExecutor(max_workers=16) as executor:
                 futures = []
                 futures_tool_numbers: dict[
@@ -494,7 +510,17 @@ class ToolCallingLLM:
                     )
                     tool_calls.append(tool_result_response_dict)
                     all_tool_calls.append(tool_result_response_dict)
-                    messages.append(tool_call_result.as_tool_call_message())
+
+                    tool_message = tool_call_result.as_tool_call_message()
+                    tool_message, summary_metadata = self.task_subagent.summarize_tool_message(
+                        tool_call_result=tool_call_result,
+                        original_message=tool_message,
+                        parent_messages=messages,
+                    )
+                    if summary_metadata:
+                        task_subagent_metadata.append(summary_metadata)
+
+                    messages.append(tool_message)
                     tokens = self.llm.count_tokens(messages=messages, tools=tools)
 
                 # Update the tool number offset for the next iteration
@@ -503,6 +529,11 @@ class ToolCallingLLM:
                 # Add a blank line after all tools in this batch complete
                 if tools_to_call:
                     logging.info("")
+
+            if task_subagent_metadata:
+                metadata.setdefault("task_subagent_summaries", []).extend(
+                    task_subagent_metadata
+                )
 
         raise Exception(f"Too many LLM calls - exceeded max_steps: {i}/{max_steps}")
 
@@ -830,6 +861,7 @@ class ToolCallingLLM:
         metadata: Dict[Any, Any] = {}
         i = 0
         tool_number_offset = 0
+        task_subagent_metadata: list[dict] = []
 
         while i < max_steps:
             i += 1
@@ -913,6 +945,10 @@ class ToolCallingLLM:
 
             tools_to_call = getattr(response_message, "tool_calls", None)
             if not tools_to_call:
+                if task_subagent_metadata:
+                    metadata.setdefault("task_subagent_summaries", []).extend(
+                        task_subagent_metadata
+                    )
                 yield StreamMessage(
                     event=StreamEvents.ANSWER_END,
                     data={
@@ -997,7 +1033,16 @@ class ToolCallingLLM:
 
                     else:
                         tool_calls.append(tool_call_result.as_tool_result_response())
-                        messages.append(tool_call_result.as_tool_call_message())
+                        tool_message = tool_call_result.as_tool_call_message()
+                        tool_message, summary_metadata = self.task_subagent.summarize_tool_message(
+                            tool_call_result=tool_call_result,
+                            original_message=tool_message,
+                            parent_messages=messages,
+                        )
+                        if summary_metadata:
+                            task_subagent_metadata.append(summary_metadata)
+
+                        messages.append(tool_message)
 
                         yield StreamMessage(
                             event=StreamEvents.TOOL_RESULT,
@@ -1014,6 +1059,10 @@ class ToolCallingLLM:
                         tool_call["pending_approval"] = True
 
                     # End stream with approvals required
+                    if task_subagent_metadata:
+                        metadata.setdefault("task_subagent_summaries", []).extend(
+                            task_subagent_metadata
+                        )
                     yield StreamMessage(
                         event=StreamEvents.APPROVAL_REQUIRED,
                         data={
@@ -1030,6 +1079,10 @@ class ToolCallingLLM:
                 # Update the tool number offset for the next iteration
                 tool_number_offset += len(tools_to_call)
 
+        if task_subagent_metadata:
+            metadata.setdefault("task_subagent_summaries", []).extend(
+                task_subagent_metadata
+            )
         raise Exception(
             f"Too many LLM calls - exceeded max_steps: {i}/{self.max_steps}"
         )
