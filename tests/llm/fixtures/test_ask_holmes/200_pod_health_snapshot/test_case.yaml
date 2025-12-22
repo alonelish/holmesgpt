@@ -1,0 +1,17 @@
+user_prompt: |
+  Summarize the pod status report below into a markdown table with columns Namespace, Pod, Phase, and Restarts. Then call out which pods need immediate attention and why.
+
+include_files:
+  - pod_status_report.md
+
+expected_output:
+  - The response includes a markdown table with headers for Namespace, Pod, Phase (or Status), and Restarts.
+  - The table rows include checkout-0, checkout-1, payments-worker-0, chat-0, chat-1, and notifier-0 with their phases and restart counts from the report.
+  - The answer highlights that checkout-1 is in CrashLoopBackOff with five restarts and needs investigation.
+  - The answer notes payments-worker-0 has two restarts and notifier-0 is Pending because it is waiting for a gpu=true node.
+
+tags:
+  - kubernetes
+  - question-answer
+  - numerical
+  - medium

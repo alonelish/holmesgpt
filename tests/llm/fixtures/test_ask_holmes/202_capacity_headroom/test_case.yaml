@@ -1,0 +1,17 @@
+user_prompt: |
+  Convert the capacity snapshot into a markdown table with columns Node, Mount, Disk used %, Inodes %, and Notes. Include a short callout on how soon each mount will hit 95% if growth is mentioned.
+
+include_files:
+  - capacity_snapshot.md
+
+expected_output:
+  - The response includes a markdown table with columns for Node, Mount, Disk used %, Inodes %, and Notes.
+  - The table covers worker-a (/var/lib/docker 82% disk, 71% inodes), worker-b (/var/lib/docker 65% disk, 55% inodes), and db-node-0 (/var/lib/postgresql 91% disk, 88% inodes with ~3% daily growth).
+  - The answer highlights db-node-0 as the biggest risk and notes it will cross 95% in about two days at the current growth rate.
+  - The response notes that worker-a and worker-b are stable but should be watched for image growth on worker-a.
+
+tags:
+  - storage
+  - numerical
+  - question-answer
+  - medium

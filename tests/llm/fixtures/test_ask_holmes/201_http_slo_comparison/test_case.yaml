@@ -1,0 +1,17 @@
+user_prompt: |
+  Turn the SLO snapshot below into a markdown table with columns Service, P99 latency (ms), Error rate (%), and Notes. Sort by highest risk and state which endpoint is furthest from targets.
+
+include_files:
+  - service_metrics.md
+
+expected_output:
+  - The response contains a markdown table with columns for Service, P99 latency, Error rate, and Notes.
+  - The table rows include orders-api (1420 ms, 3.8%), payments-api (880 ms, 0.6%), and catalog-api (620 ms, 0.2%).
+  - The answer explicitly identifies orders-api as the riskiest endpoint because it exceeds both latency and error-rate targets.
+  - The response calls out that catalog-api is within targets and payments-api is close to latency limits but under the thresholds.
+
+tags:
+  - metrics
+  - numerical
+  - question-answer
+  - medium
