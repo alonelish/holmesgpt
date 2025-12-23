@@ -6,6 +6,8 @@ They are used to both catch regressions and measure the impact of new features.
 
 [Example: pod crashloop eval](https://github.com/HolmesGPT/holmesgpt/tree/master/tests/llm/fixtures/test_ask_holmes/09_crashpod).
 
+In CI, a regression slice of the eval suite runs automatically on every pull request to surface failures early.
+
 ## Eval Tags
 
 Evals are tagged and grouped into categories. Two common tags are `easy` and `medium`:
