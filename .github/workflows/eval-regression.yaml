@@ -73,11 +73,13 @@ jobs:
 Want to rerun evals with custom filters or models? Comment on this PR with:
 
 ```
-/run-evals models=gpt-4o markers="llm and easy"
+/run-evals models=gpt-4o markers="llm and easy" keyword=""
 ```
 
+Defaults: models=gpt-4o, markers="llm and easy", keyword="", iterations=1, workers=6, classifier_model=gpt-4o.
+
 Examples:
-- Focus a test: `/run-evals test_path=tests/llm/test_ask_holmes.py keyword=80_pvc_storage_class_mismatch iterations=2`
+- Focus a test: `/run-evals keyword=80_pvc_storage_class_mismatch iterations=2`
 - Change models/markers: `/run-evals models="gpt-4o,anthropic/claude-sonnet-4-20250514" markers="llm and medium" workers=4`
 
 See docs/development/evaluations/running-evals.md for details.
