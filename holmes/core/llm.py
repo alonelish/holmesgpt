@@ -173,7 +173,7 @@ class DefaultLLM(LLM):
         )
         self._max_output_tokens = self.args.get("custom_args", {}).get(
             "max_output_tokens"
-        )  # TODO: add doc for max_output_tokens?
+        )
         self.args.pop("custom_args", None)
 
     def check_llm(
@@ -276,7 +276,7 @@ class DefaultLLM(LLM):
 
     @property
     def context_window_size(self) -> int:
-        if self._max_context_size:
+        if self._max_context_size is not None:
             return self._max_context_size
 
         if OVERRIDE_MAX_CONTENT_SIZE:
