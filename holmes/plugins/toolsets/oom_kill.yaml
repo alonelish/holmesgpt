@@ -5,6 +5,9 @@ toolsets:
     icon_url: ""
     tags:
       - cli
+    prerequisites:
+      - env:
+          - ALLOW_HOLMES_OOMKILL_TOOLSET
     additional_instructions: |
       ⚠️ This toolset is intentionally destructive. Only use in controlled environments.
     tools:

@@ -10,6 +10,7 @@ from holmes.core.tools import (
     ToolParameter,
     Toolset,
     ToolsetTag,
+    ToolsetEnvironmentPrerequisite,
 )
 from holmes.plugins.toolsets.bash.common.bash import execute_bash_command
 
@@ -80,7 +81,10 @@ class OOMKillToolset(Toolset):
             ),
             docs_url=None,
             icon_url=None,
-            prerequisites=[CallablePrerequisite(callable=self.prerequisites_callable)],
+            prerequisites=[
+                ToolsetEnvironmentPrerequisite(env=["ALLOW_HOLMES_OOMKILL_TOOLSET"]),
+                CallablePrerequisite(callable=self.prerequisites_callable),
+            ],
             tools=[TriggerOOMKill(self)],
             experimental=True,
             tags=[ToolsetTag.CORE],
