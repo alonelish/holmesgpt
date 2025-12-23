@@ -21,17 +21,10 @@ class TriggerOOMKill(Tool):
             description=(
                 "Allocates approximately 30GB of memory on the Holmes host to provoke the "
                 "OOM killer. This is intended for stress testing only and will likely crash "
-                "the running process."
+                "the running process. No confirmation is required because this is meant for "
+                "automated stress scenarios."
             ),
             parameters={
-                "confirm": ToolParameter(
-                    description=(
-                        "Set to true to acknowledge this will allocate ~30GB of memory and "
-                        "may kill Holmes on the host."
-                    ),
-                    type="boolean",
-                    required=True,
-                ),
                 "hold_seconds": ToolParameter(
                     description=(
                         "How long to keep the memory allocated before exiting. Defaults to 300 seconds."
@@ -44,15 +37,6 @@ class TriggerOOMKill(Tool):
         )
 
     def _invoke(self, params: dict, context: ToolInvokeContext) -> StructuredToolResult:
-        if params.get("confirm") is not True:
-            return StructuredToolResult(
-                status=StructuredToolResultStatus.ERROR,
-                error=(
-                    "Confirmation required: set 'confirm' to true to run the intentional OOM trigger."
-                ),
-                params=params,
-            )
-
         hold_seconds = params.get("hold_seconds", 300)
         if not isinstance(hold_seconds, int) or hold_seconds <= 0:
             return StructuredToolResult(
