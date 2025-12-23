@@ -39,6 +39,9 @@ def suppress_noisy_logs():
     logging.getLogger("markdown_it").setLevel(logging.INFO)
     # suppress UserWarnings from the slack_sdk module
     warnings.filterwarnings("ignore", category=UserWarning, module="slack_sdk.*")
+    # disable litellm's internal noisy logs suppression
+    import litellm
+    litellm.suppress_debug_info = True
 
 
 def init_logging(verbose_flags: Optional[List[bool]] = None, log_costs: bool = False):
