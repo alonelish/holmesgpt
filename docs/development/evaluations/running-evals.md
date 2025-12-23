@@ -189,6 +189,51 @@ Speed up test runs with parallel workers:
 RUN_LIVE=true ITERATIONS=10 poetry run pytest tests/llm/ -n 10
 ```
 
+## Triggering evals from PR comments
+
+Every pull request automatically runs a regression slice of the eval suite (see `.github/workflows/eval-regression.yaml`). Use the manual trigger below when you want to re-run evals with different models, markers, or test focus without pushing another commit.
+
+You can launch live evals directly from a pull request using a slash command. This is useful when you want reviewers to see results without pushing extra commits.
+
+**Who can run:** repository members and collaborators (command is ignored for others).
+
+**Command format**
+
+```
+/run-evals models=<comma-separated models> markers="<pytest -m expression>" keyword="<pytest -k filter>" iterations=<N> test_path=<path> workers=<N> classifier_model=<model> extra_pytest_args="--maxfail=1 --disable-warnings"
+```
+
+Only include the parameters you need—defaults are used for everything else.
+
+**Defaults**
+
+- `models`: `gpt-4o`
+- `markers`: `llm and easy`
+- `keyword`: _(empty)_
+- `iterations`: `1`
+- `test_path`: `tests/llm/`
+- `workers`: `6`
+- `classifier_model`: `gpt-4o`
+- `run_live` / `upload_dataset`: `true`
+
+**Examples**
+
+```text
+# Quick regression sweep
+/run-evals models=gpt-4o markers="llm and easy"
+
+# Focus on a specific scenario
+/run-evals models="gpt-4o,anthropic/claude-sonnet-4-20250514" test_path=tests/llm/test_ask_holmes.py keyword=80_pvc_storage_class_mismatch iterations=3 workers=4
+```
+
+Each manual run posts a fresh PR comment (no deletions) that includes:
+
+- The exact pytest command used
+- Models, markers, and other parameters
+- Start/end timestamps and total duration
+- Whether the run succeeded or failed
+- A link to download the full logs
+
 ### Debugging Failed Tests
 
 When tests fail, use these techniques to investigate:

@@ -62,6 +62,26 @@ jobs:
           GENERATE_REGRESSIONS_FILE: "true"
         run: |
           poetry run pytest --no-cov tests/llm/test_ask_holmes.py tests/llm/test_investigate.py -s -n10 -m 'llm and easy and not no-cicd'
+      - name: Add manual rerun instructions
+        if: steps.check-tests.outputs.should-run == 'true'
+        shell: bash
+        run: |
+          cat <<'EOF' >> evals_report.md
+
+---
+
+Want to rerun evals with custom filters or models? Comment on this PR with:
+
+```
+/run-evals models=gpt-4o markers="llm and easy"
+```
+
+Examples:
+- Focus a test: `/run-evals test_path=tests/llm/test_ask_holmes.py keyword=80_pvc_storage_class_mismatch iterations=2`
+- Change models/markers: `/run-evals models="gpt-4o,anthropic/claude-sonnet-4-20250514" markers="llm and medium" workers=4`
+
+See docs/development/evaluations/running-evals.md for details.
+EOF
       - name: Post evaluation results
         if: always()
         uses: ./.github/actions/post-eval-comment

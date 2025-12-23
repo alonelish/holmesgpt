@@ -1,0 +1,236 @@
+name: Run manual evals from PR comments
+
+on:
+  issue_comment:
+    types: [created]
+
+permissions:
+  contents: read
+  issues: write
+  pull-requests: write
+
+jobs:
+  manual-evals:
+    if: github.event.issue.pull_request != ''
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Parse /run-evals command
+        id: parse
+        env:
+          COMMENT_BODY: ${{ github.event.comment.body }}
+          COMMENT_AUTHOR_ASSOCIATION: ${{ github.event.comment.author_association }}
+        run: |
+          python - <<'PY'
+          import json
+          import os
+          import shlex
+
+          body = os.environ["COMMENT_BODY"]
+          association = os.environ["COMMENT_AUTHOR_ASSOCIATION"]
+
+          response_message = ""
+          should_run = False
+
+          allowed_associations = {"COLLABORATOR", "MEMBER", "OWNER"}
+
+          if not body.lstrip().startswith("/run-evals"):
+            # Not a trigger comment
+            print("should-run=false")
+            exit(0)
+
+          if association.upper() not in allowed_associations:
+            response_message = (
+              "Skipping evals: /run-evals is only available to repository members and collaborators."
+            )
+            print("should-run=false")
+            print(f"response-message={response_message}")
+            exit(0)
+
+          tokens = shlex.split(body)
+          defaults = {
+            "models": "gpt-4o",
+            "markers": "llm and easy",
+            "keyword": "",
+            "iterations": "1",
+            "test_path": "tests/llm/",
+            "workers": "6",
+            "classifier_model": "gpt-4o",
+            "extra_pytest_args": "",
+            "upload_dataset": "true",
+            "run_live": "true",
+          }
+
+          params = defaults.copy()
+
+          for token in tokens[1:]:
+            if "=" not in token:
+              continue
+            key, value = token.split("=", 1)
+            key = key.lower()
+            if key in params:
+              params[key] = value
+
+          should_run = True
+          params["comment_command"] = body.strip()
+          params["extra_pytest_args_json"] = json.dumps(shlex.split(params["extra_pytest_args"]))
+
+          print("should-run=true")
+          for key, value in params.items():
+            print(f"{key}={value}")
+          print(f"response-message={response_message}")
+          PY
+
+      - name: Acknowledge non-trigger or unauthorized comment
+        if: steps.parse.outputs.should-run != 'true' && steps.parse.outputs.response-message != ''
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              body: process.env.RESPONSE_MESSAGE,
+            });
+        env:
+          RESPONSE_MESSAGE: ${{ steps.parse.outputs.response-message }}
+
+      - name: Checkout
+        if: steps.parse.outputs.should-run == 'true'
+        uses: actions/checkout@v4
+
+      - name: Setup HolmesGPT environment
+        if: steps.parse.outputs.should-run == 'true'
+        uses: ./.github/actions/setup-holmes-env
+        with:
+          python-version: '3.12'
+          install-kubectl: 'true'
+
+      - name: Setup KIND cluster
+        if: steps.parse.outputs.should-run == 'true'
+        uses: ./.github/actions/setup-kind-cluster
+        with:
+          cluster-name: 'kind'
+          wait-for-ready: 'true'
+
+      - name: Run manual evals
+        if: steps.parse.outputs.should-run == 'true'
+        id: run-evals
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          AZURE_API_BASE: ${{ secrets.AZURE_API_BASE }}
+          AZURE_API_KEY: ${{ secrets.AZURE_API_KEY }}
+          AZURE_API_VERSION: ${{ secrets.AZURE_API_VERSION }}
+          BRAINTRUST_API_KEY: ${{ secrets.BRAINTRUST_API_KEY }}
+          MODEL: ${{ steps.parse.outputs.models }}
+          CLASSIFIER_MODEL: ${{ steps.parse.outputs.classifier_model }}
+          ITERATIONS: ${{ steps.parse.outputs.iterations }}
+          RUN_LIVE: ${{ steps.parse.outputs.run_live }}
+          UPLOAD_DATASET: ${{ steps.parse.outputs.upload_dataset }}
+          TEST_PATH: ${{ steps.parse.outputs.test_path }}
+          MARKERS: ${{ steps.parse.outputs.markers }}
+          KEYWORD: ${{ steps.parse.outputs.keyword }}
+          WORKERS: ${{ steps.parse.outputs.workers }}
+          EXTRA_PYTEST_ARGS_JSON: ${{ steps.parse.outputs.extra_pytest_args_json }}
+          COMMENT_COMMAND: ${{ steps.parse.outputs.comment_command }}
+        shell: bash
+        run: |
+          set -o pipefail
+          START_TIME="$(date -u +"%Y-%m-%dT%H:%M:%SZ")"
+          START_EPOCH="$(date -u +%s)"
+
+          mapfile -t EXTRA_ARGS < <(python - <<'PY'
+          import json
+          import os
+          raw = os.environ.get("EXTRA_PYTEST_ARGS_JSON") or "[]"
+          for arg in json.loads(raw):
+              print(arg)
+          PY
+          )
+
+          PYTEST_CMD=(poetry run pytest "${TEST_PATH}")
+          if [[ -n "${KEYWORD}" ]]; then
+            PYTEST_CMD+=(-k "${KEYWORD}")
+          fi
+          if [[ -n "${MARKERS}" ]]; then
+            PYTEST_CMD+=(-m "${MARKERS}")
+          fi
+          PYTEST_CMD+=(--no-cov --tb=short --strict-setup-mode --strict-setup-exceptions=22_high_latency_dbi_down)
+          if [[ -n "${WORKERS}" && "${WORKERS}" != "0" ]]; then
+            PYTEST_CMD+=(-n "${WORKERS}")
+          fi
+          PYTEST_CMD+=("${EXTRA_ARGS[@]}")
+
+          CMD_PRETTY=$(printf '%q ' "${PYTEST_CMD[@]}")
+
+          {
+            "${PYTEST_CMD[@]}"
+          } 2>&1 | tee manual_eval_output.log
+          EXIT_CODE=${PIPESTATUS[0]}
+
+          END_TIME="$(date -u +"%Y-%m-%dT%H:%M:%SZ")"
+          END_EPOCH="$(date -u +%s)"
+          DURATION=$((END_EPOCH - START_EPOCH))
+
+          HOURS=$((DURATION/3600))
+          MINS=$(( (DURATION%3600)/60 ))
+          SECS=$((DURATION%60))
+          HUMAN_DURATION=$(printf "%02d:%02d:%02d" "$HOURS" "$MINS" "$SECS")
+
+          {
+            echo "command=${CMD_PRETTY}"
+            echo "exit-code=${EXIT_CODE}"
+            echo "start-time=${START_TIME}"
+            echo "end-time=${END_TIME}"
+            echo "duration-human=${HUMAN_DURATION}"
+            echo "duration-seconds=${DURATION}"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Upload eval log
+        if: steps.parse.outputs.should-run == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: manual-eval-log-${{ github.run_id }}
+          path: manual_eval_output.log
+
+      - name: Generate manual eval report
+        if: steps.parse.outputs.should-run == 'true'
+        run: |
+          cat > manual_evals_report.md <<EOF
+          ## Manual HolmesGPT evals
+
+          - Triggered by: @${{ github.actor }}
+          - Command: \`${{ steps.parse.outputs.comment_command }}\`
+          - Test path: \`${{ steps.parse.outputs.test_path }}\`
+          - Models: \`${{ steps.parse.outputs.models }}\`
+          - Markers: \`${{ steps.parse.outputs.markers }}\`
+          - Keyword filter: \`${{ steps.parse.outputs.keyword || '""' }}\`
+          - Iterations: \`${{ steps.parse.outputs.iterations }}\`
+          - Workers: \`${{ steps.parse.outputs.workers }}\`
+          - Classifier model: \`${{ steps.parse.outputs.classifier_model }}\`
+          - Extra pytest args: \`${{ steps.parse.outputs.extra_pytest_args }}\`
+          - Started (UTC): ${{ steps.run-evals.outputs.start-time }}
+          - Finished (UTC): ${{ steps.run-evals.outputs.end-time }}
+          - Duration: ${{ steps.run-evals.outputs.duration-human }} (${{ steps.run-evals.outputs.duration-seconds }}s)
+          - Result: ${{ steps.run-evals.outputs.exit-code == '0' && '✅ Success' || '❌ Failed' }}
+
+          **Pytest command**
+          \`\`\`bash
+          ${{ steps.run-evals.outputs.command }}
+          \`\`\`
+
+          **Logs**
+          - [Download run log](https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }})
+
+          EOF
+
+      - name: Post manual eval comment
+        if: steps.parse.outputs.should-run == 'true'
+        uses: ./.github/actions/post-eval-comment
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          report-file: 'manual_evals_report.md'
+          comment-identifier: 'Manual HolmesGPT evals'
+          delete-previous: 'false'
