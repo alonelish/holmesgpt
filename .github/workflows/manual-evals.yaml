@@ -28,23 +28,29 @@ jobs:
 
           body = os.environ["COMMENT_BODY"]
           association = os.environ["COMMENT_AUTHOR_ASSOCIATION"]
+          output_path = os.environ["GITHUB_OUTPUT"]
 
           response_message = ""
           should_run = False
 
           allowed_associations = {"COLLABORATOR", "MEMBER", "OWNER"}
 
+          def set_output(name: str, value: str) -> None:
+            with open(output_path, "a", encoding="utf-8") as f:
+              f.write(f"{name}={value}\n")
+
           if not body.lstrip().startswith("/run-evals"):
             # Not a trigger comment
-            print("should-run=false")
+            set_output("should-run", "false")
+            set_output("response-message", response_message)
             exit(0)
 
           if association.upper() not in allowed_associations:
             response_message = (
               "Skipping evals: /run-evals is only available to repository members and collaborators."
             )
-            print("should-run=false")
-            print(f"response-message={response_message}")
+            set_output("should-run", "false")
+            set_output("response-message", response_message)
             exit(0)
 
           tokens = shlex.split(body)
@@ -75,10 +81,13 @@ jobs:
           params["comment_command"] = body.strip()
           params["extra_pytest_args_json"] = json.dumps(shlex.split(params["extra_pytest_args"]))
 
-          print("should-run=true")
+          set_output("should-run", "true")
           for key, value in params.items():
-            print(f"{key}={value}")
-          print(f"response-message={response_message}")
+            set_output(key, value)
+          set_output("response-message", response_message)
+
+          # Optional debug output
+          print(f"parsed /run-evals with params: {params}")
           PY
 
       - name: Acknowledge non-trigger or unauthorized comment

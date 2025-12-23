@@ -68,7 +68,7 @@ jobs:
         run: |
           cat <<'EOF' >> evals_report.md
 
----
+\---  # separator (escaped to avoid YAML document start)
 
 Want to rerun evals with custom filters or models? Comment on this PR with:
 
