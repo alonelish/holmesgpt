@@ -19,10 +19,12 @@ class MockLLM(LLM):
         self.model = model
         self._context_size = context_size
 
-    def get_context_window_size(self) -> int:
+    @property
+    def context_window_size(self) -> int:
         return self._context_size
 
-    def get_maximum_output_token(self) -> int:
+    @property
+    def maximum_output_token(self) -> int:
         return 1024
 
     def count_tokens(

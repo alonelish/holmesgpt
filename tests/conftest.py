@@ -1,5 +1,6 @@
 from pathlib import Path
 from typing import Any, Optional
+
 import pytest
 import yaml
 import logging
@@ -93,10 +94,12 @@ class MockLLM(LLM):
     def __init__(self, model: str = "mock-model"):
         self.model = model
 
-    def get_context_window_size(self) -> int:
+    @property
+    def context_window_size(self) -> int:
         return 8192
 
-    def get_maximum_output_token(self) -> int:
+    @property
+    def maximum_output_token(self) -> int:
         return 2048
 
     def count_tokens(

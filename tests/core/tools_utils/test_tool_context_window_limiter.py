@@ -3,8 +3,8 @@ from unittest.mock import Mock, patch
 import pytest
 
 from holmes.core.llm import LLM, TokenCountMetadata
-from holmes.core.tools import StructuredToolResult, StructuredToolResultStatus
 from holmes.core.models import ToolCallResult
+from holmes.core.tools import StructuredToolResult, StructuredToolResultStatus
 from holmes.core.tools_utils.tool_context_window_limiter import (
     prevent_overly_big_tool_response,
 )
@@ -15,7 +15,7 @@ class TestPreventOverlyBigToolResponse:
     def mock_llm(self):
         """Create a mock LLM instance."""
         llm = Mock(spec=LLM)
-        llm.get_context_window_size.return_value = 4096
+        llm.context_window_size = 4096
         llm.get_max_token_count_for_single_tool.return_value = (
             2048  # Default to 50% of context window
         )
@@ -116,7 +116,7 @@ class TestPreventOverlyBigToolResponse:
         ):
             # Context window: 4096, 25% = 1024 tokens allowed
             # Token count: 2000 (exceeds limit)
-            mock_llm.get_context_window_size.return_value = 4096
+            mock_llm.context_window_size = 4096
             mock_llm.get_max_token_count_for_single_tool.return_value = 1024
             mock_llm.count_tokens.return_value = TokenCountMetadata(
                 total_tokens=2000,
@@ -169,7 +169,7 @@ class TestPreventOverlyBigToolResponse:
             40,
         ):
             # Test with smaller context window
-            mock_llm.get_context_window_size.return_value = 2048
+            mock_llm.context_window_size = 2048
             mock_llm.get_max_token_count_for_single_tool.return_value = (
                 819  # 40% of 2048
             )
@@ -198,7 +198,7 @@ class TestPreventOverlyBigToolResponse:
             "holmes.common.env_vars.TOOL_MAX_ALLOCATED_CONTEXT_WINDOW_PCT",
             50,
         ):
-            mock_llm.get_context_window_size.return_value = 4096
+            mock_llm.context_window_size = 4096
             mock_llm.get_max_token_count_for_single_tool.return_value = 2048
             mock_llm.count_tokens.return_value = TokenCountMetadata(
                 total_tokens=2048,  # Exactly 50% of 4096
@@ -225,7 +225,7 @@ class TestPreventOverlyBigToolResponse:
             "holmes.common.env_vars.TOOL_MAX_ALLOCATED_CONTEXT_WINDOW_PCT",
             20,
         ):
-            mock_llm.get_context_window_size.return_value = 5000
+            mock_llm.context_window_size = 5000
             mock_llm.get_max_token_count_for_single_tool.return_value = (
                 1000  # 20% of 5000
             )

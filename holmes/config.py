@@ -515,7 +515,7 @@ class Config(RobustaBaseConfig):
             is_robusta_model=is_robusta_model,
         )  # type: ignore
         logging.info(
-            f"Using model: {model_name} ({llm.get_context_window_size():,} total tokens, {llm.get_maximum_output_token():,} output tokens)"
+            f"Using model: {model_name} ({llm.context_window_size:,} total tokens, {llm.maximum_output_token:,} output tokens)"
         )
         return llm
 

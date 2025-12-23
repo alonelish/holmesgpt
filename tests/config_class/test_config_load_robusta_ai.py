@@ -1,7 +1,7 @@
 from unittest.mock import patch
-from holmes.config import Config
-from holmes.clients.robusta_client import RobustaModelsResponse, RobustaModel
 
+from holmes.clients.robusta_client import RobustaModel, RobustaModelsResponse
+from holmes.config import Config
 
 ROBUSTA_TEST_MODELS = RobustaModelsResponse(
     models={
@@ -147,5 +147,5 @@ def test_robusta_ai_config_get_llm_context_override(
     Also makes sure the args are poped before getting to completion call llm"""
     config = Config.load_from_env()
     llm = config._get_llm("Robusta/sonnet-1m")
-    assert llm.get_context_window_size() == 1000000
+    assert llm.context_window_size == 1000000
     assert llm.args.get("custom_args") is None

@@ -1,20 +1,18 @@
 from typing import Dict, List, Optional
 
 import sentry_sdk
+
 from holmes.config import Config
 from holmes.core.models import (
-    ToolCallConversationResult,
     IssueChatRequest,
+    ToolCallConversationResult,
     WorkloadHealthChatRequest,
 )
-from holmes.plugins.prompts import load_and_render_prompt
-from holmes.core.tool_calling_llm import ToolCallingLLM
-from holmes.plugins.runbooks import RunbookCatalog
-from holmes.utils.global_instructions import (
-    Instructions,
-    generate_runbooks_args,
-)
 from holmes.core.prompt import generate_user_prompt
+from holmes.core.tool_calling_llm import ToolCallingLLM
+from holmes.plugins.prompts import load_and_render_prompt
+from holmes.plugins.runbooks import RunbookCatalog
+from holmes.utils.global_instructions import Instructions, generate_runbooks_args
 
 DEFAULT_TOOL_SIZE = 10000
 
@@ -26,10 +24,10 @@ def calculate_tool_size(
     if number_of_tools == 0:
         return DEFAULT_TOOL_SIZE
 
-    context_window = ai.llm.get_context_window_size()
+    context_window = ai.llm.context_window_size
     tokens = ai.llm.count_tokens(messages_without_tools)
     message_size_without_tools = tokens.total_tokens
-    maximum_output_token = ai.llm.get_maximum_output_token()
+    maximum_output_token = ai.llm.maximum_output_token
 
     tool_size = min(
         DEFAULT_TOOL_SIZE,

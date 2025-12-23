@@ -1,7 +1,9 @@
 import logging
 from typing import Any, Optional
-from pydantic import BaseModel
+
 import sentry_sdk
+from pydantic import BaseModel
+
 from holmes.common.env_vars import (
     ENABLE_CONVERSATION_HISTORY_COMPACTION,
     MAX_OUTPUT_TOKEN_RESERVATION,
@@ -15,7 +17,6 @@ from holmes.core.models import TruncationMetadata, TruncationResult
 from holmes.core.truncation.compaction import compact_conversation_history
 from holmes.utils import sentry_helper
 from holmes.utils.stream import StreamEvents, StreamMessage
-
 
 TRUNCATION_NOTICE = "\n\n[TRUNCATED]"
 
@@ -149,8 +150,8 @@ def limit_input_context_window(
     events = []
     metadata = {}
     initial_tokens = llm.count_tokens(messages=messages, tools=tools)  # type: ignore
-    max_context_size = llm.get_context_window_size()
-    maximum_output_token = llm.get_maximum_output_token()
+    max_context_size = llm.context_window_size
+    maximum_output_token = llm.maximum_output_token
     conversation_history_compacted = False
     if ENABLE_CONVERSATION_HISTORY_COMPACTION and (
         initial_tokens.total_tokens + maximum_output_token

@@ -57,8 +57,8 @@ def _setup_model_list_file(monkeypatch, tmp_path, data=None):
 def _get_mock_llm():
     """Helper to create a mock LLM instance."""
     mock_llm_instance = MagicMock()
-    mock_llm_instance.get_context_window_size.return_value = 128000
-    mock_llm_instance.get_maximum_output_token.return_value = 4096
+    mock_llm_instance.context_window_size = 128000
+    mock_llm_instance.maximum_output_token = 4096
     return mock_llm_instance
 
 

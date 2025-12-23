@@ -7,9 +7,9 @@ from math import floor
 from typing import TYPE_CHECKING, Any, Dict, List, Optional, Type, Union
 
 import litellm
+import sentry_sdk
 from litellm.litellm_core_utils.streaming_handler import CustomStreamWrapper
 from litellm.types.utils import ModelResponse, TextCompletionResponse
-import sentry_sdk
 from pydantic import BaseModel, ConfigDict, SecretStr
 from typing_extensions import Self
 
@@ -18,15 +18,14 @@ from holmes.clients.robusta_client import (
     RobustaModelsResponse,
     fetch_robusta_models,
 )
-
 from holmes.common.env_vars import (
+    EXTRA_HEADERS,
     FALLBACK_CONTEXT_WINDOW_SIZE,
     LOAD_ALL_ROBUSTA_MODELS,
     REASONING_EFFORT,
     ROBUSTA_AI,
     ROBUSTA_API_ENDPOINT,
     THINKING,
-    EXTRA_HEADERS,
     TOOL_MAX_ALLOCATED_CONTEXT_WINDOW_PCT,
     TOOL_MAX_ALLOCATED_CONTEXT_WINDOW_TOKENS,
 )
@@ -93,12 +92,14 @@ class LLM:
     def __init__(self):
         self.model: str  # type: ignore
 
+    @property
     @abstractmethod
-    def get_context_window_size(self) -> int:
+    def context_window_size(self) -> int:
         pass
 
+    @property
     @abstractmethod
-    def get_maximum_output_token(self) -> int:
+    def maximum_output_token(self) -> int:
         pass
 
     def get_max_token_count_for_single_tool(self) -> int:
@@ -106,7 +107,7 @@ class LLM:
             0 < TOOL_MAX_ALLOCATED_CONTEXT_WINDOW_PCT
             and TOOL_MAX_ALLOCATED_CONTEXT_WINDOW_PCT <= 100
         ):
-            context_window_size = self.get_context_window_size()
+            context_window_size = self.context_window_size
             calculated_max_tokens = int(
                 context_window_size * TOOL_MAX_ALLOCATED_CONTEXT_WINDOW_PCT // 100
             )
@@ -167,7 +168,12 @@ class DefaultLLM(LLM):
         )
 
     def update_custom_args(self):
-        self.max_context_size = self.args.get("custom_args", {}).get("max_context_size")
+        self._max_context_size = self.args.get("custom_args", {}).get(
+            "max_context_size"
+        )
+        self._max_output_tokens = self.args.get("custom_args", {}).get(
+            "max_output_tokens"
+        )  # TODO: add doc for max_output_tokens?
         self.args.pop("custom_args", None)
 
     def check_llm(
@@ -268,20 +274,23 @@ class DefaultLLM(LLM):
         # Remove duplicates while preserving order (dict.fromkeys maintains insertion order in Python 3.7+)
         return list(dict.fromkeys(names_to_try))
 
-    def get_context_window_size(self) -> int:
-        if self.max_context_size:
-            return self.max_context_size
+    @property
+    def context_window_size(self) -> int:
+        if self._max_context_size:
+            return self._max_context_size
 
         if OVERRIDE_MAX_CONTENT_SIZE:
-            logging.debug(
+            logging.info(
                 f"Using override OVERRIDE_MAX_CONTENT_SIZE {OVERRIDE_MAX_CONTENT_SIZE}"
             )
-            return OVERRIDE_MAX_CONTENT_SIZE
+            self._max_context_size = OVERRIDE_MAX_CONTENT_SIZE
+            return self._max_context_size
 
         # Try each name variant
         for name in self._get_model_name_variants_for_lookup():
             try:
-                return litellm.model_cost[name]["max_input_tokens"]
+                self._max_context_size = litellm.model_cost[name]["max_input_tokens"]
+                return self._max_context_size
             except Exception:
                 continue
 
@@ -291,7 +300,8 @@ class DefaultLLM(LLM):
             f"using default {FALLBACK_CONTEXT_WINDOW_SIZE} tokens for max_input_tokens. "
             f"To override, set OVERRIDE_MAX_CONTENT_SIZE environment variable to the correct value for your model."
         )
-        return FALLBACK_CONTEXT_WINDOW_SIZE
+        self._max_context_size = FALLBACK_CONTEXT_WINDOW_SIZE
+        return self._max_context_size
 
     @sentry_sdk.trace
     def count_tokens(
@@ -432,14 +442,16 @@ class DefaultLLM(LLM):
         else:
             raise Exception(f"Unexpected type returned by the LLM {type(result)}")
 
-    def get_maximum_output_token(self) -> int:
-        max_output_tokens = floor(min(64000, self.get_context_window_size() / 5))
+    @property
+    def maximum_output_token(self) -> int:
+        if self._max_output_tokens:
+            return self._max_output_tokens
+        max_output_tokens = floor(min(64000, self.context_window_size / 5))
 
         if OVERRIDE_MAX_OUTPUT_TOKEN:
-            logging.debug(
-                f"Using OVERRIDE_MAX_OUTPUT_TOKEN {OVERRIDE_MAX_OUTPUT_TOKEN}"
-            )
-            return OVERRIDE_MAX_OUTPUT_TOKEN
+            logging.info(f"Using OVERRIDE_MAX_OUTPUT_TOKEN {OVERRIDE_MAX_OUTPUT_TOKEN}")
+            self._max_output_tokens = OVERRIDE_MAX_OUTPUT_TOKEN
+            return self._max_output_tokens
 
         # Try each name variant
         for name in self._get_model_name_variants_for_lookup():
@@ -449,7 +461,9 @@ class DefaultLLM(LLM):
                 ]
                 if litellm_max_output_tokens < max_output_tokens:
                     max_output_tokens = litellm_max_output_tokens
-                return max_output_tokens
+
+                self._max_output_tokens = max_output_tokens
+                return self._max_output_tokens
             except Exception:
                 continue
 
@@ -459,7 +473,8 @@ class DefaultLLM(LLM):
             f"using {max_output_tokens} tokens for max_output_tokens. "
             f"To override, set OVERRIDE_MAX_OUTPUT_TOKEN environment variable to the correct value for your model."
         )
-        return max_output_tokens
+        self._max_output_tokens = max_output_tokens
+        return self._max_output_tokens
 
     def _add_cache_control_to_last_message(
         self, messages: List[Dict[str, Any]]

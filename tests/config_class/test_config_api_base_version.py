@@ -1,7 +1,8 @@
 from unittest.mock import MagicMock, patch
 
-from pydantic import SecretStr
 import yaml
+from pydantic import SecretStr
+
 from holmes.config import Config
 
 
@@ -44,8 +45,8 @@ def test_config_get_llm_with_api_base_version(monkeypatch):
 
     with patch("holmes.config.DefaultLLM") as mock_default_llm:
         mock_llm_instance = MagicMock()
-        mock_llm_instance.get_context_window_size.return_value = 128000
-        mock_llm_instance.get_maximum_output_token.return_value = 4096
+        mock_llm_instance.context_window_size = 128000
+        mock_llm_instance.maximum_output_token = 4096
         mock_default_llm.return_value = mock_llm_instance
 
         result = config._get_llm()
@@ -73,8 +74,8 @@ def test_config_get_llm_with_azure_openai_parameters(monkeypatch):
 
     with patch("holmes.config.DefaultLLM") as mock_default_llm:
         mock_llm_instance = MagicMock()
-        mock_llm_instance.get_context_window_size.return_value = 128000
-        mock_llm_instance.get_maximum_output_token.return_value = 4096
+        mock_llm_instance.context_window_size = 128000
+        mock_llm_instance.maximum_output_token = 4096
         mock_default_llm.return_value = mock_llm_instance
 
         result = config._get_llm()
@@ -110,8 +111,8 @@ def test_config_get_llm_with_model_list_api_base_version(monkeypatch, tmp_path):
 
     with patch("holmes.config.DefaultLLM") as mock_default_llm:
         mock_llm_instance = MagicMock()
-        mock_llm_instance.get_context_window_size.return_value = 128000
-        mock_llm_instance.get_maximum_output_token.return_value = 4096
+        mock_llm_instance.context_window_size = 128000
+        mock_llm_instance.maximum_output_token = 4096
         mock_default_llm.return_value = mock_llm_instance
         result = config._get_llm("test-model")
 
@@ -148,8 +149,8 @@ def test_config_get_llm_model_list_overrides_config_values(monkeypatch, tmp_path
 
     with patch("holmes.config.DefaultLLM") as mock_default_llm:
         mock_llm_instance = MagicMock()
-        mock_llm_instance.get_context_window_size.return_value = 128000
-        mock_llm_instance.get_maximum_output_token.return_value = 4096
+        mock_llm_instance.context_window_size = 128000
+        mock_llm_instance.maximum_output_token = 4096
         mock_default_llm.return_value = mock_llm_instance
 
         config._get_llm("test-model")
@@ -186,8 +187,8 @@ def test_config_get_llm_model_list_defaults_to_config_values(monkeypatch, tmp_pa
 
     with patch("holmes.config.DefaultLLM") as mock_default_llm:
         mock_llm_instance = MagicMock()
-        mock_llm_instance.get_context_window_size.return_value = 128000
-        mock_llm_instance.get_maximum_output_token.return_value = 4096
+        mock_llm_instance.context_window_size = 128000
+        mock_llm_instance.maximum_output_token = 4096
         mock_default_llm.return_value = mock_llm_instance
 
         config._get_llm("test-model")
@@ -237,8 +238,8 @@ def test_config_get_llm_with_non_none_model_list_first_model_fallback(
 
     with patch("holmes.config.DefaultLLM") as mock_default_llm:
         mock_llm_instance = MagicMock()
-        mock_llm_instance.get_context_window_size.return_value = 128000
-        mock_llm_instance.get_maximum_output_token.return_value = 4096
+        mock_llm_instance.context_window_size = 128000
+        mock_llm_instance.maximum_output_token = 4096
         mock_default_llm.return_value = mock_llm_instance
 
         # Call _get_llm without model_key - should use first model in dict
@@ -296,8 +297,8 @@ def test_config_get_llm_with_specific_model_from_model_list(monkeypatch, tmp_pat
 
     with patch("holmes.config.DefaultLLM") as mock_default_llm:
         mock_llm_instance = MagicMock()
-        mock_llm_instance.get_context_window_size.return_value = 128000
-        mock_llm_instance.get_maximum_output_token.return_value = 4096
+        mock_llm_instance.context_window_size = 128000
+        mock_llm_instance.maximum_output_token = 4096
         mock_default_llm.return_value = mock_llm_instance
 
         # Call _get_llm with specific model_key - should use that model's config
@@ -336,8 +337,8 @@ def test_config_get_llm_with_base_url_only(monkeypatch, tmp_path):
 
     with patch("holmes.config.DefaultLLM") as mock_default_llm:
         mock_llm_instance = MagicMock()
-        mock_llm_instance.get_context_window_size.return_value = 128000
-        mock_llm_instance.get_maximum_output_token.return_value = 4096
+        mock_llm_instance.context_window_size = 128000
+        mock_llm_instance.maximum_output_token = 4096
         mock_default_llm.return_value = mock_llm_instance
 
         config._get_llm("test-model")
@@ -376,8 +377,8 @@ def test_config_get_llm_api_base_overrides_base_url(monkeypatch, tmp_path):
 
     with patch("holmes.config.DefaultLLM") as mock_default_llm:
         mock_llm_instance = MagicMock()
-        mock_llm_instance.get_context_window_size.return_value = 128000
-        mock_llm_instance.get_maximum_output_token.return_value = 4096
+        mock_llm_instance.context_window_size = 128000
+        mock_llm_instance.maximum_output_token = 4096
         mock_default_llm.return_value = mock_llm_instance
 
         config._get_llm("test-model")
@@ -417,8 +418,8 @@ def test_config_get_llm_neither_api_base_nor_base_url_uses_config(
 
     with patch("holmes.config.DefaultLLM") as mock_default_llm:
         mock_llm_instance = MagicMock()
-        mock_llm_instance.get_context_window_size.return_value = 128000
-        mock_llm_instance.get_maximum_output_token.return_value = 4096
+        mock_llm_instance.context_window_size = 128000
+        mock_llm_instance.maximum_output_token = 4096
         mock_default_llm.return_value = mock_llm_instance
 
         config._get_llm("test-model")
@@ -458,8 +459,8 @@ def test_config_get_llm_both_params_popped_from_model_params(monkeypatch, tmp_pa
 
     with patch("holmes.config.DefaultLLM") as mock_default_llm:
         mock_llm_instance = MagicMock()
-        mock_llm_instance.get_context_window_size.return_value = 128000
-        mock_llm_instance.get_maximum_output_token.return_value = 4096
+        mock_llm_instance.context_window_size = 128000
+        mock_llm_instance.maximum_output_token = 4096
         mock_default_llm.return_value = mock_llm_instance
 
         config._get_llm("test-model")

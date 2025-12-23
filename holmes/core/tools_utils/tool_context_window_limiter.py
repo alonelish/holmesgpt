@@ -1,7 +1,8 @@
 from pydantic import BaseModel
+
 from holmes.core.llm import LLM
-from holmes.core.tools import StructuredToolResultStatus
 from holmes.core.models import ToolCallResult
+from holmes.core.tools import StructuredToolResultStatus
 from holmes.utils import sentry_helper
 
 
@@ -11,7 +12,7 @@ class ToolCallSizeMetadata(BaseModel):
 
 
 def get_pct_token_count(percent_of_total_context_window: float, llm: LLM) -> int:
-    context_window_size = llm.get_context_window_size()
+    context_window_size = llm.context_window_size
 
     if 0 < percent_of_total_context_window and percent_of_total_context_window <= 100:
         return int(context_window_size * percent_of_total_context_window // 100)

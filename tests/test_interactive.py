@@ -298,7 +298,7 @@ class TestRunInteractiveLoop(unittest.TestCase):
         self.mock_ai = Mock(spec=ToolCallingLLM)
         self.mock_ai.llm = Mock()
         self.mock_ai.llm.model = "test-model"
-        self.mock_ai.llm.get_context_window_size.return_value = 4096
+        self.mock_ai.llm.context_window_size = 4096
         self.mock_ai.tool_executor = Mock()
         self.mock_ai.tool_executor.toolsets = [SampleToolset()]
 

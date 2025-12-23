@@ -28,7 +28,7 @@ class FeedbackLLM(FeedbackInfoBase):
 
     def update_from_llm(self, llm: LLM):
         self.model = llm.model
-        self.max_context_size = llm.get_context_window_size()
+        self.max_context_size = llm.context_window_size
 
     def to_dict(self) -> dict:
         """Convert to dictionary representation."""

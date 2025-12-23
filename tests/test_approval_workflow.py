@@ -1,14 +1,16 @@
-from typing import Optional
-import pytest
 import json
-from unittest.mock import patch, MagicMock
+from typing import Optional
+from unittest.mock import MagicMock, patch
+
+import pytest
 from fastapi.testclient import TestClient
-from server import app
-from holmes.core.models import StructuredToolResult, StructuredToolResultStatus
-from holmes.utils.stream import StreamEvents
-from holmes.core.tool_calling_llm import ToolCallingLLM
+
 from holmes.core.llm import LLM, TokenCountMetadata
+from holmes.core.models import StructuredToolResult, StructuredToolResultStatus
+from holmes.core.tool_calling_llm import ToolCallingLLM
 from holmes.core.tools_utils.tool_executor import ToolExecutor
+from holmes.utils.stream import StreamEvents
+from server import app
 
 
 @pytest.fixture
@@ -95,8 +97,8 @@ def test_streaming_chat_approval_workflow_requires_approval(
         assistant_tokens=0,
         other_tokens=0,
     )
-    mock_llm.get_context_window_size.return_value = 128000
-    mock_llm.get_maximum_output_token.return_value = 4096
+    mock_llm.context_window_size = 128000
+    mock_llm.maximum_output_token = 4096
     mock_llm.model = "gpt-4o"
 
     # Mock the LLM completion to return a tool call
@@ -229,8 +231,8 @@ def test_streaming_chat_approval_workflow_approve_and_execute(
         assistant_tokens=0,
         other_tokens=0,
     )
-    mock_llm.get_context_window_size.return_value = 128000
-    mock_llm.get_maximum_output_token.return_value = 4096
+    mock_llm.context_window_size = 128000
+    mock_llm.maximum_output_token = 4096
     mock_llm.model = "gpt-4o"
 
     mock_llm_response = create_mock_llm_response(
@@ -376,8 +378,8 @@ def test_streaming_chat_approval_workflow_reject_command(
         assistant_tokens=0,
         other_tokens=0,
     )
-    mock_llm.get_context_window_size.return_value = 128000
-    mock_llm.get_maximum_output_token.return_value = 4096
+    mock_llm.context_window_size = 128000
+    mock_llm.maximum_output_token = 4096
     mock_llm.model = "gpt-4o"
 
     mock_llm_response = create_mock_llm_response(

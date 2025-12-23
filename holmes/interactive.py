@@ -1,5 +1,6 @@
 import logging
 import os
+import re
 import subprocess
 import tempfile
 import threading
@@ -51,7 +52,6 @@ from holmes.utils.colors import (
 )
 from holmes.utils.console.consts import agent_name
 from holmes.version import check_version_async
-import re
 
 
 class SlashCommands(Enum):
@@ -493,8 +493,8 @@ def handle_context_command(messages, ai: ToolCallingLLM, console: Console) -> No
     tokens_metadata = ai.llm.count_tokens(
         messages
     )  # TODO: pass tools to also count tokens used by input tools
-    max_context_size = ai.llm.get_context_window_size()
-    max_output_tokens = ai.llm.get_maximum_output_token()
+    max_context_size = ai.llm.context_window_size
+    max_output_tokens = ai.llm.maximum_output_token
     available_tokens = (
         max_context_size - tokens_metadata.total_tokens - max_output_tokens
     )
