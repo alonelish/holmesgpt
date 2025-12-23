@@ -87,6 +87,7 @@ def test_kubernetes_get_streams_pages_and_filters():
     assert summary["items_processed"] == 3
     assert summary["items_matched"] == 2
     assert summary["last_continue_token"] is None
+    assert result.data["count"] == 2
     assert [item["name"] for item in result.data["items"]] == ["keep-me", "keep-too"]
     assert resource.calls[0]["limit"] == 1
 
@@ -142,3 +143,35 @@ def test_kubernetes_get_returns_error_on_resolution_failure():
 
     assert result.status == StructuredToolResultStatus.ERROR
     assert "boom" in result.error
+
+
+def test_kubernetes_get_count_only_mode():
+    tool, _ = _create_tool()
+    resource = _FakeResource(namespaced=False, kind="Node")
+    resource.queue_response(
+        {
+            "items": [
+                {"metadata": {"name": "node-a"}, "kind": "Node"},
+                {"metadata": {"name": "node-b"}, "kind": "Node"},
+            ],
+            "metadata": {},
+        }
+    )
+
+    params = {
+        "api_version": "v1",
+        "kind": "nodes",
+        "output_format": "count",
+    }
+
+    with patch(
+        "holmes.plugins.toolsets.kubernetes_get._get_dynamic_client"
+    ) as mock_client, patch(
+        "holmes.plugins.toolsets.kubernetes_get._resolve_resource", return_value=resource
+    ):
+        mock_client.return_value = types.SimpleNamespace()
+        result = tool._invoke(params, context=None)  # type: ignore[arg-type]
+
+    assert result.status == StructuredToolResultStatus.SUCCESS
+    assert result.data["count"] == 2
+    assert "items" not in result.data

@@ -246,6 +246,14 @@ class KubernetesGetResources(Tool):
                     type="integer",
                     required=False,
                 ),
+                "output_format": ToolParameter(
+                    description=(
+                        "Output format. Use 'count' to return only the count plus metadata; defaults to 'full'."
+                    ),
+                    type="string",
+                    required=False,
+                    enum=["full", "count"],
+                ),
             },
             toolset=toolset,
         )
@@ -265,6 +273,7 @@ class KubernetesGetResources(Tool):
         chunk_size = int(params.get("chunk_size") or 500)
         max_results = params.get("max_results")
         max_results_int = int(max_results) if max_results else None
+        output_format = (params.get("output_format") or "full").lower()
 
         if not kind:
             return StructuredToolResult(
@@ -343,9 +352,13 @@ class KubernetesGetResources(Tool):
             "last_continue_token": continue_token,
         }
 
+        data: Dict[str, Any] = {"summary": summary, "count": len(matches)}
+        if output_format != "count":
+            data["items"] = matches
+
         return StructuredToolResult(
             status=StructuredToolResultStatus.SUCCESS,
-            data={"summary": summary, "items": matches},
+            data=data,
             params=params,
         )
 
