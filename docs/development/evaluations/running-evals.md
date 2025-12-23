@@ -6,6 +6,8 @@ They are used to both catch regressions and measure the impact of new features.
 
 [Example: pod crashloop eval](https://github.com/HolmesGPT/holmesgpt/tree/master/tests/llm/fixtures/test_ask_holmes/09_crashpod).
 
+In CI, a regression slice of the eval suite runs automatically on every pull request to surface failures early.
+
 ## Eval Tags
 
 Evals are tagged and grouped into categories. Two common tags are `easy` and `medium`:
@@ -188,6 +190,46 @@ Speed up test runs with parallel workers:
 # Run with 10 parallel workers
 RUN_LIVE=true ITERATIONS=10 poetry run pytest tests/llm/ -n 10
 ```
+
+## Triggering evals from PR comments
+
+Every pull request automatically runs a regression slice of the eval suite (see `.github/workflows/eval-regression.yaml`). Use the manual trigger below when you want to re-run evals with different models, markers, or test focus without pushing another commit.
+
+You can launch live evals directly from a pull request using a slash command. This is useful when you want reviewers to see results without pushing extra commits.
+
+**Who can run:** repository members and collaborators (command is ignored for others).
+
+**Command format (defaults in parentheses)**
+
+```
+/run-evals models=<comma-separated models> \        # default: gpt-4o
+          markers="<pytest -m expression>" \        # default: "llm and easy"
+          keyword="<pytest -k filter>" \            # default: ""
+          iterations=<N> \                          # default: 1
+          workers=<N> \                             # default: 6
+          classifier_model=<model> \                # default: gpt-4o
+          extra_pytest_args="--maxfail=1 --disable-warnings"  # default: ""
+```
+
+Only include the parameters you need—defaults are used for everything else.
+
+**Examples**
+
+```text
+# Quick regression sweep
+/run-evals models=gpt-4o markers="llm and easy"
+
+# Focus on a specific scenario
+/run-evals models="gpt-4o,anthropic/claude-sonnet-4-20250514" keyword=80_pvc_storage_class_mismatch iterations=3 workers=4
+```
+
+Each manual run posts a fresh PR comment (no deletions) that includes:
+
+- The exact pytest command used
+- Models, markers, and other parameters
+- Start/end timestamps and total duration
+- Whether the run succeeded or failed
+- A link to download the full logs
 
 ### Debugging Failed Tests
 
