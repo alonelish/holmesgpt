@@ -9,9 +9,9 @@ This guide explains how to intentionally trigger OOM kills using the built-in OO
 Holmes ships with two disabled-by-default toolsets for inducing an OOM kill:
 
 - **`oom_kill` (Python)** – `trigger_oom_kill` allocates ~30 GB and sleeps for a configurable duration.
-- **`oom_kill/bash` (YAML/bash)** – `trigger_oom_kill_bash` does the same via a bash-executed Python snippet.
+- **`oom_kill_bash` (YAML/bash)** – `trigger_oom_kill_bash` does the same via a bash-executed Python snippet and applies `ulimit -v 2097152` (2 GiB virtual memory cap) before allocation to reduce blast radius.
 
-Both toolsets require the environment variable `ALLOW_HOLMES_OOMKILL_TOOLSET` to pass prerequisites and must be explicitly enabled in configuration.
+Both toolsets require the environment variable `ALLOW_HOLMES_OOMKILL_TOOLSET` to pass prerequisites and must be explicitly enabled in configuration. They are **disabled by default** and will not be loaded unless you opt in.
 
 ## Enabling via Helm/ArgoCD (cluster install)
 
@@ -23,12 +23,11 @@ Both toolsets require the environment variable `ALLOW_HOLMES_OOMKILL_TOOLSET` to
      --helm-set-string additionalEnvVars[0].value=true
    ```
 
-2. **Enable the toolsets**:
+2. **Enable the toolsets** (note the underscore name for the bash variant):
    ```bash
-   # Note the escaped slash for the bash toolset name
    argocd app set <APP_NAME> \
      --helm-set-string toolsets.oom_kill.enabled=true \
-     --helm-set-string toolsets.oom_kill\\/bash.enabled=true
+     --helm-set-string toolsets.oom_kill_bash.enabled=true
    ```
 
 3. **Sync to apply**:
@@ -51,7 +50,7 @@ Add to your local config (e.g., `config.yaml`) and set the env guard before runn
 toolsets:
   oom_kill:
     enabled: true
-  oom_kill/bash:
+  oom_kill_bash:
     enabled: true
 ```
 

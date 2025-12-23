@@ -1,5 +1,5 @@
 toolsets:
-  oom_kill/bash:
+  oom_kill_bash:
     description: "DANGEROUS: intentionally allocate ~30GB on the Holmes host to trigger OOM kill for stress testing (no confirmation required)."
     docs_url: ""
     icon_url: ""
@@ -14,6 +14,7 @@ toolsets:
       - name: "trigger_oom_kill_bash"
         description: "Allocate ~30GB of memory and hold it for a period to provoke the OOM killer. No confirmation required; intended for automated stress tests."
         command: |
+          ulimit -v 2097152 || true
           python - <<'PY'
           import time
 
