@@ -15,15 +15,46 @@ Both toolsets require the environment variable `ALLOW_HOLMES_OOMKILL_TOOLSET` to
 
 ## Enabling via Helm/ArgoCD (cluster install)
 
+Use the correct values path for your deployment method.
+
+=== "Robusta Helm Chart (Holmes as subchart)"
+
 1. **Set the env guard** (required):
    ```bash
-   # Example: add to your values or patch deployment env
+   argocd app set <APP_NAME> \
+     --helm-set-string holmes.additionalEnvVars[0].name=ALLOW_HOLMES_OOMKILL_TOOLSET \
+     --helm-set-string holmes.additionalEnvVars[0].value=true
+   ```
+
+2. **Enable the toolsets**:
+   ```bash
+   argocd app set <APP_NAME> \
+     --helm-set-string holmes.toolsets.oom_kill.enabled=true \
+     --helm-set-string holmes.toolsets.oom_kill_bash.enabled=true
+   ```
+
+3. **Sync to apply**:
+   ```bash
+   argocd app sync <APP_NAME>
+   ```
+
+4. **Verify** (optional):
+   ```bash
+   kubectl -n <holmes-namespace> exec -it <holmes-pod> -- \
+     cat /app/custom_toolset.yaml
+   # Expect oom_kill and oom_kill_bash present and enabled
+   ```
+
+=== "Holmes Helm Chart (direct)"
+
+1. **Set the env guard** (required):
+   ```bash
    argocd app set <APP_NAME> \
      --helm-set-string additionalEnvVars[0].name=ALLOW_HOLMES_OOMKILL_TOOLSET \
      --helm-set-string additionalEnvVars[0].value=true
    ```
 
-2. **Enable the toolsets** (note the underscore name for the bash variant):
+2. **Enable the toolsets**:
    ```bash
    argocd app set <APP_NAME> \
      --helm-set-string toolsets.oom_kill.enabled=true \
@@ -39,7 +70,7 @@ Both toolsets require the environment variable `ALLOW_HOLMES_OOMKILL_TOOLSET` to
    ```bash
    kubectl -n <holmes-namespace> exec -it <holmes-pod> -- \
      cat /app/custom_toolset.yaml
-   # Expect oom_kill and oom_kill/bash present and enabled
+   # Expect oom_kill and oom_kill_bash present and enabled
    ```
 
 ## Enabling in Local CLI Mode
