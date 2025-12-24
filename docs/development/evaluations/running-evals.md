@@ -72,6 +72,46 @@ Once you're comfortable running individual evals, you can run the full benchmark
 ./run_benchmarks_local.sh 'gpt-4o' 'easy' 1 '' 6
 ```
 
+### Running Benchmarks via GitHub Actions
+
+You can also run comprehensive evaluations directly in GitHub Actions with custom parameters, useful for testing in CI/CD without local setup:
+
+**How to manually trigger the eval workflow:**
+
+1. Navigate to the **[Actions tab](https://github.com/HolmesGPT/holmesgpt/actions/workflows/eval-benchmarks.yaml)** in the repository
+2. Select **"Run full eval benchmarks"** workflow from the left sidebar
+3. Click the **"Run workflow"** dropdown button (top right)
+4. Configure parameters:
+   - **Models**: Comma-separated list of models to test (e.g., `gpt-4o,anthropic/claude-sonnet-4-20250514`)
+   - **Test markers**: Pytest markers to filter tests (e.g., `easy`, `medium`, `logs`, `kubernetes`)
+     - Note: `llm` marker is automatically prepended, so just specify additional filters
+   - **Iterations**: Number of iterations per test (max 10, recommended: 10 for statistical significance)
+5. Click **"Run workflow"** to start execution
+
+**Results will be:**
+- Published to [latest-results.md](./latest-results.md)
+- Archived in [history/](./history/) with timestamp
+- Available as downloadable artifacts in the workflow run
+
+**Example configurations:**
+
+```yaml
+# Quick validation with GPT-4o
+Models: gpt-4o
+Test markers: easy
+Iterations: 1
+
+# Comprehensive model comparison
+Models: gpt-4o,gpt-4.1,anthropic/claude-sonnet-4-20250514
+Test markers: easy
+Iterations: 10
+
+# Test specific capability across models
+Models: gpt-4o,anthropic/claude-sonnet-4-20250514
+Test markers: logs and kubernetes
+Iterations: 3
+```
+
 ## Environment Variables
 
 Essential variables for controlling test behavior:

@@ -64,9 +64,14 @@ Our CI/CD pipeline runs evaluations automatically:
 
 - **Weekly** - Every Sunday at 2 AM UTC (comprehensive testing with 10 iterations)
 - **Pull Requests** - When eval-related files are modified (quick validation)
-- **On-demand** - Via GitHub Actions UI
+- **On-demand** - Via GitHub Actions UI with custom parameters
 
-Results are published here and archived in [history](./history/index.md).
+**[→ How to manually trigger evaluations](./running-evals.md#running-benchmarks-via-github-actions)**
+
+You can run custom evaluations by:
+1. Going to [Actions → Run full eval benchmarks](https://github.com/HolmesGPT/holmesgpt/actions/workflows/eval-benchmarks.yaml)
+2. Clicking "Run workflow" and configuring models, test markers, and iterations
+3. Viewing results in [latest results](./latest-results.md) and [history](./history/index.md)
 
 ## Model Comparison
 

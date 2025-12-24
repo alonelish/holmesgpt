@@ -148,6 +148,17 @@ def generate_markdown_report(sorted_results: List[dict]) -> Tuple[str, List[dict
     )
     markdown += "\n- :no_entry_sign: the test was throttled by API rate limits/overload"
     markdown += "\n- :x: the test failed and should be fixed before merging the PR"
+    markdown += "\n\n---\n"
+    markdown += "\n### :rocket: Run Custom Evaluations"
+    markdown += "\n\nYou can manually trigger comprehensive evaluations with custom parameters:"
+    markdown += "\n\n1. Go to **[Actions → Run full eval benchmarks](../../actions/workflows/eval-benchmarks.yaml)**"
+    markdown += "\n2. Click **Run workflow**"
+    markdown += "\n3. Configure parameters:"
+    markdown += "\n   - **Models**: Comma-separated list (e.g., `gpt-4o,anthropic/claude-sonnet-4-20250514`)"
+    markdown += "\n   - **Test markers**: Pytest markers to filter tests (e.g., `easy`, `medium`, `logs`)"
+    markdown += "\n   - **Iterations**: Number of times to run each test (max 10, recommended: 10 for reliability)"
+    markdown += "\n4. Click **Run workflow** to start"
+    markdown += "\n\nResults will be published to the [latest results page](../../docs/development/evaluations/latest-results.md)."
 
     return (
         markdown,
