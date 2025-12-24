@@ -4,7 +4,7 @@ toolsets:
     docs_url: ""
     icon_url: ""
     tags:
-      - cli
+      - core
     prerequisites:
       - env:
           - ALLOW_HOLMES_OOMKILL_TOOLSET
