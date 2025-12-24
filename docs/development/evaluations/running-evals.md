@@ -81,12 +81,13 @@ You can also run comprehensive evaluations directly in GitHub Actions with custo
 1. Navigate to the **[Actions tab](https://github.com/HolmesGPT/holmesgpt/actions/workflows/eval-benchmarks.yaml)** in the repository
 2. Select **"Run full eval benchmarks"** workflow from the left sidebar
 3. Click the **"Run workflow"** dropdown button (top right)
-4. Configure parameters:
+4. Select the branch to run the workflow on (e.g., `master`, your PR branch, or any feature branch)
+5. Configure parameters:
    - **Models**: Comma-separated list of models to test (e.g., `gpt-4o,anthropic/claude-sonnet-4-20250514`)
    - **Test markers**: Pytest markers to filter tests (e.g., `easy`, `medium`, `logs`, `kubernetes`)
      - Note: `llm` marker is automatically prepended, so just specify additional filters
    - **Iterations**: Number of iterations per test (max 10, recommended: 10 for statistical significance)
-5. Click **"Run workflow"** to start execution
+6. Click **"Run workflow"** to start execution
 
 **Results will be:**
 - Published to [latest-results.md](./latest-results.md)
@@ -96,21 +97,26 @@ You can also run comprehensive evaluations directly in GitHub Actions with custo
 **Example configurations:**
 
 ```yaml
-# Quick validation with GPT-4o
+# Quick validation with GPT-4o on master branch
+Branch: master
 Models: gpt-4o
 Test markers: easy
 Iterations: 1
 
-# Comprehensive model comparison
+# Test your PR branch changes comprehensively
+Branch: your-feature-branch
 Models: gpt-4o,gpt-4.1,anthropic/claude-sonnet-4-20250514
 Test markers: easy
 Iterations: 10
 
 # Test specific capability across models
+Branch: master
 Models: gpt-4o,anthropic/claude-sonnet-4-20250514
 Test markers: logs and kubernetes
 Iterations: 3
 ```
+
+**Pro tip:** Use branch selection to test your changes on a PR branch before merging. This helps catch issues that might not show up in the quick regression tests.
 
 ## Environment Variables
 
