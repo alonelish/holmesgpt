@@ -16,6 +16,8 @@ from holmes.plugins.toolsets.bash.common.bash import execute_bash_command
 
 
 class TriggerOOMKill(Tool):
+    toolset: "OOMKillToolset"
+
     def __init__(self, toolset: "OOMKillToolset"):
         super().__init__(
             name="trigger_oom_kill",
@@ -34,7 +36,7 @@ class TriggerOOMKill(Tool):
                     required=False,
                 ),
             },
-            toolset=toolset,
+            toolset=toolset,  # type: ignore[call-arg]
         )
 
     def _invoke(self, params: dict, context: ToolInvokeContext) -> StructuredToolResult:
