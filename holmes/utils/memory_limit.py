@@ -13,7 +13,7 @@ logger = logging.getLogger(__name__)
 
 # Environment variable for configuring memory limit for tool subprocesses
 TOOL_MEMORY_LIMIT_ENV = "HOLMES_TOOL_MEMORY_LIMIT"
-TOOL_MEMORY_LIMIT_DEFAULT = "2GB"
+TOOL_MEMORY_LIMIT_DEFAULT = "500MB"
 
 
 def parse_size_to_kb(size_str: str) -> int:
@@ -115,9 +115,11 @@ def check_oom_and_append_hint(output: str, return_code: int) -> str:
     if is_oom:
         current_limit = os.environ.get(TOOL_MEMORY_LIMIT_ENV, TOOL_MEMORY_LIMIT_DEFAULT)
         hint = (
-            f"\n\n[OOM] Command was likely killed due to memory limits. "
-            f"Current limit: {current_limit}. "
-            f"To increase, set {TOOL_MEMORY_LIMIT_ENV} (e.g., '4GB', '8GB')."
+            f"\n\n[OOM] Command was killed due to memory limits (current limit: {current_limit}). "
+            f"Try querying the data differently to reduce memory usage - add filters to narrow the results, "
+            f"use smaller time ranges, or try alternative tools that may be more memory-efficient. "
+            f"If you cannot succeed with a modified query, you may recommend the user increase the limit "
+            f"by setting {TOOL_MEMORY_LIMIT_ENV} (e.g., '1GB', '2GB')."
         )
         return output + hint
 

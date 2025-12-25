@@ -1,4 +1,5 @@
 import textwrap
+import time
 from typing import Any, Dict
 
 from holmes.core.tools import (
@@ -48,21 +49,10 @@ class TriggerOOMKill(Tool):
                 params=params,
             )
 
-        command = textwrap.dedent(
-            f"""
-            python - <<'PY'
-            import time
-
-            size_bytes = 30 * 1024 * 1024 * 1024
-            print(f"Allocating {{size_bytes / 1024 / 1024 / 1024:.0f}} GB of memory to intentionally trigger OOM kill; sleeping for {hold_seconds}s")
-            data = bytearray(size_bytes)
-            time.sleep({hold_seconds})
-            PY
-            """
-        ).strip()
-
-        timeout = hold_seconds + 30
-        return execute_bash_command(cmd=command, timeout=timeout, params=params)
+        size_bytes = 30 * 1024 * 1024 * 1024
+        print(f"Allocating {{size_bytes / 1024 / 1024 / 1024:.0f}} GB of memory to intentionally trigger OOM kill; sleeping for {hold_seconds}s")
+        data = bytearray(size_bytes) # type: ignore
+        time.sleep({hold_seconds})
 
     def get_parameterized_one_liner(self, params: Dict[str, Any]) -> str:
         hold_seconds = params.get("hold_seconds", 300)
