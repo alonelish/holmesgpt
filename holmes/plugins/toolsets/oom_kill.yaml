@@ -14,7 +14,6 @@ toolsets:
       - name: "trigger_oom_kill_bash"
         description: "Allocate ~30GB of memory and hold it for a period to provoke the OOM killer. No confirmation required; intended for automated stress tests."
         command: |
-          ulimit -v 2097152 || true
           python - <<'PY'
           import time
 
