@@ -52,6 +52,7 @@ EXTRA_HEADERS = os.environ.get("EXTRA_HEADERS", "")
 THINKING = os.environ.get("THINKING", "")
 REASONING_EFFORT = os.environ.get("REASONING_EFFORT", "").strip().lower()
 TEMPERATURE = float(os.environ.get("TEMPERATURE", "0.00000001"))
+TOOL_MEMORY_LIMIT_MB = int(os.environ.get("TOOL_MEMORY_LIMIT_MB", 800))
 
 STREAM_CHUNKS_PER_PARSE = int(
     os.environ.get("STREAM_CHUNKS_PER_PARSE", 80)
@@ -113,3 +114,10 @@ RESET_REPEATED_TOOL_CALL_CHECK_AFTER_COMPACTION = load_bool(
 )
 
 SSE_READ_TIMEOUT = float(os.environ.get("SSE_READ_TIMEOUT", "120"))
+
+LLM_REQUEST_TIMEOUT = float(os.environ.get("LLM_REQUEST_TIMEOUT", "600"))
+
+ENABLE_CONNECTION_KEEPALIVE = load_bool("ENABLE_CONNECTION_KEEPALIVE", False)
+KEEPALIVE_IDLE = int(os.environ.get("KEEPALIVE_IDLE", 2))
+KEEPALIVE_INTVL = int(os.environ.get("KEEPALIVE_INTVL", 2))
+KEEPALIVE_CNT = int(os.environ.get("KEEPALIVE_CNT", 5))
