@@ -144,13 +144,28 @@ class ContextWindowLimiterOutput(BaseModel):
 
 @sentry_sdk.trace
 def limit_input_context_window(
-    llm: LLM, messages: list[dict], tools: Optional[list[dict[str, Any]]]
+    llm: LLM,
+    messages: list[dict],
+    tools: Optional[list[dict[str, Any]]],
+    disable_truncation: bool = False,
 ) -> ContextWindowLimiterOutput:
     events = []
     metadata = {}
-    initial_tokens = llm.count_tokens(messages=messages, tools=tools)  # type: ignore
     max_context_size = llm.get_context_window_size()
     maximum_output_token = llm.get_maximum_output_token()
+    if disable_truncation:
+        tokens = llm.count_tokens(messages=messages, tools=tools)  # type: ignore
+        return ContextWindowLimiterOutput(
+            events=events,
+            messages=messages,
+            metadata=metadata,
+            max_context_size=max_context_size,
+            maximum_output_token=maximum_output_token,
+            tokens=tokens,
+            conversation_history_compacted=False,
+        )
+
+    initial_tokens = llm.count_tokens(messages=messages, tools=tools)  # type: ignore
     conversation_history_compacted = False
     if ENABLE_CONVERSATION_HISTORY_COMPACTION and (
         initial_tokens.total_tokens + maximum_output_token

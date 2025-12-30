@@ -376,7 +376,10 @@ class ToolCallingLLM:
             tool_choice = "auto" if tools else None
 
             limit_result = limit_input_context_window(
-                llm=self.llm, messages=messages, tools=tools
+                llm=self.llm,
+                messages=messages,
+                tools=tools,
+                disable_truncation=self.anthropic_code_mode,
             )
             messages = limit_result.messages
             metadata = metadata | limit_result.metadata
@@ -730,8 +733,12 @@ class ToolCallingLLM:
                     user_approved=user_approved,
                 )
 
-            original_token_count = prevent_overly_big_tool_response(
-                tool_call_result=tool_call_result, llm=self.llm
+            original_token_count = (
+                None
+                if self.anthropic_code_mode
+                else prevent_overly_big_tool_response(
+                    tool_call_result=tool_call_result, llm=self.llm
+                )
             )
 
             ToolCallingLLM._log_tool_call_result(
@@ -890,7 +897,10 @@ class ToolCallingLLM:
             tool_choice = "auto" if tools else None
 
             limit_result = limit_input_context_window(
-                llm=self.llm, messages=messages, tools=tools
+                llm=self.llm,
+                messages=messages,
+                tools=tools,
+                disable_truncation=self.anthropic_code_mode,
             )
             yield from limit_result.events
             messages = limit_result.messages
