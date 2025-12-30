@@ -91,8 +91,18 @@ function buildBody(p, progressSteps, extras = {}) {
  */
 function buildRerunFooter(p, context) {
   const workflowUrl = `https://github.com/${context.repo.owner}/${context.repo.repo}/actions/workflows/eval-regression.yaml`;
-  return '\n---\n<details>\n<summary>📖 <b>Legend</b></summary>\n\n' +
-    '### 🔄 Re-run evals manually\n\n' +
+  return '\n---\n' +
+    '<details>\n<summary>📖 <b>Legend</b></summary>\n\n' +
+    '| Icon | Meaning |\n|------|--------|\n' +
+    '| ✅ | The test was successful |\n' +
+    '| ➖ | The test was skipped |\n' +
+    '| ⚠️ | The test failed but is known to be flaky or known to fail |\n' +
+    '| 🚧 | The test had a setup failure (not a code regression) |\n' +
+    '| 🔧 | The test failed due to mock data issues (not a code regression) |\n' +
+    '| 🚫 | The test was throttled by API rate limits/overload |\n' +
+    '| ❌ | The test failed and should be fixed before merging the PR |\n' +
+    '</details>\n' +
+    '\n<details>\n<summary>🔄 <b>Re-run evals manually</b></summary>\n\n' +
     '> ⚠️ **Warning:** Manual re-runs have NO default markers and will run ALL LLM tests (~100+), which can take 1+ hours. ' +
     'Use `markers: regression` or `filter: test_name` to limit scope.\n\n' +
     '**Option 1: Comment on this PR** with `/eval`:\n\n' +
@@ -104,14 +114,15 @@ function buildRerunFooter(p, context) {
     '| `markers` | Pytest markers (**no default - runs all tests!**) |\n' +
     '| `filter` | Pytest -k filter |\n' +
     '| `iterations` | Number of runs, max 10 |\n\n' +
-    `**Option 2: [Trigger via GitHub Actions UI](${workflowUrl})** → "Run workflow"\n\n` +
-    '### 🏷️ Valid markers\n\n' +
-    (p.validMarkers || '_(No markers found)_') +
-    '\n\n### 📋 Valid eval names (use with filter)\n\n' +
+    `**Option 2: [Trigger via GitHub Actions UI](${workflowUrl})** → "Run workflow"\n</details>\n` +
+    '\n<details>\n<summary>🏷️ <b>Valid markers</b></summary>\n\n' +
+    (p.validMarkers || '_(Collecting from pyproject.toml...)_') +
+    '\n</details>\n' +
+    '\n<details>\n<summary>📋 <b>Valid eval names (use with filter)</b></summary>\n\n' +
     '**test_ask_holmes:**\n' +
-    (p.askHolmesEvals || '_(No evals found)_') +
+    (p.askHolmesEvals || '_(Collecting from tests/llm/fixtures/...)_') +
     '\n\n**test_investigate:**\n' +
-    (p.investigateEvals || '_(No evals found)_') +
+    (p.investigateEvals || '_(Collecting from tests/llm/fixtures/...)_') +
     '\n</details>\n';
 }
 
