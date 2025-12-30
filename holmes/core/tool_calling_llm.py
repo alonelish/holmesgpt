@@ -184,11 +184,22 @@ class ToolCallingLLM:
 
     def _is_anthropic_model(self) -> bool:
         provider_info = litellm.get_llm_provider(self.llm.model)
-        return (
+        if (
             provider_info is not None
             and len(provider_info) > 1
             and provider_info[1] == "anthropic"
-        )
+        ):
+            return True
+
+        if (
+            provider_info is not None
+            and len(provider_info) > 1
+            and provider_info[1] == "bedrock"
+            and "anthropic" in (self.llm.model or "").lower()
+        ):
+            return True
+
+        return False
 
     def _maybe_enable_anthropic_code_mode(
         self, tools: Optional[List[Dict[str, Any]]]
