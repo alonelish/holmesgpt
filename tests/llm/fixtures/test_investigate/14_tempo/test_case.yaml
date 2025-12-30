@@ -5,3 +5,7 @@ evaluation:
 mock_policy: always_mock
 # Unreliable. Some tool calls fail
 # Success rate 98.99%  for 99 evals
+tags:
+  - kubernetes
+  - traces
+  - tempo

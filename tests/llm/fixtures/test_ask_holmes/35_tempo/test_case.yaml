@@ -3,3 +3,7 @@ expected_output:
   - Fraud service is slow due to a database query
 evaluation:
   correctness: 1
+tags:
+  - kubernetes
+  - traces
+  - tempo
