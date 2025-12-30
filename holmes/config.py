@@ -53,6 +53,7 @@ class Config(RobustaBaseConfig):
     fast_model: Optional[str] = None
     max_steps: int = 40
     cluster_name: Optional[str] = None
+    anthropic_code_mode: bool = False
 
     alertmanager_url: Optional[str] = None
     alertmanager_username: Optional[str] = None
@@ -180,6 +181,7 @@ class Config(RobustaBaseConfig):
             "api_base",
             "api_version",
             "max_steps",
+            "anthropic_code_mode",
             "alertmanager_url",
             "alertmanager_username",
             "alertmanager_password",
@@ -289,14 +291,21 @@ class Config(RobustaBaseConfig):
         refresh_toolsets: bool = False,
         tracer=None,
         model_name: Optional[str] = None,
+        anthropic_code_mode: Optional[bool] = None,
     ) -> "ToolCallingLLM":
         tool_executor = self.create_console_tool_executor(dal, refresh_toolsets)
         from holmes.core.tool_calling_llm import ToolCallingLLM
 
+        resolved_code_mode = (
+            anthropic_code_mode
+            if anthropic_code_mode is not None
+            else self.anthropic_code_mode
+        )
         return ToolCallingLLM(
             tool_executor,
             self.max_steps,
             self._get_llm(tracer=tracer, model_key=model_name),
+            anthropic_code_mode=resolved_code_mode,
         )
 
     def create_agui_toolcalling_llm(
@@ -304,12 +313,21 @@ class Config(RobustaBaseConfig):
         dal: Optional["SupabaseDal"] = None,
         model: Optional[str] = None,
         tracer=None,
+        anthropic_code_mode: Optional[bool] = None,
     ) -> "ToolCallingLLM":
         tool_executor = self.create_agui_tool_executor(dal)
         from holmes.core.tool_calling_llm import ToolCallingLLM
 
+        resolved_code_mode = (
+            anthropic_code_mode
+            if anthropic_code_mode is not None
+            else self.anthropic_code_mode
+        )
         return ToolCallingLLM(
-            tool_executor, self.max_steps, self._get_llm(model, tracer)
+            tool_executor,
+            self.max_steps,
+            self._get_llm(model, tracer),
+            anthropic_code_mode=resolved_code_mode,
         )
 
     def create_toolcalling_llm(
@@ -317,12 +335,21 @@ class Config(RobustaBaseConfig):
         dal: Optional["SupabaseDal"] = None,
         model: Optional[str] = None,
         tracer=None,
+        anthropic_code_mode: Optional[bool] = None,
     ) -> "ToolCallingLLM":
         tool_executor = self.create_tool_executor(dal)
         from holmes.core.tool_calling_llm import ToolCallingLLM
 
+        resolved_code_mode = (
+            anthropic_code_mode
+            if anthropic_code_mode is not None
+            else self.anthropic_code_mode
+        )
         return ToolCallingLLM(
-            tool_executor, self.max_steps, self._get_llm(model, tracer)
+            tool_executor,
+            self.max_steps,
+            self._get_llm(model, tracer),
+            anthropic_code_mode=resolved_code_mode,
         )
 
     def create_issue_investigator(
@@ -330,6 +357,7 @@ class Config(RobustaBaseConfig):
         dal: Optional["SupabaseDal"] = None,
         model: Optional[str] = None,
         tracer=None,
+        anthropic_code_mode: Optional[bool] = None,
     ) -> "IssueInvestigator":
         all_runbooks = load_builtin_runbooks()
         for runbook_path in self.custom_runbooks:
@@ -341,16 +369,26 @@ class Config(RobustaBaseConfig):
         tool_executor = self.create_tool_executor(dal)
         from holmes.core.tool_calling_llm import IssueInvestigator
 
+        resolved_code_mode = (
+            anthropic_code_mode
+            if anthropic_code_mode is not None
+            else self.anthropic_code_mode
+        )
+
         return IssueInvestigator(
             tool_executor=tool_executor,
             runbook_manager=runbook_manager,
             max_steps=self.max_steps,
             llm=self._get_llm(model, tracer),
             cluster_name=self.cluster_name,
+            anthropic_code_mode=resolved_code_mode,
         )
 
     def create_console_issue_investigator(
-        self, dal: Optional["SupabaseDal"] = None, model_name: Optional[str] = None
+        self,
+        dal: Optional["SupabaseDal"] = None,
+        model_name: Optional[str] = None,
+        anthropic_code_mode: Optional[bool] = None,
     ) -> "IssueInvestigator":
         all_runbooks = load_builtin_runbooks()
         for runbook_path in self.custom_runbooks:
@@ -362,12 +400,19 @@ class Config(RobustaBaseConfig):
         tool_executor = self.create_console_tool_executor(dal=dal)
         from holmes.core.tool_calling_llm import IssueInvestigator
 
+        resolved_code_mode = (
+            anthropic_code_mode
+            if anthropic_code_mode is not None
+            else self.anthropic_code_mode
+        )
+
         return IssueInvestigator(
             tool_executor=tool_executor,
             runbook_manager=runbook_manager,
             max_steps=self.max_steps,
             llm=self._get_llm(model_key=model_name),
             cluster_name=self.cluster_name,
+            anthropic_code_mode=resolved_code_mode,
         )
 
     def validate_jira_config(self):
@@ -543,6 +588,7 @@ class SourceFactory(BaseModel):
         ticket_username: Optional[str],
         ticket_api_key: Optional[str],
         ticket_id: Optional[str],
+        anthropic_code_mode: bool = False,
     ) -> TicketSource:
         supported_sources = [s.value for s in SupportedTicketSources]
         if source not in supported_sources:
@@ -560,6 +606,7 @@ class SourceFactory(BaseModel):
                 jira_username=ticket_username,
                 jira_api_key=ticket_api_key,
                 jira_query=None,
+                anthropic_code_mode=anthropic_code_mode,
                 custom_toolsets=None,
                 custom_runbooks=None,
             )
@@ -593,6 +640,7 @@ class SourceFactory(BaseModel):
                 pagerduty_api_key=ticket_api_key,
                 pagerduty_user_email=ticket_username,
                 pagerduty_incident_key=None,
+                anthropic_code_mode=anthropic_code_mode,
                 custom_toolsets=None,
                 custom_runbooks=None,
             )

@@ -103,6 +103,7 @@ class InvestigateRequest(BaseModel):
     prompt_template: str = "builtin://generic_investigation.jinja2"
     sections: Optional[InputSectionsDataType] = None
     model: Optional[str] = None
+    anthropic_code_mode: bool = False
     # TODO in the future
     # response_handler: ...
 
@@ -190,6 +191,7 @@ class ChatRequestBaseModel(BaseModel):
     )
     tool_decisions: Optional[List[ToolApprovalDecision]] = None
     additional_system_prompt: Optional[str] = None
+    anthropic_code_mode: bool = False
 
     # In our setup with litellm, the first message in conversation_history
     # should follow the structure [{"role": "system", "content": ...}],
@@ -227,6 +229,7 @@ class WorkloadHealthRequest(BaseModel):
     include_tool_call_results: bool = False
     prompt_template: str = "builtin://kubernetes_workload_ask.jinja2"
     model: Optional[str] = None
+    anthropic_code_mode: bool = False
 
 
 class ChatRequest(ChatRequestBaseModel):

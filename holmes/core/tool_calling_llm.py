@@ -4,6 +4,7 @@ import logging
 import textwrap
 from typing import Dict, List, Optional, Type, Union, Callable, Any
 
+import litellm
 from holmes.core.models import (
     ToolApprovalDecision,
     ToolCallResult,
@@ -165,15 +166,50 @@ class ToolCallingLLM:
     llm: LLM
 
     def __init__(
-        self, tool_executor: ToolExecutor, max_steps: int, llm: LLM, tracer=None
+        self,
+        tool_executor: ToolExecutor,
+        max_steps: int,
+        llm: LLM,
+        tracer=None,
+        anthropic_code_mode: bool = False,
     ):
         self.tool_executor = tool_executor
         self.max_steps = max_steps
         self.tracer = tracer
         self.llm = llm
+        self.anthropic_code_mode = anthropic_code_mode
         self.approval_callback: Optional[
             Callable[[StructuredToolResult], tuple[bool, Optional[str]]]
         ] = None
+
+    def _is_anthropic_model(self) -> bool:
+        provider_info = litellm.get_llm_provider(self.llm.model)
+        return (
+            provider_info is not None
+            and len(provider_info) > 1
+            and provider_info[1] == "anthropic"
+        )
+
+    def _maybe_enable_anthropic_code_mode(
+        self, tools: Optional[List[Dict[str, Any]]]
+    ) -> List[Dict[str, Any]]:
+        tools = tools or []
+        if not (self.anthropic_code_mode and self._is_anthropic_model()):
+            return tools
+
+        code_execution_tool = {
+            "type": "code_execution_20250522",
+            "name": "code_execution",
+        }
+        for tool in tools:
+            tool_type = tool.get("type")
+            if tool.get("name") == code_execution_tool["name"] or (
+                isinstance(tool_type, str) and tool_type.startswith("code_execution")
+            ):
+                return tools
+
+        tools.append(code_execution_tool)
+        return tools
 
     def process_tool_decisions(
         self, messages: List[Dict[str, Any]], tool_decisions: List[ToolApprovalDecision]
@@ -313,8 +349,10 @@ class ToolCallingLLM:
         ] = []  # Used for preventing repeated tool calls. potentially reset after compaction
         all_tool_calls = []  # type: ignore
         costs = LLMCosts()
-        tools = self.tool_executor.get_all_tools_openai_format(
-            target_model=self.llm.model
+        tools = self._maybe_enable_anthropic_code_mode(
+            self.tool_executor.get_all_tools_openai_format(
+                target_model=self.llm.model
+            )
         )
         max_steps = self.max_steps
         i = 0
@@ -823,8 +861,10 @@ class ToolCallingLLM:
         if msgs:
             messages.extend(msgs)
         tool_calls: list[dict] = []
-        tools = self.tool_executor.get_all_tools_openai_format(
-            target_model=self.llm.model
+        tools = self._maybe_enable_anthropic_code_mode(
+            self.tool_executor.get_all_tools_openai_format(
+                target_model=self.llm.model
+            )
         )
         max_steps = self.max_steps
         metadata: Dict[Any, Any] = {}
@@ -1066,8 +1106,14 @@ class IssueInvestigator(ToolCallingLLM):
         max_steps: int,
         llm: LLM,
         cluster_name: Optional[str],
+        anthropic_code_mode: bool = False,
     ):
-        super().__init__(tool_executor, max_steps, llm)
+        super().__init__(
+            tool_executor,
+            max_steps,
+            llm,
+            anthropic_code_mode=anthropic_code_mode,
+        )
         self.runbook_manager = runbook_manager
         self.cluster_name = cluster_name
 
