@@ -1,5 +1,0 @@
-{
-  "work": [
-    "pytest -m 'llm and regression' tests/llm/test_ask_holmes.py"
-  ]
-}
