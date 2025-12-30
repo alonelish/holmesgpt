@@ -58,6 +58,16 @@ A [Grafana service account token](https://grafana.com/docs/grafana/latest/admini
 | grafana_get_home_dashboard | Get the home dashboard configuration |
 | grafana_get_dashboard_tags | List all tags used across dashboards for categorization |
 
+### Controlling response size
+
+Large dashboards can produce very big JSON payloads. To keep tool outputs readable you can:
+
+- **Limit depth:** `max_depth: 1` returns only the first level of keys, replacing deeper structures with a truncated marker.
+- **Filter with jsonpath:** `jsonpath: $.dashboard.panels[*].title` extracts just the panel titles.
+- **Filter with jq:** `jq: .dashboard.panels[].id` extracts panel IDs using familiar jq syntax.
+
+Filters run before depth truncation, so you can combine them to precisely scope the response.
+
 ## How it Works
 
 ### Dashboard Query Extraction

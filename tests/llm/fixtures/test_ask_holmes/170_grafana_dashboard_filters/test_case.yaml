@@ -1,0 +1,67 @@
+user_prompt: "Only show the panel ids and titles from the Grafana dashboard with UID 'filterdemo'. Keep the response compact by filtering or limiting depth rather than returning the full dashboard JSON."
+
+expected_output:
+  - Mentions dashboard UID filterdemo
+  - Lists the panel titles Requests Overview and Latency Breakdown
+  - Indicates the dashboard data was filtered/truncated rather than returning the full JSON
+
+tags:
+  - medium
+  - network
+  - toolset-limitation
+
+setup_timeout: 600
+
+port_forwards:
+  - namespace: app-170
+    service: grafana
+    local_port: 3030
+    remote_port: 3000
+
+before_test: |
+  kubectl create namespace app-170 || true
+
+  # Generate a large dashboard JSON to exercise filtering and depth controls
+  python ./generate_dashboard.py > /tmp/filter-demo.json
+
+  # Create the dashboards ConfigMap from generated JSON
+  kubectl create configmap grafana-dashboards \
+    --from-file=filter-demo.json=/tmp/filter-demo.json \
+    -n app-170 --dry-run=client -o yaml | kubectl apply -f -
+
+  # Apply Grafana deployment and provider config
+  kubectl apply -f grafana.yaml -n app-170
+
+  # Wait for pod to be created
+  for i in {1..60}; do
+    if kubectl get pods -n app-170 -l app=grafana -o name | grep -q grafana; then
+      echo "Pod scheduled"
+      break
+    fi
+    echo "Waiting for Grafana pod to schedule ($i/60)"
+    sleep 5
+  done
+
+  # Wait for Grafana pod readiness with retry loop to avoid race conditions
+  READY=false
+  for i in {1..60}; do
+    if kubectl wait --for=condition=ready pod -l app=grafana -n app-170 --timeout=5s 2>/dev/null; then
+      READY=true
+      break
+    fi
+    echo "Grafana not ready yet ($i/60). Retrying in 5s..."
+    sleep 5
+  done
+
+  if [ "$READY" = false ]; then
+    echo "Grafana pod failed to become ready"
+    kubectl get pods -n app-170 -l app=grafana
+    exit 1
+  fi
+
+  # Verify dashboard is reachable and provisioned
+  kubectl run grafana-check-170 --rm -i --restart=Never --image=curlimages/curl -n app-170 -- \
+    curl -s http://grafana:3000/api/dashboards/uid/filterdemo | grep -q "filterdemo"
+
+after_test: |
+  kubectl delete namespace app-170 || true
