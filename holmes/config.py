@@ -19,6 +19,7 @@ from holmes.plugins.runbooks import (
     load_runbook_catalog,
     load_runbooks_from_file,
 )
+from holmes.utils.llms import resolve_anthropic_code_mode
 
 # Source plugin imports moved to their respective create methods to speed up startup
 if TYPE_CHECKING:
@@ -139,6 +140,9 @@ class Config(RobustaBaseConfig):
             )
         else:
             logging.warning("No llm models were loaded")
+
+    def resolve_code_mode(self, override: Optional[bool]) -> bool:
+        return resolve_anthropic_code_mode(override, default=self.anthropic_code_mode)
 
     @classmethod
     def load_from_file(cls, config_file: Optional[Path], **kwargs) -> "Config":
@@ -296,11 +300,7 @@ class Config(RobustaBaseConfig):
         tool_executor = self.create_console_tool_executor(dal, refresh_toolsets)
         from holmes.core.tool_calling_llm import ToolCallingLLM
 
-        resolved_code_mode = (
-            anthropic_code_mode
-            if anthropic_code_mode is not None
-            else self.anthropic_code_mode
-        )
+        resolved_code_mode = self.resolve_code_mode(anthropic_code_mode)
         return ToolCallingLLM(
             tool_executor,
             self.max_steps,
@@ -318,11 +318,7 @@ class Config(RobustaBaseConfig):
         tool_executor = self.create_agui_tool_executor(dal)
         from holmes.core.tool_calling_llm import ToolCallingLLM
 
-        resolved_code_mode = (
-            anthropic_code_mode
-            if anthropic_code_mode is not None
-            else self.anthropic_code_mode
-        )
+        resolved_code_mode = self.resolve_code_mode(anthropic_code_mode)
         return ToolCallingLLM(
             tool_executor,
             self.max_steps,
@@ -340,11 +336,7 @@ class Config(RobustaBaseConfig):
         tool_executor = self.create_tool_executor(dal)
         from holmes.core.tool_calling_llm import ToolCallingLLM
 
-        resolved_code_mode = (
-            anthropic_code_mode
-            if anthropic_code_mode is not None
-            else self.anthropic_code_mode
-        )
+        resolved_code_mode = self.resolve_code_mode(anthropic_code_mode)
         return ToolCallingLLM(
             tool_executor,
             self.max_steps,
@@ -369,11 +361,7 @@ class Config(RobustaBaseConfig):
         tool_executor = self.create_tool_executor(dal)
         from holmes.core.tool_calling_llm import IssueInvestigator
 
-        resolved_code_mode = (
-            anthropic_code_mode
-            if anthropic_code_mode is not None
-            else self.anthropic_code_mode
-        )
+        resolved_code_mode = self.resolve_code_mode(anthropic_code_mode)
 
         return IssueInvestigator(
             tool_executor=tool_executor,
@@ -400,11 +388,7 @@ class Config(RobustaBaseConfig):
         tool_executor = self.create_console_tool_executor(dal=dal)
         from holmes.core.tool_calling_llm import IssueInvestigator
 
-        resolved_code_mode = (
-            anthropic_code_mode
-            if anthropic_code_mode is not None
-            else self.anthropic_code_mode
-        )
+        resolved_code_mode = self.resolve_code_mode(anthropic_code_mode)
 
         return IssueInvestigator(
             tool_executor=tool_executor,
