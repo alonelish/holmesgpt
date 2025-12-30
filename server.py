@@ -164,7 +164,9 @@ def investigate_issues(investigate_request: InvestigateRequest):
     try:
         runbooks = config.get_runbook_catalog()
         code_mode = (
-            investigate_request.anthropic_code_mode or config.anthropic_code_mode
+            investigate_request.anthropic_code_mode
+            if investigate_request.anthropic_code_mode is not None
+            else config.anthropic_code_mode
         )
         result = investigation.investigate_issues(
             investigate_request=investigate_request,
@@ -188,7 +190,11 @@ def investigate_issues(investigate_request: InvestigateRequest):
 @app.post("/api/stream/investigate")
 def stream_investigate_issues(req: InvestigateRequest):
     try:
-        code_mode = req.anthropic_code_mode or config.anthropic_code_mode
+        code_mode = (
+            req.anthropic_code_mode
+            if req.anthropic_code_mode is not None
+            else config.anthropic_code_mode
+        )
         ai, system_prompt, user_prompt, response_format, sections, runbooks = (
             investigation.get_investigation_context(
                 req,
@@ -248,7 +254,11 @@ def workload_health_check(request: WorkloadHealthRequest):
             request.ask,
             runbooks_ctx,
         )
-        code_mode = request.anthropic_code_mode or config.anthropic_code_mode
+        code_mode = (
+            request.anthropic_code_mode
+            if request.anthropic_code_mode is not None
+            else config.anthropic_code_mode
+        )
         ai = config.create_toolcalling_llm(
             dal=dal,
             model=request.model,
@@ -295,7 +305,11 @@ def workload_health_conversation(
     request: WorkloadHealthChatRequest,
 ):
     try:
-        code_mode = request.anthropic_code_mode or config.anthropic_code_mode
+        code_mode = (
+            request.anthropic_code_mode
+            if request.anthropic_code_mode is not None
+            else config.anthropic_code_mode
+        )
         ai = config.create_toolcalling_llm(
             dal=dal,
             model=request.model,
@@ -331,7 +345,9 @@ def issue_conversation(issue_chat_request: IssueChatRequest):
     try:
         runbooks = config.get_runbook_catalog()
         code_mode = (
-            issue_chat_request.anthropic_code_mode or config.anthropic_code_mode
+            issue_chat_request.anthropic_code_mode
+            if issue_chat_request.anthropic_code_mode is not None
+            else config.anthropic_code_mode
         )
         ai = config.create_toolcalling_llm(
             dal=dal,
@@ -378,7 +394,11 @@ def already_answered(conversation_history: Optional[List[dict]]) -> bool:
 def chat(chat_request: ChatRequest):
     try:
         runbooks = config.get_runbook_catalog()
-        code_mode = chat_request.anthropic_code_mode or config.anthropic_code_mode
+        code_mode = (
+            chat_request.anthropic_code_mode
+            if chat_request.anthropic_code_mode is not None
+            else config.anthropic_code_mode
+        )
         ai = config.create_toolcalling_llm(
             dal=dal,
             model=chat_request.model,

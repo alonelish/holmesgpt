@@ -100,8 +100,8 @@ opt_max_steps: Optional[int] = typer.Option(
     help="Advanced. Maximum number of steps the LLM can take to investigate the issue",
 )
 opt_anthropic_code_mode: bool = typer.Option(
-    False,
-    "--anthropic-code-mode",
+    True,
+    "--anthropic-code-mode/--no-anthropic-code-mode",
     help="Enable Anthropic code execution mode (adds the Anthropic code interpreter tool for supported models)",
 )
 opt_verbose: Optional[List[bool]] = typer.Option(

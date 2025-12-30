@@ -47,7 +47,11 @@ def investigate_issues(
     resolved_code_mode = (
         anthropic_code_mode
         if anthropic_code_mode is not None
-        else investigate_request.anthropic_code_mode or config.anthropic_code_mode
+        else (
+            investigate_request.anthropic_code_mode
+            if investigate_request.anthropic_code_mode is not None
+            else config.anthropic_code_mode
+        )
     )
 
     ai = config.create_issue_investigator(
@@ -98,7 +102,11 @@ def get_investigation_context(
     resolved_code_mode = (
         anthropic_code_mode
         if anthropic_code_mode is not None
-        else investigate_request.anthropic_code_mode or config.anthropic_code_mode
+        else (
+            investigate_request.anthropic_code_mode
+            if investigate_request.anthropic_code_mode is not None
+            else config.anthropic_code_mode
+        )
     )
     ai = config.create_issue_investigator(
         dal=dal,

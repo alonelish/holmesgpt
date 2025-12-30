@@ -53,7 +53,7 @@ class Config(RobustaBaseConfig):
     fast_model: Optional[str] = None
     max_steps: int = 40
     cluster_name: Optional[str] = None
-    anthropic_code_mode: bool = False
+    anthropic_code_mode: bool = True
 
     alertmanager_url: Optional[str] = None
     alertmanager_username: Optional[str] = None
