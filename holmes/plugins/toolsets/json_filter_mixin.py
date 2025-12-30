@@ -107,16 +107,29 @@ class JsonFilterMixin:
         return parsed_data, None
 
     def filter_result(self, result: StructuredToolResult, params: Dict) -> StructuredToolResult:
-        filtered_data, error = self._filter_result_data(result.data, params)
+        base_result = (
+            result
+            if isinstance(result, StructuredToolResult)
+            else StructuredToolResult(
+                status=getattr(result, "status", StructuredToolResultStatus.SUCCESS),
+                data=getattr(result, "data", None),
+                params=getattr(result, "params", params),
+                url=getattr(result, "url", None),
+                invocation=getattr(result, "invocation", None),
+                icon_url=getattr(result, "icon_url", None),
+            )
+        )
+
+        filtered_data, error = self._filter_result_data(base_result.data, params)
         if error:
             return StructuredToolResult(
                 status=StructuredToolResultStatus.ERROR,
                 error=error,
                 params=params,
-                url=result.url,
-                invocation=result.invocation,
-                icon_url=result.icon_url,
+                url=base_result.url,
+                invocation=base_result.invocation,
+                icon_url=base_result.icon_url,
             )
 
-        result.data = filtered_data
-        return result
+        base_result.data = filtered_data
+        return base_result
