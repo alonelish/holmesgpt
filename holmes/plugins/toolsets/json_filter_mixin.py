@@ -106,19 +106,33 @@ class JsonFilterMixin:
         parsed_data = _truncate_to_depth(parsed_data, params.get("max_depth"))
         return parsed_data, None
 
+    @staticmethod
+    def _safe_string(value: Any) -> Optional[str]:
+        if value is None:
+            return None
+        if isinstance(value, str):
+            return value
+        try:
+            return str(value)
+        except Exception:
+            return None
+
     def filter_result(self, result: StructuredToolResult, params: Dict) -> StructuredToolResult:
-        base_result = (
-            result
-            if isinstance(result, StructuredToolResult)
-            else StructuredToolResult(
+        base_result = result if isinstance(result, StructuredToolResult) else None
+        if base_result is None:
+            base_result = StructuredToolResult(
                 status=getattr(result, "status", StructuredToolResultStatus.SUCCESS),
                 data=getattr(result, "data", None),
                 params=getattr(result, "params", params),
-                url=getattr(result, "url", None),
-                invocation=getattr(result, "invocation", None),
-                icon_url=getattr(result, "icon_url", None),
+                url=self._safe_string(getattr(result, "url", None)),
+                invocation=self._safe_string(getattr(result, "invocation", None)),
+                icon_url=self._safe_string(getattr(result, "icon_url", None)),
             )
-        )
+        else:
+            # Normalize string fields to avoid MagicMock validation failures
+            base_result.url = self._safe_string(base_result.url)
+            base_result.invocation = self._safe_string(base_result.invocation)
+            base_result.icon_url = self._safe_string(base_result.icon_url)
 
         filtered_data, error = self._filter_result_data(base_result.data, params)
         if error:
