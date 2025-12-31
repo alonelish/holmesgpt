@@ -48,7 +48,7 @@ from tests.llm.utils.test_env_vars import (
 
 # Configuration constants
 DEBUG_SEPARATOR = "=" * 80
-LLM_TEST_TYPES = ["test_ask_holmes", "test_investigate", "test_workload_health"]
+LLM_TEST_TYPES = ["test_ask_holmes", "test_investigate"]
 
 
 def is_llm_test(nodeid: str) -> bool:
@@ -57,7 +57,6 @@ def is_llm_test(nodeid: str) -> bool:
         [
             "test_ask_holmes" in nodeid,
             "test_investigate" in nodeid,
-            "test_workload_health" in nodeid,
         ]
     )
 
@@ -746,8 +745,6 @@ def _collect_test_results_from_stats(terminalreporter):
                     test_type = "ask"
                 elif "test_investigate" in nodeid:
                     test_type = "investigate"
-                elif "test_workload_health" in nodeid:
-                    test_type = "workload_health"
                 else:
                     test_type = "unknown"
 
@@ -831,8 +828,6 @@ def _collect_test_results_from_stats(terminalreporter):
                 test_type = "ask"
             elif "test_investigate" in nodeid:
                 test_type = "investigate"
-            elif "test_workload_health" in nodeid:
-                test_type = "workload_health"
             else:
                 test_type = "unknown"
 
@@ -906,7 +901,7 @@ def _collect_test_results_from_stats(terminalreporter):
     results_with_ids = []
     for result in test_results.values():
         # If we have a clean test case ID from the test, use it
-        # This is set in test_ask_holmes.py, test_investigate.py, and test_workload_health.py
+        # This is set in test_ask_holmes.py and test_investigate.py
         # via: request.node.user_properties.append(("clean_test_case_id", test_case.id))
         # It provides the clean test case ID without model suffixes that pytest adds when
         # parameterizing with multiple models (e.g., "01_how_many_pods" instead of

@@ -11,8 +11,6 @@ if add_custom_certificate(ADDITIONAL_CERTIFICATE):
 # IMPORTING ABOVE MIGHT INITIALIZE AN HTTPS CLIENT THAT DOESN'T TRUST THE CUSTOM CERTIFICATE
 import json
 from typing import List, Optional
-from holmes.utils.global_instructions import generate_runbooks_args
-from holmes.core.prompt import generate_user_prompt
 import litellm
 import sentry_sdk
 from holmes import get_version, is_official_release
@@ -41,24 +39,14 @@ from holmes.common.env_vars import (
     SENTRY_TRACES_SAMPLE_RATE,
 )
 from holmes.config import Config
-from holmes.core.conversations import (
-    build_chat_messages,
-    build_issue_chat_messages,
-    build_workload_health_chat_messages,
-)
+from holmes.core.conversations import build_chat_messages, build_issue_chat_messages
 from holmes.core.models import (
     FollowUpAction,
-    InvestigationResult,
     InvestigateRequest,
-    WorkloadHealthRequest,
     ChatRequest,
     ChatResponse,
     IssueChatRequest,
-    WorkloadHealthChatRequest,
-    workload_health_structured_output,
 )
-from holmes.core.investigation_structured_output import clear_json_markdown
-from holmes.plugins.prompts import load_and_render_prompt
 from holmes.utils.holmes_sync_toolsets import holmes_sync_toolsets_status
 from holmes.utils.log import EndpointFilter
 # removed: add_runbooks_to_user_prompt
@@ -205,105 +193,6 @@ def stream_investigate_issues(req: InvestigateRequest):
         raise HTTPException(status_code=401, detail=e.message)
     except Exception as e:
         logging.exception(f"Error in /api/stream/investigate: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
-
-
-@app.post("/api/workload_health_check")
-def workload_health_check(request: WorkloadHealthRequest):
-    try:
-        runbooks = config.get_runbook_catalog()
-        resource = request.resource
-        workload_alerts: list[str] = []
-        if request.alert_history:
-            workload_alerts = dal.get_workload_issues(
-                resource, request.alert_history_since_hours
-            )
-
-        issue_instructions = request.instructions or []
-        stored_instructions = None
-        if request.stored_instrucitons:
-            stored_instructions = dal.get_resource_instructions(
-                resource.get("kind", "").lower(), resource.get("name")
-            )
-
-        global_instructions = dal.get_global_instructions_for_account()
-
-        runbooks_ctx = generate_runbooks_args(
-            runbook_catalog=runbooks,
-            global_instructions=global_instructions,
-            issue_instructions=issue_instructions,
-            resource_instructions=stored_instructions,
-        )
-        request.ask = generate_user_prompt(
-            request.ask,
-            runbooks_ctx,
-        )
-        ai = config.create_toolcalling_llm(dal=dal, model=request.model)
-
-        system_prompt = load_and_render_prompt(
-            request.prompt_template,
-            context={
-                "alerts": workload_alerts,
-                "toolsets": ai.tool_executor.toolsets,
-                "response_format": workload_health_structured_output,
-                "cluster_name": config.cluster_name,
-                "runbooks_enabled": True if runbooks else False,
-            },
-        )
-
-        ai_call = ai.prompt_call(
-            system_prompt,
-            request.ask,
-            HOLMES_POST_PROCESSING_PROMPT,
-            workload_health_structured_output,
-        )
-
-        ai_call.result = clear_json_markdown(ai_call.result)
-
-        return InvestigationResult(
-            analysis=ai_call.result,
-            tool_calls=ai_call.tool_calls,
-            num_llm_calls=ai_call.num_llm_calls,
-            instructions=issue_instructions,
-            metadata=ai_call.metadata,
-        )
-    except AuthenticationError as e:
-        raise HTTPException(status_code=401, detail=e.message)
-    except litellm.exceptions.RateLimitError as e:
-        raise HTTPException(status_code=429, detail=e.message)
-    except Exception as e:
-        logging.exception(f"Error in /api/workload_health_check: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=str(e))
-
-
-@app.post("/api/workload_health_chat")
-def workload_health_conversation(
-    request: WorkloadHealthChatRequest,
-):
-    try:
-        ai = config.create_toolcalling_llm(dal=dal, model=request.model)
-        global_instructions = dal.get_global_instructions_for_account()
-
-        messages = build_workload_health_chat_messages(
-            workload_health_chat_request=request,
-            ai=ai,
-            config=config,
-            global_instructions=global_instructions,
-        )
-        llm_call = ai.messages_call(messages=messages)
-
-        return ChatResponse(
-            analysis=llm_call.result,
-            tool_calls=llm_call.tool_calls,
-            conversation_history=llm_call.messages,
-            metadata=llm_call.metadata,
-        )
-    except AuthenticationError as e:
-        raise HTTPException(status_code=401, detail=e.message)
-    except litellm.exceptions.RateLimitError as e:
-        raise HTTPException(status_code=429, detail=e.message)
-    except Exception as e:
-        logging.error(f"Error in /api/workload_health_chat: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
 
 
