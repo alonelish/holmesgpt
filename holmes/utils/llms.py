@@ -1,5 +1,5 @@
 import fnmatch
-from typing import List
+from typing import List, Optional
 
 
 def model_matches_list(model: str, model_list: List[str]) -> bool:
@@ -18,3 +18,17 @@ def model_matches_list(model: str, model_list: List[str]) -> bool:
         if fnmatch.fnmatchcase(model, pattern):
             return True
     return False
+
+
+def resolve_anthropic_code_mode(
+    *preferences: Optional[bool], default: bool
+) -> bool:
+    """
+    Resolve Anthropic code mode preference in priority order.
+
+    Returns the first non-None value from preferences, otherwise the provided default.
+    """
+    for preference in preferences:
+        if preference is not None:
+            return preference
+    return default

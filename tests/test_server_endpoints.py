@@ -1,5 +1,5 @@
 import pytest
-from unittest.mock import patch, MagicMock
+from unittest.mock import ANY, MagicMock, patch
 from fastapi.testclient import TestClient
 from server import app
 
@@ -43,10 +43,15 @@ def test_api_chat_all_fields(
             {"role": "system", "content": "You are a helpful assistant."}
         ],
         "model": "gpt-4.1",
+        "anthropic_code_mode": True,
     }
     response = client.post("/api/chat", json=payload)
     assert response.status_code == 200
     data = response.json()
+
+    mock_create_toolcalling_llm.assert_called_once_with(
+        dal=ANY, model="gpt-4.1", anthropic_code_mode=True
+    )
 
     assert "analysis" in data
     assert "conversation_history" in data

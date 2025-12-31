@@ -99,6 +99,11 @@ opt_max_steps: Optional[int] = typer.Option(
     "--max-steps",
     help="Advanced. Maximum number of steps the LLM can take to investigate the issue",
 )
+opt_anthropic_code_mode: bool = typer.Option(
+    True,
+    "--anthropic-code-mode/--no-anthropic-code-mode",
+    help="Enable Anthropic code execution mode (adds the Anthropic code interpreter tool for supported models)",
+)
 opt_verbose: Optional[List[bool]] = typer.Option(
     [],
     "--verbose",
@@ -184,6 +189,7 @@ def ask(
     max_steps: Optional[int] = opt_max_steps,
     verbose: Optional[List[bool]] = opt_verbose,
     log_costs: bool = opt_log_costs,
+    anthropic_code_mode: bool = opt_anthropic_code_mode,
     # semi-common options
     destination: Optional[DestinationType] = opt_destination,
     slack_token: Optional[str] = opt_slack_token,
@@ -248,6 +254,7 @@ def ask(
         model=model,
         fast_model=fast_model,
         max_steps=max_steps,
+        anthropic_code_mode=anthropic_code_mode,
         custom_toolsets_from_cli=custom_toolsets,
         slack_token=slack_token,
         slack_channel=slack_channel,
@@ -385,6 +392,7 @@ def alertmanager(
     custom_runbooks: Optional[List[Path]] = opt_custom_runbooks,
     max_steps: Optional[int] = opt_max_steps,
     verbose: Optional[List[bool]] = opt_verbose,
+    anthropic_code_mode: bool = opt_anthropic_code_mode,
     # advanced options for this command
     destination: Optional[DestinationType] = opt_destination,
     slack_token: Optional[str] = opt_slack_token,
@@ -412,6 +420,7 @@ def alertmanager(
         alertmanager_file=alertmanager_file,
         slack_token=slack_token,
         slack_channel=slack_channel,
+        anthropic_code_mode=anthropic_code_mode,
         custom_toolsets_from_cli=custom_toolsets,
         custom_runbooks=custom_runbooks,
     )
@@ -521,6 +530,7 @@ def jira(
     custom_runbooks: Optional[List[Path]] = opt_custom_runbooks,
     max_steps: Optional[int] = opt_max_steps,
     verbose: Optional[List[bool]] = opt_verbose,
+    anthropic_code_mode: bool = opt_anthropic_code_mode,
     json_output_file: Optional[str] = opt_json_output_file,
     # advanced options for this command
     system_prompt: Optional[str] = typer.Option(
@@ -541,6 +551,7 @@ def jira(
         jira_username=jira_username,
         jira_api_key=jira_api_key,
         jira_query=jira_query,
+        anthropic_code_mode=anthropic_code_mode,
         custom_toolsets_from_cli=custom_toolsets,
         custom_runbooks=custom_runbooks,
     )
@@ -620,6 +631,7 @@ def ticket(
     ),
     post_processing_prompt: Optional[str] = opt_post_processing_prompt,
     model: Optional[str] = opt_model,
+    anthropic_code_mode: bool = opt_anthropic_code_mode,
 ):
     """
     Fetch and print a Jira ticket from the specified source.
@@ -632,11 +644,12 @@ def ticket(
         ticket_source = SourceFactory.create_source(
             source=source,
             config_file=config_file,
-            ticket_url=ticket_url,
-            ticket_username=ticket_username,
-            ticket_api_key=ticket_api_key,
-            ticket_id=ticket_id,
-        )
+        ticket_url=ticket_url,
+        ticket_username=ticket_username,
+        ticket_api_key=ticket_api_key,
+        ticket_id=ticket_id,
+        anthropic_code_mode=anthropic_code_mode,
+    )
     except Exception as e:
         console.print(f"[bold red]Error: {str(e)}[/bold red]")
         return
@@ -713,6 +726,7 @@ def github(
     custom_runbooks: Optional[List[Path]] = opt_custom_runbooks,
     max_steps: Optional[int] = opt_max_steps,
     verbose: Optional[List[bool]] = opt_verbose,
+    anthropic_code_mode: bool = opt_anthropic_code_mode,
     # advanced options for this command
     system_prompt: Optional[str] = typer.Option(
         "builtin://generic_investigation.jinja2", help=system_prompt_help
@@ -733,6 +747,7 @@ def github(
         github_pat=github_pat,
         github_repository=github_repository,
         github_query=github_query,
+        anthropic_code_mode=anthropic_code_mode,
         custom_toolsets_from_cli=custom_toolsets,
         custom_runbooks=custom_runbooks,
     )
@@ -797,6 +812,7 @@ def pagerduty(
     custom_runbooks: Optional[List[Path]] = opt_custom_runbooks,
     max_steps: Optional[int] = opt_max_steps,
     verbose: Optional[List[bool]] = opt_verbose,
+    anthropic_code_mode: bool = opt_anthropic_code_mode,
     json_output_file: Optional[str] = opt_json_output_file,
     # advanced options for this command
     system_prompt: Optional[str] = typer.Option(
@@ -816,6 +832,7 @@ def pagerduty(
         pagerduty_api_key=pagerduty_api_key,
         pagerduty_user_email=pagerduty_user_email,
         pagerduty_incident_key=pagerduty_incident_key,
+        anthropic_code_mode=anthropic_code_mode,
         custom_toolsets_from_cli=custom_toolsets,
         custom_runbooks=custom_runbooks,
     )
@@ -882,6 +899,7 @@ def opsgenie(
     custom_runbooks: Optional[List[Path]] = opt_custom_runbooks,
     max_steps: Optional[int] = opt_max_steps,
     verbose: Optional[List[bool]] = opt_verbose,
+    anthropic_code_mode: bool = opt_anthropic_code_mode,
     # advanced options for this command
     system_prompt: Optional[str] = typer.Option(
         "builtin://generic_investigation.jinja2", help=system_prompt_help
@@ -901,6 +919,7 @@ def opsgenie(
         opsgenie_api_key=opsgenie_api_key,
         opsgenie_team_integration_key=opsgenie_team_integration_key,
         opsgenie_query=opsgenie_query,
+        anthropic_code_mode=anthropic_code_mode,
         custom_toolsets_from_cli=custom_toolsets,
         custom_runbooks=custom_runbooks,
     )

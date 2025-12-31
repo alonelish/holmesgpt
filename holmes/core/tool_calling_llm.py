@@ -4,6 +4,7 @@ import logging
 import textwrap
 from typing import Dict, List, Optional, Type, Union, Callable, Any
 
+import litellm
 from holmes.core.models import (
     ToolApprovalDecision,
     ToolCallResult,
@@ -63,6 +64,7 @@ from holmes.utils.stream import (
     add_token_count_to_metadata,
     build_stream_event_token_count,
 )
+from holmes.utils.llms import model_matches_list
 
 # Create a named logger for cost tracking
 cost_logger = logging.getLogger("holmes.costs")
@@ -165,15 +167,72 @@ class ToolCallingLLM:
     llm: LLM
 
     def __init__(
-        self, tool_executor: ToolExecutor, max_steps: int, llm: LLM, tracer=None
+        self,
+        tool_executor: ToolExecutor,
+        max_steps: int,
+        llm: LLM,
+        tracer=None,
+        anthropic_code_mode: bool = False,
     ):
         self.tool_executor = tool_executor
         self.max_steps = max_steps
         self.tracer = tracer
         self.llm = llm
+        self.anthropic_code_mode = anthropic_code_mode
         self.approval_callback: Optional[
             Callable[[StructuredToolResult], tuple[bool, Optional[str]]]
         ] = None
+
+    def _is_anthropic_model(self) -> bool:
+        model_name = (self.llm.model or "").lower()
+
+        try:
+            provider_info = litellm.get_llm_provider(model_name)
+            if (
+                provider_info is not None
+                and len(provider_info) > 1
+                and provider_info[1] in {"anthropic", "bedrock"}
+            ):
+                return True
+        except Exception:
+            pass
+
+        if model_matches_list(
+            model_name,
+            [
+                "*anthropic*",
+                "*claude*",
+            ],
+        ):
+            return True
+
+        return False
+
+    def _maybe_enable_anthropic_code_mode(
+        self, tools: Optional[List[Dict[str, Any]]]
+    ) -> List[Dict[str, Any]]:
+        tools = tools or []
+
+        # Always advertise code execution and mark all tools as usable so downstream
+        # providers (e.g., Anthropic via OpenRouter) can invoke them without
+        # additional gating.
+        for tool in tools:
+            tool["usable"] = True
+
+        code_execution_tool = {
+            "type": "code_execution_20250522",
+            "name": "code_execution",
+            "usable": True,
+        }
+        for tool in tools:
+            tool_type = tool.get("type")
+            if tool.get("name") == code_execution_tool["name"] or (
+                isinstance(tool_type, str) and tool_type.startswith("code_execution")
+            ):
+                return tools
+
+        tools.append(code_execution_tool)
+        return tools
 
     def process_tool_decisions(
         self, messages: List[Dict[str, Any]], tool_decisions: List[ToolApprovalDecision]
@@ -313,8 +372,10 @@ class ToolCallingLLM:
         ] = []  # Used for preventing repeated tool calls. potentially reset after compaction
         all_tool_calls = []  # type: ignore
         costs = LLMCosts()
-        tools = self.tool_executor.get_all_tools_openai_format(
-            target_model=self.llm.model
+        tools = self._maybe_enable_anthropic_code_mode(
+            self.tool_executor.get_all_tools_openai_format(
+                target_model=self.llm.model
+            )
         )
         max_steps = self.max_steps
         i = 0
@@ -327,7 +388,10 @@ class ToolCallingLLM:
             tool_choice = "auto" if tools else None
 
             limit_result = limit_input_context_window(
-                llm=self.llm, messages=messages, tools=tools
+                llm=self.llm,
+                messages=messages,
+                tools=tools,
+                disable_truncation=self.anthropic_code_mode,
             )
             messages = limit_result.messages
             metadata = metadata | limit_result.metadata
@@ -681,8 +745,12 @@ class ToolCallingLLM:
                     user_approved=user_approved,
                 )
 
-            original_token_count = prevent_overly_big_tool_response(
-                tool_call_result=tool_call_result, llm=self.llm
+            original_token_count = (
+                None
+                if self.anthropic_code_mode
+                else prevent_overly_big_tool_response(
+                    tool_call_result=tool_call_result, llm=self.llm
+                )
             )
 
             ToolCallingLLM._log_tool_call_result(
@@ -823,8 +891,10 @@ class ToolCallingLLM:
         if msgs:
             messages.extend(msgs)
         tool_calls: list[dict] = []
-        tools = self.tool_executor.get_all_tools_openai_format(
-            target_model=self.llm.model
+        tools = self._maybe_enable_anthropic_code_mode(
+            self.tool_executor.get_all_tools_openai_format(
+                target_model=self.llm.model
+            )
         )
         max_steps = self.max_steps
         metadata: Dict[Any, Any] = {}
@@ -839,7 +909,10 @@ class ToolCallingLLM:
             tool_choice = "auto" if tools else None
 
             limit_result = limit_input_context_window(
-                llm=self.llm, messages=messages, tools=tools
+                llm=self.llm,
+                messages=messages,
+                tools=tools,
+                disable_truncation=self.anthropic_code_mode,
             )
             yield from limit_result.events
             messages = limit_result.messages
@@ -1066,8 +1139,14 @@ class IssueInvestigator(ToolCallingLLM):
         max_steps: int,
         llm: LLM,
         cluster_name: Optional[str],
+        anthropic_code_mode: bool = False,
     ):
-        super().__init__(tool_executor, max_steps, llm)
+        super().__init__(
+            tool_executor,
+            max_steps,
+            llm,
+            anthropic_code_mode=anthropic_code_mode,
+        )
         self.runbook_manager = runbook_manager
         self.cluster_name = cluster_name
 

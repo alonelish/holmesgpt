@@ -407,6 +407,7 @@ jobs:
           AZURE_API_VERSION: ${{ secrets.AZURE_API_VERSION }}
           AWS_BEARER_TOKEN_BEDROCK: ${{ secrets.AWS_BEARER_TOKEN_BEDROCK }}
           AWS_REGION_NAME: ${{ vars.AWS_REGION_NAME }}
+          OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
           MODEL: ${{ steps.eval-params.outputs.model }}
           ITERATIONS: ${{ steps.eval-params.outputs.iterations }}
           CLASSIFIER_MODEL: ${{ vars.CLASSIFIER_MODEL || 'gpt-4o' }}

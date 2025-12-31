@@ -1,0 +1,5 @@
+{
+  "work": [
+    "poetry run pytest tests/llm/test_ask_holmes.py -k \"90_runbook_basic_selection\" --no-cov"
+  ]
+}

@@ -18,6 +18,7 @@ from holmes.core.investigation_structured_output import (
     REQUEST_STRUCTURED_OUTPUT_FROM_LLM,
     get_output_format_for_investigation,
 )
+from holmes.utils.llms import resolve_anthropic_code_mode
 
 from holmes.plugins.prompts import load_and_render_prompt
 from holmes.utils import sentry_helper
@@ -30,6 +31,7 @@ def investigate_issues(
     model: Optional[str] = None,
     trace_span=DummySpan(),
     runbooks: Optional[RunbookCatalog] = None,
+    anthropic_code_mode: Optional[bool] = None,
 ) -> InvestigationResult:
     context = dal.get_issue_data(investigate_request.context.get("robusta_issue_id"))
 
@@ -43,7 +45,15 @@ def investigate_issues(
     create_issue_investigator_span = trace_span.start_span(
         "create_issue_investigator", SpanType.FUNCTION.value
     )
-    ai = config.create_issue_investigator(dal=dal, model=model)
+    resolved_code_mode = resolve_anthropic_code_mode(
+        anthropic_code_mode,
+        investigate_request.anthropic_code_mode,
+        default=getattr(config, "anthropic_code_mode", True),
+    )
+
+    ai = config.create_issue_investigator(
+        dal=dal, model=model, anthropic_code_mode=resolved_code_mode
+    )
     create_issue_investigator_span.end()
 
     issue = Issue(
@@ -84,8 +94,18 @@ def get_investigation_context(
     dal: SupabaseDal,
     config: Config,
     request_structured_output_from_llm: Optional[bool] = None,
+    anthropic_code_mode: Optional[bool] = None,
 ):
-    ai = config.create_issue_investigator(dal=dal, model=investigate_request.model)
+    resolved_code_mode = resolve_anthropic_code_mode(
+        anthropic_code_mode,
+        investigate_request.anthropic_code_mode,
+        default=getattr(config, "anthropic_code_mode", True),
+    )
+    ai = config.create_issue_investigator(
+        dal=dal,
+        model=investigate_request.model,
+        anthropic_code_mode=resolved_code_mode,
+    )
 
     raw_data = investigate_request.model_dump()
     context = dal.get_issue_data(investigate_request.context.get("robusta_issue_id"))

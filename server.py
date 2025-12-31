@@ -61,6 +61,7 @@ from holmes.core.investigation_structured_output import clear_json_markdown
 from holmes.plugins.prompts import load_and_render_prompt
 from holmes.utils.holmes_sync_toolsets import holmes_sync_toolsets_status
 from holmes.utils.log import EndpointFilter
+from holmes.utils.llms import resolve_anthropic_code_mode
 # removed: add_runbooks_to_user_prompt
 
 
@@ -163,11 +164,15 @@ if LOG_PERFORMANCE:
 def investigate_issues(investigate_request: InvestigateRequest):
     try:
         runbooks = config.get_runbook_catalog()
+        code_mode = resolve_anthropic_code_mode(
+            investigate_request.anthropic_code_mode, default=config.anthropic_code_mode
+        )
         result = investigation.investigate_issues(
             investigate_request=investigate_request,
             dal=dal,
             config=config,
             model=investigate_request.model,
+            anthropic_code_mode=code_mode,
             runbooks=runbooks,
         )
         return result
@@ -184,8 +189,16 @@ def investigate_issues(investigate_request: InvestigateRequest):
 @app.post("/api/stream/investigate")
 def stream_investigate_issues(req: InvestigateRequest):
     try:
+        code_mode = resolve_anthropic_code_mode(
+            req.anthropic_code_mode, default=config.anthropic_code_mode
+        )
         ai, system_prompt, user_prompt, response_format, sections, runbooks = (
-            investigation.get_investigation_context(req, dal, config)
+            investigation.get_investigation_context(
+                req,
+                dal,
+                config,
+                anthropic_code_mode=code_mode,
+            )
         )
 
         return StreamingResponse(
@@ -238,7 +251,14 @@ def workload_health_check(request: WorkloadHealthRequest):
             request.ask,
             runbooks_ctx,
         )
-        ai = config.create_toolcalling_llm(dal=dal, model=request.model)
+        code_mode = resolve_anthropic_code_mode(
+            request.anthropic_code_mode, default=config.anthropic_code_mode
+        )
+        ai = config.create_toolcalling_llm(
+            dal=dal,
+            model=request.model,
+            anthropic_code_mode=code_mode,
+        )
 
         system_prompt = load_and_render_prompt(
             request.prompt_template,
@@ -280,7 +300,14 @@ def workload_health_conversation(
     request: WorkloadHealthChatRequest,
 ):
     try:
-        ai = config.create_toolcalling_llm(dal=dal, model=request.model)
+        code_mode = resolve_anthropic_code_mode(
+            request.anthropic_code_mode, default=config.anthropic_code_mode
+        )
+        ai = config.create_toolcalling_llm(
+            dal=dal,
+            model=request.model,
+            anthropic_code_mode=code_mode,
+        )
         global_instructions = dal.get_global_instructions_for_account()
 
         messages = build_workload_health_chat_messages(
@@ -310,7 +337,14 @@ def workload_health_conversation(
 def issue_conversation(issue_chat_request: IssueChatRequest):
     try:
         runbooks = config.get_runbook_catalog()
-        ai = config.create_toolcalling_llm(dal=dal, model=issue_chat_request.model)
+        code_mode = resolve_anthropic_code_mode(
+            issue_chat_request.anthropic_code_mode, default=config.anthropic_code_mode
+        )
+        ai = config.create_toolcalling_llm(
+            dal=dal,
+            model=issue_chat_request.model,
+            anthropic_code_mode=code_mode,
+        )
         global_instructions = dal.get_global_instructions_for_account()
 
         messages = build_issue_chat_messages(
@@ -351,7 +385,14 @@ def already_answered(conversation_history: Optional[List[dict]]) -> bool:
 def chat(chat_request: ChatRequest):
     try:
         runbooks = config.get_runbook_catalog()
-        ai = config.create_toolcalling_llm(dal=dal, model=chat_request.model)
+        code_mode = resolve_anthropic_code_mode(
+            chat_request.anthropic_code_mode, default=config.anthropic_code_mode
+        )
+        ai = config.create_toolcalling_llm(
+            dal=dal,
+            model=chat_request.model,
+            anthropic_code_mode=code_mode,
+        )
         global_instructions = dal.get_global_instructions_for_account()
         messages = build_chat_messages(
             chat_request.ask,

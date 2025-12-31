@@ -1,0 +1,85 @@
+from types import SimpleNamespace
+from unittest.mock import MagicMock
+
+from holmes.core.tool_calling_llm import ToolCallingLLM
+
+
+def test_anthropic_code_mode_adds_code_execution_tool():
+    tool_executor = MagicMock()
+    llm = SimpleNamespace(model="anthropic/claude-3-5-sonnet-20241022")
+    toolcalling_llm = ToolCallingLLM(
+        tool_executor=tool_executor,
+        max_steps=1,
+        llm=llm,
+        anthropic_code_mode=True,
+    )
+
+    tools = [{"type": "function", "function": {"name": "do_something"}}]
+    updated_tools = toolcalling_llm._maybe_enable_anthropic_code_mode(list(tools))
+
+    assert any(tool.get("name") == "code_execution" for tool in updated_tools)
+    assert (
+        sum(1 for tool in updated_tools if tool.get("name") == "code_execution") == 1
+    )
+    assert all(tool.get("usable") is True for tool in updated_tools)
+
+
+def test_code_execution_tool_added_for_non_anthropic_models():
+    tool_executor = MagicMock()
+    llm = SimpleNamespace(model="gpt-4.1")
+    toolcalling_llm = ToolCallingLLM(
+        tool_executor=tool_executor,
+        max_steps=1,
+        llm=llm,
+        anthropic_code_mode=True,
+    )
+
+    updated_tools = toolcalling_llm._maybe_enable_anthropic_code_mode([])
+
+    assert any(tool.get("name") == "code_execution" for tool in updated_tools)
+    assert all(tool.get("usable") is True for tool in updated_tools)
+
+
+def test_anthropic_code_mode_applied_for_bedrock_anthropic_models():
+    tool_executor = MagicMock()
+    llm = SimpleNamespace(model="bedrock/eu.anthropic.claude-sonnet-4-5-20250929-v1:0")
+    toolcalling_llm = ToolCallingLLM(
+        tool_executor=tool_executor,
+        max_steps=1,
+        llm=llm,
+        anthropic_code_mode=True,
+    )
+
+    updated_tools = toolcalling_llm._maybe_enable_anthropic_code_mode([])
+
+    assert any(tool.get("name") == "code_execution" for tool in updated_tools)
+
+
+def test_anthropic_code_mode_applied_for_openrouter_anthropic_models():
+    tool_executor = MagicMock()
+    llm = SimpleNamespace(model="openrouter/anthropic/claude-code-sonnet-4.5")
+    toolcalling_llm = ToolCallingLLM(
+        tool_executor=tool_executor,
+        max_steps=1,
+        llm=llm,
+        anthropic_code_mode=True,
+    )
+
+    updated_tools = toolcalling_llm._maybe_enable_anthropic_code_mode([])
+
+    assert any(tool.get("name") == "code_execution" for tool in updated_tools)
+
+
+def test_anthropic_code_mode_applied_for_unknown_provider_with_claude_name():
+    tool_executor = MagicMock()
+    llm = SimpleNamespace(model="custom-proxy/claude.code-sonnet-4.5")
+    toolcalling_llm = ToolCallingLLM(
+        tool_executor=tool_executor,
+        max_steps=1,
+        llm=llm,
+        anthropic_code_mode=True,
+    )
+
+    updated_tools = toolcalling_llm._maybe_enable_anthropic_code_mode([])
+
+    assert any(tool.get("name") == "code_execution" for tool in updated_tools)
