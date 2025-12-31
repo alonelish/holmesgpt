@@ -58,13 +58,29 @@ jobs:
               return;
             }
 
-            // Get PR SHA for checkout
+            // Parse branch parameter from comment if specified (for cross-branch comparison)
+            const body = context.payload.comment.body;
+            let targetBranch = '';
+            for (const line of body.split('\n').slice(1)) {
+              const colonIdx = line.indexOf(':');
+              if (colonIdx === -1) continue;
+              const key = line.slice(0, colonIdx).trim().toLowerCase();
+              const value = line.slice(colonIdx + 1).trim();
+              if (key === 'branch' && value && /^[a-zA-Z0-9_.\/-]*$/.test(value)) {
+                targetBranch = value;
+                break;
+              }
+            }
+            core.setOutput('branch', targetBranch);
+
+            // Get PR SHA and branch for checkout (only used if no branch override)
             const pr = await github.rest.pulls.get({
               owner: context.repo.owner,
               repo: context.repo.repo,
               pull_number: context.issue.number
             });
             core.setOutput('pr_sha', pr.data.head.sha);
+            core.setOutput('pr_branch', pr.data.head.ref);
 
             // Add eyes reaction to indicate the comment was seen and is being processed
             await github.rest.reactions.createForIssueComment({
@@ -77,7 +93,8 @@ jobs:
       - uses: actions/checkout@v4
         if: github.event_name != 'issue_comment' || steps.eval-comment.outcome == 'success'
         with:
-          ref: ${{ steps.eval-comment.outputs.pr_sha || github.ref }}
+          # For /eval with branch: checkout the specified branch; otherwise checkout PR SHA or current ref
+          ref: ${{ steps.eval-comment.outputs.branch || steps.eval-comment.outputs.pr_sha || github.ref }}
 
       - name: Determine eval parameters
         if: github.event_name != 'issue_comment' || steps.eval-comment.outcome == 'success'
@@ -95,7 +112,8 @@ jobs:
               markers: /^[a-zA-Z0-9_\- ]*$/,
               filter: /^[a-zA-Z0-9_\-]*$/,
               iterations: /^[0-9]+$/,
-              pr_number: /^[0-9]*$/
+              pr_number: /^[0-9]*$/,
+              branch: /^[a-zA-Z0-9_.\/-]*$/
             };
 
             function validate(value, name) {
@@ -108,7 +126,7 @@ jobs:
             }
 
             function parseComment(body) {
-              const params = { model: '', markers: '', filter: '', iterations: '1' };
+              const params = { model: '', markers: '', filter: '', iterations: '1', branch: '' };
               const validKeys = new Set(Object.keys(params));
               for (const line of body.split('\n').slice(1)) {
                 const colonIdx = line.indexOf(':');
@@ -120,7 +138,7 @@ jobs:
               return params;
             }
 
-            let model, markers, filter, iterations, isManual, triggerSource, prNumber, triggeredBy;
+            let model, markers, filter, iterations, isManual, triggerSource, prNumber, triggeredBy, branch, displayBranch;
             const event = context.eventName;
 
             if (event === 'issue_comment') {
@@ -129,9 +147,13 @@ jobs:
               markers = validate(parsed.markers, 'markers');
               filter = validate(parsed.filter, 'filter');
               iterations = validate(parsed.iterations, 'iterations');
-              if ([model, markers, filter, iterations].includes(null)) return;
+              branch = validate(parsed.branch, 'branch');
+              if ([model, markers, filter, iterations, branch].includes(null)) return;
+              // displayBranch shows what branch we're testing: override branch or PR branch
+              const prBranch = ${{ toJSON(steps.eval-comment.outputs.pr_branch) }} || '';
+              displayBranch = branch || prBranch;
               isManual = true;
-              triggerSource = '/eval comment';
+              triggerSource = branch ? `/eval on branch \`${branch}\`` : '/eval comment';
               prNumber = context.issue.number;
               triggeredBy = context.payload.comment.user.login;
             } else if (event === 'workflow_dispatch') {
@@ -140,30 +162,32 @@ jobs:
               filter = validate(${{ toJSON(github.event.inputs.filter) }} || '', 'filter');
               iterations = validate(${{ toJSON(github.event.inputs.iterations) }} || '', 'iterations');
               const prNum = validate(${{ toJSON(github.event.inputs.pr_number) }} || '', 'pr_number');
+              branch = ''; // workflow_dispatch doesn't support branch override yet
               if ([model, markers, filter, iterations, prNum].includes(null)) return;
               isManual = true;
               triggerSource = 'workflow_dispatch';
               triggeredBy = context.actor;
+              displayBranch = context.ref.replace('refs/heads/', '');
 
               // Auto-detect PR from branch if pr_number not provided
               if (prNum) {
                 prNumber = parseInt(prNum, 10);
               } else {
-                const branch = context.ref.replace('refs/heads/', '');
+                const currentBranch = context.ref.replace('refs/heads/', '');
                 const prs = await github.rest.pulls.list({
                   owner: context.repo.owner,
                   repo: context.repo.repo,
-                  head: `${context.repo.owner}:${branch}`,
+                  head: `${context.repo.owner}:${currentBranch}`,
                   state: 'open'
                 });
                 if (prs.data.length === 1) {
                   prNumber = prs.data[0].number;
-                  core.info(`Auto-detected PR #${prNumber} from branch ${branch}`);
+                  core.info(`Auto-detected PR #${prNumber} from branch ${currentBranch}`);
                 } else if (prs.data.length > 1) {
-                  core.warning(`Multiple open PRs found for branch ${branch}, please specify pr_number`);
+                  core.warning(`Multiple open PRs found for branch ${currentBranch}, please specify pr_number`);
                   prNumber = null;
                 } else {
-                  core.info(`No open PR found for branch ${branch}`);
+                  core.info(`No open PR found for branch ${currentBranch}`);
                   prNumber = null;
                 }
               }
@@ -172,18 +196,23 @@ jobs:
               markers = 'regression';
               filter = '';
               iterations = '1';
+              branch = '';
               isManual = false;
               prNumber = event === 'pull_request' ? context.payload.pull_request.number : null;
               triggeredBy = '';
               // Build descriptive trigger source for automatic runs
               if (event === 'pull_request') {
                 const sha = context.payload.pull_request.head.sha.substring(0, 7);
-                triggerSource = `commit ${sha}`;
+                const prBranch = context.payload.pull_request.head.ref;
+                displayBranch = prBranch;
+                triggerSource = `commit ${sha} on branch \`${prBranch}\``;
               } else if (event === 'push') {
                 const sha = context.sha.substring(0, 7);
-                const branch = context.ref.replace('refs/heads/', '');
-                triggerSource = `push to ${branch} (${sha})`;
+                const pushBranch = context.ref.replace('refs/heads/', '');
+                displayBranch = pushBranch;
+                triggerSource = `push to \`${pushBranch}\` (${sha})`;
               } else {
+                displayBranch = '';
                 triggerSource = 'automatic';
               }
             }
@@ -202,6 +231,8 @@ jobs:
             core.setOutput('trigger_source', triggerSource);
             core.setOutput('pr_number', prNumber ? prNumber.toString() : '');
             core.setOutput('triggered_by', triggeredBy);
+            core.setOutput('branch', branch);
+            core.setOutput('display_branch', displayBranch || '');
             core.setOutput('marker_expr', markers ? `llm and (${markers})` : 'llm');
             core.setOutput('run_url', `https://github.com/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`);
 
@@ -213,6 +244,8 @@ jobs:
               markers,
               filter,
               iterations: iterNum.toString(),
+              branch,
+              display_branch: displayBranch || '',
               run_url: `https://github.com/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`,
               pr_number: prNumber ? prNumber.toString() : ''
             }));
@@ -427,6 +460,7 @@ jobs:
           GENERATE_REGRESSIONS_FILE: "true"
           EVAL_MARKER_EXPR: ${{ steps.eval-params.outputs.marker_expr }}
           EVAL_FILTER: ${{ steps.eval-params.outputs.filter }}
+          EVAL_BRANCH: ${{ steps.eval-params.outputs.branch }}
         run: |
           # Unset MODEL if empty so get_models() uses DEFAULT_MODEL
           [[ -z "$MODEL" ]] && unset MODEL
