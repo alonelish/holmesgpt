@@ -17,6 +17,8 @@ function buildParams(raw) {
     markers: raw.markers,
     filter: raw.filter,
     iterations: raw.iterations,
+    branch: raw.branch || '',
+    displayBranch: raw.display_branch || '',
     runUrl: raw.run_url,
     prNumber: raw.pr_number ? parseInt(raw.pr_number, 10) : null,
     commentId: raw.comment_id ? parseInt(raw.comment_id, 10) : null,
@@ -25,7 +27,8 @@ function buildParams(raw) {
     duration: raw.duration || 'N/A',
     validMarkers: raw.valid_markers || '',
     askHolmesEvals: raw.ask_holmes_evals || '',
-    investigateEvals: raw.investigate_evals || ''
+    investigateEvals: raw.investigate_evals || '',
+    triggered_by: raw.triggered_by || ''
   };
 }
 
@@ -48,6 +51,7 @@ function renderProgress(steps) {
 function renderParamsTable(p) {
   return `| Parameter | Value |\n|-----------|-------|\n` +
     `| **Triggered via** | ${p.trigger} |\n` +
+    (p.displayBranch ? `| **Branch** | \`${p.displayBranch}\` |\n` : '') +
     `| **Model** | \`${p.model}\` |\n` +
     `| **Markers** | \`${p.markers || 'all LLM tests'}\` |\n` +
     (p.filter ? `| **Filter (-k)** | \`${p.filter}\` |\n` : '') +
@@ -91,8 +95,7 @@ function buildBody(p, progressSteps, extras = {}) {
  */
 function buildRerunFooter(p, context) {
   const workflowUrl = `https://github.com/${context.repo.owner}/${context.repo.repo}/actions/workflows/eval-regression.yaml`;
-  return '\n---\n' +
-    '<details>\n<summary>📖 <b>Legend</b></summary>\n\n' +
+  return '\n<details>\n<summary>📖 <b>Legend</b></summary>\n\n' +
     '| Icon | Meaning |\n|------|--------|\n' +
     '| ✅ | The test was successful |\n' +
     '| ➖ | The test was skipped |\n' +
@@ -109,11 +112,14 @@ function buildRerunFooter(p, context) {
     '```\n/eval\nmarkers: regression\n```\n\n' +
     'Or with more options (one per line):\n\n' +
     '```\n/eval\nmodel: gpt-4o\nmarkers: regression\nfilter: 09_crashpod\niterations: 5\n```\n\n' +
+    'Run evals on a different branch (e.g., master) for comparison:\n\n' +
+    '```\n/eval\nbranch: master\nmarkers: regression\n```\n\n' +
     '| Option | Description |\n|--------|-------------|\n' +
     '| `model` | Model(s) to test (default: same as automatic runs) |\n' +
     '| `markers` | Pytest markers (**no default - runs all tests!**) |\n' +
     '| `filter` | Pytest -k filter |\n' +
-    '| `iterations` | Number of runs, max 10 |\n\n' +
+    '| `iterations` | Number of runs, max 10 |\n' +
+    '| `branch` | Run evals on a different branch (for cross-branch comparison) |\n\n' +
     `**Option 2: [Trigger via GitHub Actions UI](${workflowUrl})** → "Run workflow"\n</details>\n` +
     '\n<details>\n<summary>🏷️ <b>Valid markers</b></summary>\n\n' +
     (p.validMarkers || '_(Collecting from pyproject.toml...)_') +
