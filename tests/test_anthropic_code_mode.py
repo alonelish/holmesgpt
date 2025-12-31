@@ -66,3 +66,18 @@ def test_anthropic_code_mode_applied_for_openrouter_anthropic_models():
     updated_tools = toolcalling_llm._maybe_enable_anthropic_code_mode([])
 
     assert any(tool.get("name") == "code_execution" for tool in updated_tools)
+
+
+def test_anthropic_code_mode_applied_for_unknown_provider_with_claude_name():
+    tool_executor = MagicMock()
+    llm = SimpleNamespace(model="custom-proxy/claude.code-sonnet-4.5")
+    toolcalling_llm = ToolCallingLLM(
+        tool_executor=tool_executor,
+        max_steps=1,
+        llm=llm,
+        anthropic_code_mode=True,
+    )
+
+    updated_tools = toolcalling_llm._maybe_enable_anthropic_code_mode([])
+
+    assert any(tool.get("name") == "code_execution" for tool in updated_tools)

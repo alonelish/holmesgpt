@@ -184,27 +184,24 @@ class ToolCallingLLM:
         ] = None
 
     def _is_anthropic_model(self) -> bool:
-        provider_info = litellm.get_llm_provider(self.llm.model)
-        if (
-            provider_info is not None
-            and len(provider_info) > 1
-            and provider_info[1] == "anthropic"
-        ):
-            return True
+        model_name = (self.llm.model or "").lower()
 
-        if (
-            provider_info is not None
-            and len(provider_info) > 1
-            and provider_info[1] == "bedrock"
-            and "anthropic" in (self.llm.model or "").lower()
-        ):
-            return True
+        try:
+            provider_info = litellm.get_llm_provider(model_name)
+            if (
+                provider_info is not None
+                and len(provider_info) > 1
+                and provider_info[1] in {"anthropic", "bedrock"}
+            ):
+                return True
+        except Exception:
+            pass
 
         if model_matches_list(
-            self.llm.model or "",
+            model_name,
             [
-                "*anthropic*claude*",
-                "openrouter/anthropic/*",
+                "*anthropic*",
+                "*claude*",
             ],
         ):
             return True
