@@ -34,6 +34,7 @@ from holmes.plugins.toolsets.grafana.toolset_grafana_tempo import GrafanaTempoTo
 from holmes.plugins.toolsets.internet.internet import InternetToolset
 from holmes.plugins.toolsets.internet.notion import NotionToolset
 from holmes.plugins.toolsets.kafka import KafkaToolset
+from holmes.plugins.toolsets.kubernetes_get import KubernetesGetToolset
 from holmes.plugins.toolsets.kubernetes_logs import KubernetesLogsToolset
 from holmes.plugins.toolsets.mcp.toolset_mcp import RemoteMCPToolset
 from holmes.plugins.toolsets.newrelic.newrelic import NewRelicToolset
@@ -111,6 +112,7 @@ def load_python_toolsets(
 
         toolsets.append(PrometheusToolset())
 
+    toolsets.append(KubernetesGetToolset())
     if not USE_LEGACY_KUBERNETES_LOGS:
         toolsets.append(KubernetesLogsToolset())
 
