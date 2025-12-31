@@ -48,7 +48,7 @@ def investigate_issues(
     resolved_code_mode = resolve_anthropic_code_mode(
         anthropic_code_mode,
         investigate_request.anthropic_code_mode,
-        default=config.anthropic_code_mode,
+        default=getattr(config, "anthropic_code_mode", True),
     )
 
     ai = config.create_issue_investigator(
@@ -99,7 +99,7 @@ def get_investigation_context(
     resolved_code_mode = resolve_anthropic_code_mode(
         anthropic_code_mode,
         investigate_request.anthropic_code_mode,
-        default=config.anthropic_code_mode,
+        default=getattr(config, "anthropic_code_mode", True),
     )
     ai = config.create_issue_investigator(
         dal=dal,
