@@ -15,7 +15,7 @@
     {
       "id": "tempo-trace-comparison.md",
       "update_date": "2025-12-30",
-      "description": "Use when investigating reported latency or tail-latency spikes; compares fast, typical, and slow Tempo traces to isolate the bottleneck",
+      "description": "Use when investigating latency or error spikes in tracing backends (Tempo, Datadog, etc.); compare unhealthy vs. healthy traces to isolate the bottleneck",
       "link": "tracing/tempo-trace-comparison.md"
     }
   ]
