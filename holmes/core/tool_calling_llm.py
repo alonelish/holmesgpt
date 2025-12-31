@@ -64,6 +64,7 @@ from holmes.utils.stream import (
     add_token_count_to_metadata,
     build_stream_event_token_count,
 )
+from holmes.utils.llms import model_matches_list
 
 # Create a named logger for cost tracking
 cost_logger = logging.getLogger("holmes.costs")
@@ -196,6 +197,15 @@ class ToolCallingLLM:
             and len(provider_info) > 1
             and provider_info[1] == "bedrock"
             and "anthropic" in (self.llm.model or "").lower()
+        ):
+            return True
+
+        if model_matches_list(
+            self.llm.model or "",
+            [
+                "*anthropic*claude*",
+                "openrouter/anthropic/*",
+            ],
         ):
             return True
 
