@@ -4,15 +4,195 @@ The AWS MCP server provides comprehensive access to AWS services through a secur
 
 ## Overview
 
-The AWS MCP server is deployed as a separate pod in your cluster when using the Holmes or Robusta Helm charts. For CLI users, you'll need to deploy the MCP server manually and configure Holmes to connect to it.
+The AWS MCP server is deployed as a separate pod in your cluster. Choose your installation method:
 
-## Configuration
+- **Holmes Helm Chart** or **Robusta Helm Chart**: The MCP server is deployed automatically when enabled
+- **Holmes CLI**: Deploy the MCP server manually to your cluster
+
+## Prerequisites
+
+**For EKS clusters (recommended)**:
+
+- An EKS cluster with an OIDC provider enabled ([how to enable](https://docs.aws.amazon.com/eks/latest/userguide/enable-iam-roles-for-service-accounts.html))
+- An IAM role configured for IRSA (IAM Roles for Service Accounts)
+- The IAM role must have the HolmesGPT read-only policy attached
+
+**For non-EKS clusters**:
+
+- AWS access key and secret key with appropriate permissions
+
+## Step 1: Set Up IAM Permissions
+
+Before configuring Holmes, you need to create the IAM policy and role that grants AWS access.
+
+### Create the IAM Policy
+
+The AWS MCP server requires comprehensive read-only permissions across AWS services, covering:
+
+- **Core Observability**: CloudWatch, Logs, Events
+- **Compute & Networking**: EC2, ELB, Auto Scaling, VPC
+- **Containers**: EKS, ECS, ECR
+- **Security**: IAM, CloudTrail, GuardDuty, Security Hub
+- **Databases**: RDS, ElastiCache, DocumentDB, Neptune
+- **Cost Management**: Cost Explorer, Budgets, Organizations
+- **Storage**: S3, EBS, EFS, Backup
+- **Serverless**: Lambda, Step Functions, API Gateway, SNS, SQS
+- **And more...**
+
+**Option A: Use the helper scripts (recommended)**
+
+We provide scripts that automate the IAM setup:
+
+1. [Enable OIDC Provider Script](https://github.com/robusta-dev/holmes-mcp-integrations/blob/master/servers/aws/enable-oidc-provider.sh) - Enables OIDC for your EKS cluster
+2. [Setup IRSA Script](https://github.com/robusta-dev/holmes-mcp-integrations/blob/master/servers/aws/setup-irsa.sh) - Creates the policy and IAM role
+
+**Option B: Create manually**
+
+```bash
+# Download the policy
+curl -O https://raw.githubusercontent.com/robusta-dev/holmes-mcp-integrations/master/servers/aws/aws-mcp-iam-policy.json
+
+# Create the IAM policy
+aws iam create-policy \
+  --policy-name HolmesMCPReadOnly \
+  --policy-document file://aws-mcp-iam-policy.json
+```
+
+The complete policy is available on GitHub: [aws-mcp-iam-policy.json](https://github.com/robusta-dev/holmes-mcp-integrations/blob/master/servers/aws/aws-mcp-iam-policy.json)
+
+### Create the IAM Role for IRSA
+
+Create an IAM role that can be assumed by the Kubernetes service account:
+
+```bash
+# Get your OIDC provider URL
+OIDC_PROVIDER=$(aws eks describe-cluster --name YOUR_CLUSTER_NAME --query "cluster.identity.oidc.issuer" --output text | sed -e "s/^https:\/\///")
+
+# Create the trust policy
+cat > trust-policy.json << EOF
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Effect": "Allow",
+      "Principal": {
+        "Federated": "arn:aws:iam::ACCOUNT_ID:oidc-provider/${OIDC_PROVIDER}"
+      },
+      "Action": "sts:AssumeRoleWithWebIdentity",
+      "Condition": {
+        "StringEquals": {
+          "${OIDC_PROVIDER}:sub": "system:serviceaccount:YOUR_NAMESPACE:aws-mcp-server-sa"
+        }
+      }
+    }
+  ]
+}
+EOF
+
+# Create the role
+aws iam create-role \
+  --role-name HolmesMCPRole \
+  --assume-role-policy-document file://trust-policy.json
+
+# Attach the policy to the role
+aws iam attach-role-policy \
+  --role-name HolmesMCPRole \
+  --policy-arn arn:aws:iam::ACCOUNT_ID:policy/HolmesMCPReadOnly
+```
+
+**Note the role ARN** - you'll need it in the next step: `arn:aws:iam::ACCOUNT_ID:role/HolmesMCPRole`
+
+## Step 2: Configure and Deploy
+
+Choose your installation method:
+
+=== "Holmes Helm Chart"
+
+    **Step 2a: Update your values.yaml**
+
+    Add the AWS MCP addon configuration:
+
+    ```yaml
+    mcpAddons:
+      aws:
+        enabled: true
+
+        serviceAccount:
+          create: true
+          annotations:
+            # Use the IAM role ARN from Step 1
+            eks.amazonaws.com/role-arn: "arn:aws:iam::ACCOUNT_ID:role/HolmesMCPRole"
+
+        config:
+          region: "us-east-1"  # Change to your AWS region
+    ```
+
+    For additional options (resources, network policy, node selectors), see the [full chart values](https://github.com/HolmesGPT/holmesgpt/blob/master/helm/holmes/values.yaml#L75).
+
+    **Step 2b: Deploy Holmes**
+
+    ```bash
+    helm upgrade --install holmes robusta/holmes -f values.yaml
+    ```
+
+    **Step 2c: Verify the deployment**
+
+    ```bash
+    # Check that the MCP server pod is running
+    kubectl get pods -l app=aws-mcp-server
+
+    # Check the logs for any errors
+    kubectl logs -l app=aws-mcp-server
+    ```
+
+=== "Robusta Helm Chart"
+
+    **Step 2a: Update your generated_values.yaml**
+
+    Add the Holmes MCP addon configuration under the `holmes` section:
+
+    ```yaml
+    globalConfig:
+      # Your existing Robusta configuration
+
+    holmes:
+      mcpAddons:
+        aws:
+          enabled: true
+
+          serviceAccount:
+            create: true
+            annotations:
+              # Use the IAM role ARN from Step 1
+              eks.amazonaws.com/role-arn: "arn:aws:iam::ACCOUNT_ID:role/HolmesMCPRole"
+
+          config:
+            region: "us-east-1"  # Change to your AWS region
+    ```
+
+    For additional options (resources, network policy, node selectors), see the [full chart values](https://github.com/HolmesGPT/holmesgpt/blob/master/helm/holmes/values.yaml#L75).
+
+    **Step 2b: Deploy Robusta**
+
+    ```bash
+    helm upgrade --install robusta robusta/robusta -f generated_values.yaml --set clusterName=YOUR_CLUSTER_NAME
+    ```
+
+    **Step 2c: Verify the deployment**
+
+    ```bash
+    # Check that the MCP server pod is running
+    kubectl get pods -l app=aws-mcp-server
+
+    # Check the logs for any errors
+    kubectl logs -l app=aws-mcp-server
+    ```
 
 === "Holmes CLI"
 
-    For CLI usage, you need to deploy the AWS MCP server first, then configure Holmes to connect to it. Below is an example, on how to deploy it in your cluster.
+    For CLI usage, you need to deploy the AWS MCP server to your cluster, then configure Holmes to connect to it.
 
-    ### Step 1: Deploy the AWS MCP Server
+    **Step 2a: Create the deployment manifest**
 
     Create a file named `aws-mcp-deployment.yaml`:
 
@@ -28,8 +208,8 @@ The AWS MCP server is deployed as a separate pod in your cluster when using the 
       name: aws-mcp-sa
       namespace: holmes-mcp
       annotations:
-        # For EKS IRSA, add your role ARN:
-        # eks.amazonaws.com/role-arn: arn:aws:iam::ACCOUNT_ID:role/YOUR_ROLE_NAME
+        # Use the IAM role ARN from Step 1
+        eks.amazonaws.com/role-arn: "arn:aws:iam::ACCOUNT_ID:role/HolmesMCPRole"
     ---
     apiVersion: apps/v1
     kind: Deployment
@@ -61,11 +241,6 @@ The AWS MCP server is deployed as a separate pod in your cluster when using the 
               value: "us-east-1"  # Change to your region
             - name: READ_OPERATIONS_ONLY
               value: "true"
-            # If not using IRSA, provide credentials via environment variables:
-            # - name: AWS_ACCESS_KEY_ID
-            #   value: "your-access-key"
-            # - name: AWS_SECRET_ACCESS_KEY
-            #   value: "your-secret-key"
             resources:
               requests:
                 memory: "512Mi"
@@ -99,49 +274,25 @@ The AWS MCP server is deployed as a separate pod in your cluster when using the 
         name: http
     ```
 
-    Deploy it to your cluster:
+    **Step 2b: Deploy to your cluster**
 
     ```bash
     kubectl apply -f aws-mcp-deployment.yaml
     ```
 
-    ### Step 2: Configure AWS Credentials
-
-    Choose one of these methods:
-
-    **Option A: Using IRSA (Recommended for EKS)**
-    - Create an IAM role with the necessary permissions
-    - Configure the role ARN in the ServiceAccount annotation
-    - The pod will automatically assume the role
-
-    **Option B: Using Environment Variables**
-    - Uncomment the AWS credential environment variables in the deployment
-    - Or create a secret and reference it:
+    **Step 2c: Verify the deployment**
 
     ```bash
-    kubectl create secret generic aws-credentials \
-      --from-literal=aws-access-key-id=YOUR_KEY \
-      --from-literal=aws-secret-access-key=YOUR_SECRET \
-      -n holmes-mcp
+    # Check that the pod is running
+    kubectl get pods -n holmes-mcp
+
+    # Check the logs for any errors
+    kubectl logs -n holmes-mcp -l app=aws-mcp-server
     ```
 
-    Then reference it in the deployment:
-    ```yaml
-    - name: AWS_ACCESS_KEY_ID
-      valueFrom:
-        secretKeyRef:
-          name: aws-credentials
-          key: aws-access-key-id
-    - name: AWS_SECRET_ACCESS_KEY
-      valueFrom:
-        secretKeyRef:
-          name: aws-credentials
-          key: aws-secret-access-key
-    ```
+    **Step 2d: Configure Holmes CLI**
 
-    ### Step 3: Configure Holmes CLI
-
-    Add the MCP server configuration to **~/.holmes/config.yaml**:
+    Add the MCP server to `~/.holmes/config.yaml`:
 
     ```yaml
     mcp_servers:
@@ -179,137 +330,69 @@ The AWS MCP server is deployed as a separate pod in your cluster when using the 
           Remember: Your goal is to gather evidence from AWS, not to instruct the user to gather it. Use the MCP server proactively to build a complete picture of what happened.
     ```
 
-    ### Step 4: Port Forwarding (Optional for Local Testing)
+    **Step 2e: Port forwarding (for local testing only)**
 
-    If running Holmes CLI locally and need to access the MCP server:
+    If running Holmes CLI locally (outside the cluster):
 
     ```bash
     kubectl port-forward -n holmes-mcp svc/aws-mcp-server 8000:8000
     ```
 
-    Then update the URL in config.yaml to:
+    Then update the URL in `~/.holmes/config.yaml`:
+
     ```yaml
     url: "http://localhost:8000"
     ```
 
-=== "Holmes Helm Chart"
+## Alternative: Using Access Keys Instead of IRSA
 
-    The MCP server will use IRSA (IAM Roles for Service Accounts) for permissions - see the IAM Configuration section below for setup details.
+If you're not using EKS or prefer static credentials, you can use AWS access keys instead of IRSA.
 
-    Add the following configuration to your `values.yaml` file:
+**For Helm charts**, add the credentials to your values:
 
-    ```yaml
-    mcpAddons:
-      aws:
-        enabled: true
+```yaml
+mcpAddons:
+  aws:
+    enabled: true
+    config:
+      region: "us-east-1"
+    # Add credentials via environment variables
+    extraEnv:
+      - name: AWS_ACCESS_KEY_ID
+        valueFrom:
+          secretKeyRef:
+            name: aws-credentials
+            key: aws-access-key-id
+      - name: AWS_SECRET_ACCESS_KEY
+        valueFrom:
+          secretKeyRef:
+            name: aws-credentials
+            key: aws-secret-access-key
+```
 
-        # Service account for IRSA (IAM Roles for Service Accounts)
-        serviceAccount:
-          create: true
-          annotations:
-            # Add your EKS IRSA role ARN here
-            eks.amazonaws.com/role-arn: "arn:aws:iam::ACCOUNT_ID:role/YOUR_ROLE_NAME"
-
-        # AWS configuration
-        config:
-          region: "us-east-1"  # Your AWS region
-    ```
-
-    For additional configuration options (resources, network policy, node selectors, etc.), see the [full chart values](https://github.com/HolmesGPT/holmesgpt/blob/master/helm/holmes/values.yaml#L75).
-
-    Then deploy or upgrade your Holmes installation:
-
-    ```bash
-    helm upgrade --install holmes robusta/holmes -f values.yaml
-    ```
-
-=== "Robusta Helm Chart"
-
-    The MCP server will use IRSA (IAM Roles for Service Accounts) for permissions - see the IAM Configuration section below for setup details.
-
-    Add the following configuration to your `generated_values.yaml`:
-
-    ```yaml
-    globalConfig:
-      # Your existing Robusta configuration
-
-
-    # Add the Holmes MCP addon configuration
-    holmes:
-      mcpAddons:
-        aws:
-          enabled: true
-
-          # Service account for IRSA (IAM Roles for Service Accounts)
-          serviceAccount:
-            create: true
-            annotations:
-              # Add your EKS IRSA role ARN here
-              eks.amazonaws.com/role-arn: "arn:aws:iam::ACCOUNT_ID:role/YOUR_ROLE_NAME"
-
-          # AWS configuration
-          config:
-            region: "us-east-1"  # Your AWS region
-    ```
-
-    For additional configuration options (resources, network policy, node selectors, etc.), see the [full chart values](https://github.com/HolmesGPT/holmesgpt/blob/master/helm/holmes/values.yaml#L75).
-
-    Then deploy or upgrade your Robusta installation:
-
-    ```bash
-    helm upgrade --install robusta robusta/robusta -f generated_values.yaml --set clusterName=YOUR_CLUSTER_NAME
-    ```
-
-## IAM Configuration
-
-### EKS with IRSA (Recommended)
-
-For EKS clusters, use IAM Roles for Service Accounts (IRSA) for secure, fine-grained permissions:
-
-1. Create an IAM policy with the required permissions (see example below)
-2. Create an IAM role and attach the policy
-3. Associate the role with the service account using the annotation in values.yaml
-
-### IAM Policy
-
-The AWS MCP server requires comprehensive read-only permissions across AWS services. We provide a complete IAM policy that covers:
-
-- **Core Observability**: CloudWatch, Logs, Events
-- **Compute & Networking**: EC2, ELB, Auto Scaling, VPC
-- **Containers**: EKS, ECS, ECR
-- **Security**: IAM, CloudTrail, GuardDuty, Security Hub
-- **Databases**: RDS, ElastiCache, DocumentDB, Neptune
-- **Cost Management**: Cost Explorer, Budgets, Organizations
-- **Storage**: S3, EBS, EFS, Backup
-- **Serverless**: Lambda, Step Functions, API Gateway, SNS, SQS
-- **And more...**
-
-You can find the complete IAM policy in:
-
-- **GitHub**: [aws-mcp-iam-policy.json](https://github.com/robusta-dev/holmes-mcp-integrations/blob/master/servers/aws/aws-mcp-iam-policy.json)
-
-#### Quick Setup
-
-For EKS IRSA setup, we provide helper scripts to create the policy and IAM Role:
-
-- [Setup IRSA Script](https://github.com/robusta-dev/holmes-mcp-integrations/blob/master/servers/aws/setup-irsa.sh)
-- [Enable OIDC Provider Script](https://github.com/robusta-dev/holmes-mcp-integrations/blob/master/servers/aws/enable-oidc-provider.sh)
-
-To create it manually:
+Create the secret first:
 
 ```bash
-# Download the policy
-curl -O https://raw.githubusercontent.com/robusta-dev/holmes-mcp-integrations/master/servers/aws/aws-mcp-iam-policy.json
+kubectl create secret generic aws-credentials \
+  --from-literal=aws-access-key-id=YOUR_KEY \
+  --from-literal=aws-secret-access-key=YOUR_SECRET \
+  -n YOUR_NAMESPACE
+```
 
-# Create IAM policy
-aws iam create-policy \
-  --policy-name HolmesMCPReadOnly \
-  --policy-document file://aws-mcp-iam-policy.json
+**For CLI deployments**, update the deployment manifest to include the credentials:
 
-# Attach to your role (for IRSA)
-aws iam attach-role-policy \
-  --role-name YOUR_ROLE_NAME \
-  --policy-arn arn:aws:iam::ACCOUNT_ID:policy/HolmesMCPReadOnly
+```yaml
+env:
+  - name: AWS_ACCESS_KEY_ID
+    valueFrom:
+      secretKeyRef:
+        name: aws-credentials
+        key: aws-access-key-id
+  - name: AWS_SECRET_ACCESS_KEY
+    valueFrom:
+      secretKeyRef:
+        name: aws-credentials
+        key: aws-secret-access-key
 ```
 
 ## Capabilities
@@ -365,5 +448,5 @@ The AWS MCP server provides access to all AWS services through the AWS CLI. Comm
 
 ### Check IAM Policy for a k8s workload
 ```
-""What IAM policy is the aws mcp using? What capabilities does it have?"
+"What IAM policy is the aws mcp using? What capabilities does it have?"
 ```
