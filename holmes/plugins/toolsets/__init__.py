@@ -44,7 +44,6 @@ from holmes.plugins.toolsets.opensearch.opensearch_query_assist import (
     OpenSearchQueryAssistToolset,
 )
 from holmes.plugins.toolsets.opensearch.opensearch_search import OpenSearchSearchToolset
-from holmes.plugins.toolsets.opensearch.opensearch_traces import OpenSearchTracesToolset
 from holmes.plugins.toolsets.rabbitmq.toolset_rabbitmq import RabbitMQToolset
 from holmes.plugins.toolsets.robusta.robusta import RobustaToolset
 from holmes.plugins.toolsets.runbook.runbook_fetcher import RunbookToolset
@@ -98,7 +97,6 @@ def load_python_toolsets(
         DatadogMetricsToolset(),
         DatadogTracesToolset(),
         OpenSearchLogsToolset(),
-        OpenSearchTracesToolset(),
         OpenSearchQueryAssistToolset(),
         CoralogixToolset(),
         RabbitMQToolset(),
