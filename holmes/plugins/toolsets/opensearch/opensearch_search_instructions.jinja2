@@ -31,6 +31,32 @@ Accepts full OpenSearch query DSL in `body` parameter. Examples:
 }
 ```
 
+**Trace search (replaces traces_in_range_search):**
+```json
+{
+  "query": {"range": {"startTimeMillis": {"gte": 1234567890, "lte": 1234567999}}},
+  "size": 100,
+  "_source": ["traceId", "spanId", "duration", "serviceName"],
+  "track_total_hits": false
+}
+```
+
+**Discover fields in index (replaces get_traces_fields):**
+```json
+{
+  "size": 1,
+  "_source": false,
+  "script_fields": {
+    "all_fields": {
+      "script": {
+        "lang": "painless",
+        "source": "Map fields = new HashMap(); List stack = new ArrayList(); stack.add(['prefix': '', 'obj': params['_source']]); while (!stack.isEmpty()) { Map item = stack.remove(stack.size() - 1); String prefix = item.get('prefix'); Map obj = item.get('obj'); for (entry in obj.entrySet()) { String fullPath = prefix.isEmpty() ? entry.getKey() : prefix + '.' + entry.getKey(); fields.put(fullPath, true); if (entry.getValue() instanceof Map) { stack.add(['prefix': fullPath, 'obj': entry.getValue()]); } } } return fields.keySet();"
+      }
+    }
+  }
+}
+```
+
 **With aggregations:**
 ```json
 {
@@ -65,7 +91,7 @@ Accepts newline-delimited JSON (ndjson). Each search = header line + body line:
 {"query": {"term": {"trace.id": "abc"}}, "size": 50}
 ```
 
-Use for correlation queries across multiple indices.
+Use for correlation queries across multiple indices (e.g., trace logs, spans, metrics).
 
 ### opensearch_pit_open
 **API**: `POST /<index>/_pit?keep_alive=<time>`
@@ -85,3 +111,4 @@ Closes PIT to free resources.
 * Use `.keyword` suffix for exact text matches
 * For large result sets, use PIT + search_after pagination
 * For correlation queries, batch with _msearch
+* For field discovery, use size=1 with script_fields (minimal response)
