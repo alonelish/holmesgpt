@@ -43,6 +43,7 @@ from holmes.plugins.toolsets.opensearch.opensearch_logs import OpenSearchLogsToo
 from holmes.plugins.toolsets.opensearch.opensearch_query_assist import (
     OpenSearchQueryAssistToolset,
 )
+from holmes.plugins.toolsets.opensearch.opensearch_search import OpenSearchSearchToolset
 from holmes.plugins.toolsets.opensearch.opensearch_traces import OpenSearchTracesToolset
 from holmes.plugins.toolsets.rabbitmq.toolset_rabbitmq import RabbitMQToolset
 from holmes.plugins.toolsets.robusta.robusta import RobustaToolset
@@ -85,6 +86,7 @@ def load_python_toolsets(
         ConnectivityCheckToolset(),
         RobustaToolset(dal),
         OpenSearchToolset(),
+        OpenSearchSearchToolset(),
         GrafanaLokiToolset(),
         GrafanaTempoToolset(),
         NewRelicToolset(),
