@@ -14,6 +14,7 @@ from holmes.core.tools import (
 import json
 from requests import RequestException
 
+from holmes.plugins.toolsets.json_filter_mixin import JsonFilterMixin
 from holmes.plugins.toolsets.opensearch.opensearch_utils import (
     BaseOpenSearchToolset,
     add_auth_header,
@@ -25,12 +26,12 @@ from holmes.plugins.toolsets.utils import get_param_or_raise, toolset_name_for_o
 TRACES_FIELDS_CACHE_KEY = "cached_traces_fields"
 
 
-class GetTracesFields(Tool):
+class GetTracesFields(JsonFilterMixin, Tool):
     def __init__(self, toolset: BaseOpenSearchToolset):
         super().__init__(
             name="get_traces_fields",
             description="Get all the fields in the traces documents",
-            parameters={},
+            parameters=self.extend_parameters({}),
         )
         self._toolset = toolset
         self._cache = None
@@ -46,11 +47,12 @@ class GetTracesFields(Tool):
                 cached_response = self._cache.get(TRACES_FIELDS_CACHE_KEY, None)
                 if cached_response:
                     logging.debug("traces fields returned from cache")
-                    return StructuredToolResult(
+                    result = StructuredToolResult(
                         status=StructuredToolResultStatus.SUCCESS,
                         data=cached_response,
                         params=params,
                     )
+                    return self.filter_result(result, params)
 
             body = {
                 "size": 1,
@@ -76,14 +78,15 @@ class GetTracesFields(Tool):
                 headers=headers,
             )
             logs_response.raise_for_status()
-            response = json.dumps(logs_response.json())
+            response = logs_response.json()
             if self._cache:
                 self._cache[TRACES_FIELDS_CACHE_KEY] = response
-            return StructuredToolResult(
+            result = StructuredToolResult(
                 status=StructuredToolResultStatus.SUCCESS,
                 data=response,
                 params=params,
             )
+            return self.filter_result(result, params)
         except requests.Timeout:
             logging.warning(
                 "Timeout while fetching opensearch traces fields", exc_info=True
@@ -112,18 +115,18 @@ class GetTracesFields(Tool):
         return f"{toolset_name_for_one_liner(self._toolset.name)}: List Trace Fields"
 
 
-class TracesSearchQuery(Tool):
+class TracesSearchQuery(JsonFilterMixin, Tool):
     def __init__(self, toolset: "OpenSearchTracesToolset"):
         super().__init__(
             name="traces_in_range_search",
             description="Get traces in a specified time range for an opensearch query",
-            parameters={
+            parameters=self.extend_parameters({
                 "query": ToolParameter(
                     description="An OpenSearch search query. It should be a stringified json, matching opensearch search syntax. "
                     "The query must contain a 'range' on the startTimeMillis field. From a given startTimeMillis, until a given startTimeMillis. This is time in milliseconds",
                     type="string",
                 ),
-            },
+            }),
         )
         self._toolset = toolset
         self._cache = None
@@ -153,11 +156,12 @@ class TracesSearchQuery(Tool):
                 err_msg = logs_response.text
 
             logs_response.raise_for_status()
-            return StructuredToolResult(
+            result = StructuredToolResult(
                 status=StructuredToolResultStatus.SUCCESS,
                 data=logs_response.json(),
                 params=params,
             )
+            return self.filter_result(result, params)
         except requests.Timeout:
             logging.warning(
                 "Timeout while fetching opensearch traces search", exc_info=True

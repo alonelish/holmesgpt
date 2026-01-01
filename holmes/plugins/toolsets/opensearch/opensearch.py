@@ -15,6 +15,7 @@ from holmes.core.tools import (
     ToolsetTag,
 )
 from holmes.plugins.toolsets.consts import TOOLSET_CONFIG_MISSING_ERROR
+from holmes.plugins.toolsets.json_filter_mixin import JsonFilterMixin
 from holmes.plugins.toolsets.utils import toolset_name_for_one_liner
 
 
@@ -79,47 +80,48 @@ class BaseOpenSearchTool(Tool):
     toolset: "OpenSearchToolset"
 
 
-class ListShards(BaseOpenSearchTool):
+class ListShards(JsonFilterMixin, BaseOpenSearchTool):
     def __init__(self, toolset: "OpenSearchToolset"):
         super().__init__(
             name="opensearch_list_shards",
             description="List the shards within an opensearch cluster",
-            parameters={
+            parameters=self.extend_parameters({
                 "host": ToolParameter(
                     description="The cluster host",
                     type="string",
                     required=True,
                 )
-            },
+            }),
             toolset=toolset,
         )
 
     def _invoke(self, params: dict, context: ToolInvokeContext) -> StructuredToolResult:
         client = get_client(self.toolset.clients, host=params.get("host", ""))
-        shards = client.client.cat.shards()
-        return StructuredToolResult(
+        shards = client.client.cat.shards(format="json")
+        result = StructuredToolResult(
             status=StructuredToolResultStatus.SUCCESS,
-            data=str(shards),
+            data=shards,
             params=params,
         )
+        return self.filter_result(result, params)
 
     def get_parameterized_one_liner(self, params: Dict) -> str:
         host = params.get("host", "")
         return f"{toolset_name_for_one_liner(self.toolset.name)}: List Shards ({host})"
 
 
-class GetClusterSettings(BaseOpenSearchTool):
+class GetClusterSettings(JsonFilterMixin, BaseOpenSearchTool):
     def __init__(self, toolset: "OpenSearchToolset"):
         super().__init__(
             name="opensearch_get_cluster_settings",
             description="Retrieve the cluster's settings",
-            parameters={
+            parameters=self.extend_parameters({
                 "host": ToolParameter(
                     description="The cluster host",
                     type="string",
                     required=True,
                 )
-            },
+            }),
             toolset=toolset,
         )
 
@@ -128,62 +130,65 @@ class GetClusterSettings(BaseOpenSearchTool):
         response = client.client.cluster.get_settings(
             include_defaults=True, flat_settings=True
         )
-        return StructuredToolResult(
+        result = StructuredToolResult(
             status=StructuredToolResultStatus.SUCCESS,
-            data=str(response),
+            data=response,
             params=params,
         )
+        return self.filter_result(result, params)
 
     def get_parameterized_one_liner(self, params) -> str:
         host = params.get("host", "")
         return f"{toolset_name_for_one_liner(self.toolset.name)}: Get Cluster Settings ({host})"
 
 
-class GetClusterHealth(BaseOpenSearchTool):
+class GetClusterHealth(JsonFilterMixin, BaseOpenSearchTool):
     def __init__(self, toolset: "OpenSearchToolset"):
         super().__init__(
             name="opensearch_get_cluster_health",
             description="Retrieve the cluster's health",
-            parameters={
+            parameters=self.extend_parameters({
                 "host": ToolParameter(
                     description="The cluster host",
                     type="string",
                     required=True,
                 )
-            },
+            }),
             toolset=toolset,
         )
 
     def _invoke(self, params: dict, context: ToolInvokeContext) -> StructuredToolResult:
         client = get_client(self.toolset.clients, host=params.get("host", ""))
         health = client.client.cluster.health()
-        return StructuredToolResult(
+        result = StructuredToolResult(
             status=StructuredToolResultStatus.SUCCESS,
-            data=str(health),
+            data=health,
             params=params,
         )
+        return self.filter_result(result, params)
 
     def get_parameterized_one_liner(self, params) -> str:
         host = params.get("host", "")
         return f"{toolset_name_for_one_liner(self.toolset.name)}: Check Cluster Health ({host})"
 
 
-class ListOpenSearchHosts(BaseOpenSearchTool):
+class ListOpenSearchHosts(JsonFilterMixin, BaseOpenSearchTool):
     def __init__(self, toolset: "OpenSearchToolset"):
         super().__init__(
             name="opensearch_list_hosts",
             description="List all OpenSearch hosts in the cluster",
-            parameters={},
+            parameters=self.extend_parameters({}),
             toolset=toolset,
         )
 
     def _invoke(self, params: dict, context: ToolInvokeContext) -> StructuredToolResult:
         hosts = [host for client in self.toolset.clients for host in client.hosts]
-        return StructuredToolResult(
+        result = StructuredToolResult(
             status=StructuredToolResultStatus.SUCCESS,
-            data=str(hosts),
+            data=hosts,
             params=params,
         )
+        return self.filter_result(result, params)
 
     def get_parameterized_one_liner(self, params: Dict) -> str:
         return f"{toolset_name_for_one_liner(self.toolset.name)}: List OpenSearch Hosts"
