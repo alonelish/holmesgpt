@@ -26,80 +26,37 @@ from holmes.plugins.toolsets.utils import get_param_or_raise, toolset_name_for_o
 
 
 class OpenSearchSearch(JsonFilterMixin, Tool):
-    """Generic OpenSearch _search API with optimization support"""
+    """Thin wrapper for OpenSearch /<index>/_search API"""
 
     def __init__(self, toolset: "OpenSearchSearchToolset"):
         super().__init__(
             name="opensearch_search",
             description=(
-                "Execute an OpenSearch _search query. Supports document retrieval, filtering, "
-                "pagination, and various optimizations. Use this for querying logs, traces, metrics, "
-                "or any indexed data."
+                "Execute OpenSearch _search API: POST /<index>/_search or POST /_search with PIT. "
+                "Thin wrapper - accepts full OpenSearch query DSL request body. "
+                "Supports all search parameters: query, size, from, sort, _source, aggregations, "
+                "track_total_hits, timeout, search_after, pit, etc."
             ),
             parameters=self.extend_parameters({
                 "index": ToolParameter(
-                    description="Index pattern to search (e.g., 'logs-*', 'traces-*', 'my-index')",
-                    type="string",
-                    required=True,
-                ),
-                "query": ToolParameter(
                     description=(
-                        "OpenSearch query DSL as stringified JSON. Example: "
-                        '{"bool": {"filter": [{"range": {"@timestamp": {"gte": "now-1h"}}}]}}. '
-                        "Use filter context for cacheable queries."
+                        "Index pattern to search (e.g., 'logs-*', 'traces-*'). "
+                        "Omit when using PIT (pit parameter in body)"
+                    ),
+                    type="string",
+                    required=False,
+                ),
+                "body": ToolParameter(
+                    description=(
+                        "Complete OpenSearch _search request body as stringified JSON. "
+                        "Full OpenSearch Query DSL supported. Examples:\n"
+                        '{"query": {"bool": {"filter": [{"range": {"@timestamp": {"gte": "now-1h"}}}]}}, "size": 100}\n'
+                        '{"query": {"match_all": {}}, "_source": ["@timestamp", "message"], "size": 50}\n'
+                        '{"query": {"term": {"level": "ERROR"}}, "aggs": {"by_service": {"terms": {"field": "service.keyword"}}}}\n'
+                        '{"query": {"match_all": {}}, "pit": {"id": "pit_id", "keep_alive": "1m"}, "sort": [...], "search_after": [...]}'
                     ),
                     type="string",
                     required=True,
-                ),
-                "size": ToolParameter(
-                    description="Number of documents to return (default: 100, max: 10000)",
-                    type="integer",
-                    required=False,
-                ),
-                "source_fields": ToolParameter(
-                    description=(
-                        "Comma-separated list of fields to return in _source. "
-                        "Example: '@timestamp,message,service.name'. Dramatically reduces payload size."
-                    ),
-                    type="string",
-                    required=False,
-                ),
-                "track_total_hits": ToolParameter(
-                    description=(
-                        "Whether to track total hit count. Set to false for faster queries when "
-                        "exact count isn't needed. Default: false."
-                    ),
-                    type="boolean",
-                    required=False,
-                ),
-                "timeout": ToolParameter(
-                    description="Query timeout (e.g., '30s', '1m'). Default: '30s'",
-                    type="string",
-                    required=False,
-                ),
-                "sort": ToolParameter(
-                    description=(
-                        "Sort specification as stringified JSON. Example: "
-                        '[{"@timestamp": {"order": "desc"}}]'
-                    ),
-                    type="string",
-                    required=False,
-                ),
-                "search_after": ToolParameter(
-                    description=(
-                        "Values from the previous page's last hit for pagination. "
-                        "Use with sort parameter. Example: '[1609459200000, \"doc-id-123\"]'"
-                    ),
-                    type="string",
-                    required=False,
-                ),
-                "pit_id": ToolParameter(
-                    description=(
-                        "Point-in-Time ID for consistent pagination. "
-                        "Use opensearch_pit_open to create a PIT first."
-                    ),
-                    type="string",
-                    required=False,
                 ),
             }),
         )
@@ -108,50 +65,32 @@ class OpenSearchSearch(JsonFilterMixin, Tool):
     def _invoke(self, params: dict, context: ToolInvokeContext) -> StructuredToolResult:
         err_msg = ""
         try:
-            # Build the search request body
-            query_str = get_param_or_raise(params, "query")
-            query_obj = json.loads(query_str)
-
-            body: Dict[str, Any] = {
-                "query": query_obj,
-                "size": params.get("size", 100),
-                "track_total_hits": params.get("track_total_hits", False),
-                "timeout": params.get("timeout", "30s"),
-            }
-
-            # Add _source filtering if specified
-            if params.get("source_fields"):
-                source_fields = [f.strip() for f in params["source_fields"].split(",")]
-                body["_source"] = source_fields
-
-            # Add sort if specified
-            if params.get("sort"):
-                body["sort"] = json.loads(params["sort"])
-
-            # Add search_after for pagination
-            if params.get("search_after"):
-                body["search_after"] = json.loads(params["search_after"])
-
-            # Add PIT if specified
-            if params.get("pit_id"):
-                body["pit"] = {
-                    "id": params["pit_id"],
-                    "keep_alive": "5m"
-                }
+            # Parse the request body
+            body_str = get_param_or_raise(params, "body")
+            body = json.loads(body_str)
 
             # Determine the URL
             config = self._toolset.opensearch_config
-            if params.get("pit_id"):
+            
+            # Check if PIT is used in the body
+            if body.get("pit"):
                 # When using PIT, don't include index in URL
                 url = f"{config.opensearch_url}/_search"
             else:
-                index = get_param_or_raise(params, "index")
+                # Otherwise, index is required
+                index = params.get("index")
+                if not index:
+                    return StructuredToolResult(
+                        status=StructuredToolResultStatus.ERROR,
+                        error="'index' parameter required when not using PIT in body",
+                        params=params,
+                    )
                 url = f"{config.opensearch_url}/{index}/_search"
 
             headers = {"Content-Type": "application/json"}
             headers.update(add_auth_header(config.opensearch_auth_header))
 
-            logging.debug(f"OpenSearch search query: {json.dumps(body)}")
+            logging.debug(f"OpenSearch _search: {url} body={json.dumps(body)}")
 
             response = requests.post(
                 url=url,
@@ -200,34 +139,28 @@ class OpenSearchSearch(JsonFilterMixin, Tool):
 
 
 class OpenSearchMultiSearch(JsonFilterMixin, Tool):
-    """Batch multiple search queries for correlation analysis"""
+    """Thin wrapper for OpenSearch /_msearch API"""
 
     def __init__(self, toolset: "OpenSearchSearchToolset"):
         super().__init__(
             name="opensearch_msearch",
             description=(
-                "Execute multiple OpenSearch queries in a single request using _msearch. "
-                "Essential for correlation queries across different indices (logs, traces, metrics). "
-                "Reduces latency by batching requests."
+                "Execute OpenSearch _msearch API: POST /_msearch. "
+                "Thin wrapper - accepts newline-delimited JSON (ndjson) format. "
+                "Each search requires two lines: header line (with index or PIT) and body line (with query). "
+                "Useful for executing multiple searches in one request for correlation analysis."
             ),
             parameters=self.extend_parameters({
-                "searches": ToolParameter(
+                "ndjson": ToolParameter(
                     description=(
-                        "Array of search specifications as stringified JSON. Each element should have "
-                        "'index' and 'query' fields. Example: "
-                        '[{"index": "logs-*", "query": {"term": {"trace.id": "abc"}}, "size": 100}, '
-                        '{"index": "traces-*", "query": {"term": {"trace.id": "abc"}}, "size": 50}]'
+                        "Newline-delimited JSON string. Format: header\\nbody\\nheader\\nbody\\n. "
+                        "Each header line must contain 'index' OR 'pit'. Each body line is a search request. "
+                        "Example:\n"
+                        '{\"index\": \"logs-*\"}\\n{\"query\": {\"term\": {\"trace.id\": \"abc\"}}, \"size\": 100}\\n'
+                        '{\"index\": \"traces-*\"}\\n{\"query\": {\"term\": {\"trace.id\": \"abc\"}}, \"size\": 50}\\n'
                     ),
                     type="string",
                     required=True,
-                ),
-                "pit_id": ToolParameter(
-                    description=(
-                        "Optional Point-in-Time ID to use for all searches. "
-                        "Ensures consistency across queries."
-                    ),
-                    type="string",
-                    required=False,
                 ),
             }),
         )
@@ -236,49 +169,11 @@ class OpenSearchMultiSearch(JsonFilterMixin, Tool):
     def _invoke(self, params: dict, context: ToolInvokeContext) -> StructuredToolResult:
         err_msg = ""
         try:
-            searches_str = get_param_or_raise(params, "searches")
-            searches = json.loads(searches_str)
-
-            if not isinstance(searches, list):
-                return StructuredToolResult(
-                    status=StructuredToolResultStatus.ERROR,
-                    error="searches parameter must be a JSON array",
-                    params=params,
-                )
-
-            # Build _msearch request body (newline-delimited JSON)
-            ndjson_lines = []
-            pit_id = params.get("pit_id")
-
-            for search_spec in searches:
-                if not isinstance(search_spec, dict):
-                    continue
-
-                # Header line
-                header: Dict[str, Any] = {}
-                if pit_id:
-                    # When using PIT, include it in header
-                    header["pit"] = {"id": pit_id, "keep_alive": "5m"}
-                else:
-                    # Otherwise specify index
-                    header["index"] = search_spec.get("index", "")
-
-                ndjson_lines.append(json.dumps(header))
-
-                # Body line
-                body = {
-                    "query": search_spec.get("query", {"match_all": {}}),
-                    "size": search_spec.get("size", 100),
-                    "track_total_hits": search_spec.get("track_total_hits", False),
-                }
-
-                if search_spec.get("_source"):
-                    body["_source"] = search_spec["_source"]
-
-                ndjson_lines.append(json.dumps(body))
-
-            # Join with newlines and add trailing newline
-            ndjson_body = "\n".join(ndjson_lines) + "\n"
+            ndjson_body = get_param_or_raise(params, "ndjson")
+            
+            # Ensure trailing newline
+            if not ndjson_body.endswith("\n"):
+                ndjson_body += "\n"
 
             config = self._toolset.opensearch_config
             url = f"{config.opensearch_url}/_msearch"
@@ -286,7 +181,7 @@ class OpenSearchMultiSearch(JsonFilterMixin, Tool):
             headers = {"Content-Type": "application/x-ndjson"}
             headers.update(add_auth_header(config.opensearch_auth_header))
 
-            logging.debug(f"OpenSearch _msearch request: {ndjson_body}")
+            logging.debug(f"OpenSearch _msearch: {url}")
 
             response = requests.post(
                 url=url,
@@ -482,14 +377,14 @@ class OpenSearchPITClose(Tool):
 
 
 class OpenSearchSearchToolset(BaseOpenSearchToolset):
-    """Generalized OpenSearch search capabilities"""
+    """Thin wrappers for OpenSearch REST APIs"""
 
     def __init__(self):
         super().__init__(
             name="opensearch/search",
             description=(
-                "Comprehensive OpenSearch search capabilities including document retrieval, "
-                "multi-search for correlations, aggregations, and PIT pagination."
+                "Thin wrappers for OpenSearch search APIs: _search, _msearch, _pit. "
+                "Accepts full OpenSearch Query DSL - all parameters exposed."
             ),
             docs_url="https://holmesgpt.dev/data-sources/builtin-toolsets/opensearch-search/",
             icon_url="https://opensearch.org/assets/brand/PNG/Mark/opensearch_mark_default.png",
