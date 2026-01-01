@@ -5,6 +5,7 @@
 * Tools are thin wrappers around OpenSearch REST APIs
 * OpenSearch Query DSL is well-documented - use your knowledge from training data
 * All tools accept full request bodies - nothing is hidden
+* **ALWAYS prefer server-side filtering** - use OpenSearch Query DSL to filter/transform data before it leaves the server
 
 ## Available Tools
 
@@ -103,8 +104,23 @@ Creates Point-in-Time snapshot for consistent pagination.
 
 Closes PIT to free resources.
 
+## Filtering Strategy
+
+**ALWAYS use server-side filtering first:**
+1. **Query DSL** - Filter documents at query time with `bool.filter`, `bool.must_not`, `range`, `term`, etc.
+2. **_source filtering** - Select only needed fields: `"_source": ["field1", "field2"]` (reduces response by 80-90%)
+3. **size parameter** - Limit number of results returned
+4. **aggregations** - Compute statistics server-side instead of fetching all data
+5. **script_fields** - Transform data server-side using Painless scripts
+
+**Client-side filtering (jq/max_depth) is a last resort:**
+- Only use when server-side filtering is insufficient
+- Example edge cases: complex nested JSON transformations, response truncation for debugging
+- If you find yourself using jq frequently, reconsider your Query DSL approach
+
 ## Best Practices
 
+* **Server-side first**: Use Query DSL, _source filtering, aggregations before considering client-side tools
 * Use `track_total_hits: false` when exact count not needed (faster)
 * Use `_source` filtering to reduce payload size (can reduce by 80-90%)
 * Use filter context in bool queries (enables caching)
