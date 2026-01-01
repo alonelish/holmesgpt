@@ -19,6 +19,7 @@ By enabling this toolset, HolmesGPT will fetch pod logs from [OpenSearch](https:
           opensearch_url: <your opensearch/elastic URL>
           index_pattern: <name of the index to use> # The pattern matching the indexes containing the logs. Supports wildcards. For example `fluentd-*`
           opensearch_auth_header: "ApiKey <...>" # An optional header value set to the `Authorization` header for every request to opensearch
+          ssl_verify: true # Optional. Set to false to disable SSL certificate verification (useful for self-signed certificates). Defaults to true
           labels: # set the labels according to how values are mapped in your opensearch cluster
             pod: "kubernetes.pod_name"
             namespace: "kubernetes.namespace_name"
@@ -42,6 +43,7 @@ By enabling this toolset, HolmesGPT will fetch pod logs from [OpenSearch](https:
             opensearch_url: https://skdjasid.europe-west1.gcp.cloud.es.io:443 # The URL to your opensearch cluster.
             index_pattern: fluentd-* # The pattern matching the indexes containing the logs. Supports wildcards
             opensearch_auth_header: "ApiKey b0ZlwQWEsdwAkv047bafirkallDFWJIWDWdwlQQ==" # An optional header value set to the `Authorization` header for every request to opensearch.
+            ssl_verify: true # Optional. Set to false to disable SSL certificate verification (useful for self-signed certificates). Defaults to true
             labels: # set the labels according to how values are mapped in your opensearch cluster
               pod: "kubernetes.pod_name"
               namespace: "kubernetes.namespace_name"

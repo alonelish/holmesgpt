@@ -71,7 +71,7 @@ class GetTracesFields(Tool):
             logs_response = requests.get(
                 url=get_search_url(self._toolset.opensearch_config),
                 timeout=180,
-                verify=True,
+                verify=self._toolset.opensearch_config.ssl_verify,
                 data=json.dumps(body),
                 headers=headers,
             )
@@ -145,7 +145,7 @@ class TracesSearchQuery(Tool):
             logs_response = requests.get(
                 url=get_search_url(self._toolset.opensearch_config),
                 timeout=180,
-                verify=True,
+                verify=self._toolset.opensearch_config.ssl_verify,
                 data=json.dumps(full_query),
                 headers=headers,
             )

@@ -114,7 +114,7 @@ class OpenSearchLogsToolset(BasePodLoggingToolset):
             logs_response = requests.post(
                 url=url,
                 timeout=180,
-                verify=True,
+                verify=self.opensearch_config.ssl_verify,
                 json=query,
                 headers=headers,
             )

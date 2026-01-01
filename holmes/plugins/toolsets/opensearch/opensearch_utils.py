@@ -22,6 +22,7 @@ class BaseOpenSearchConfig(BaseModel):
     opensearch_auth_header: Optional[str] = None
     # Setting to None will disable the cache
     fields_ttl_seconds: Optional[int] = 14400  # 4 hours
+    ssl_verify: bool = True  # Allow disabling SSL verification for self-signed certificates
 
 
 class OpenSearchLoggingConfig(BaseOpenSearchConfig):
@@ -46,7 +47,7 @@ def opensearch_health_check(config: BaseOpenSearchConfig) -> tuple[bool, str]:
         headers.update(add_auth_header(config.opensearch_auth_header))
         health_response = requests.get(
             url=url,
-            verify=True,
+            verify=config.ssl_verify,
             data=json.dumps({"size": 1}),
             headers=headers,
         )
