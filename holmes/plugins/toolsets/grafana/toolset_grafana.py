@@ -18,6 +18,7 @@ from holmes.plugins.toolsets.grafana.common import (
     build_headers,
 )
 from holmes.plugins.toolsets.utils import toolset_name_for_one_liner
+from holmes.plugins.toolsets.json_filter_mixin import JsonFilterMixin
 
 
 class GrafanaDashboardConfig(GrafanaConfig):
@@ -237,19 +238,21 @@ class SearchDashboards(BaseGrafanaTool):
         return f"{toolset_name_for_one_liner(self._toolset.name)}: Search Dashboards"
 
 
-class GetDashboardByUID(BaseGrafanaTool):
+class GetDashboardByUID(JsonFilterMixin, BaseGrafanaTool):
     def __init__(self, toolset: GrafanaToolset):
         super().__init__(
             toolset=toolset,
             name="grafana_get_dashboard_by_uid",
             description="Get a dashboard by its UID using the /api/dashboards/uid/:uid endpoint",
-            parameters={
-                "uid": ToolParameter(
-                    description="The unique identifier of the dashboard",
-                    type="string",
-                    required=True,
-                ),
-            },
+            parameters=self.extend_parameters(
+                {
+                    "uid": ToolParameter(
+                        description="The unique identifier of the dashboard",
+                        type="string",
+                        required=True,
+                    )
+                }
+            ),
         )
 
     def _invoke(self, params: dict, context: ToolInvokeContext) -> StructuredToolResult:
@@ -260,29 +263,25 @@ class GetDashboardByUID(BaseGrafanaTool):
             self._toolset.grafana_config, uid=uid
         )
 
-        return StructuredToolResult(
-            status=result.status,
-            data=result.data,
-            params=result.params,
-            url=dashboard_url if dashboard_url else result.url,
-        )
+        filtered_result = self.filter_result(result, params)
+        filtered_result.url = dashboard_url if dashboard_url else result.url
+        return filtered_result
 
     def get_parameterized_one_liner(self, params: Dict) -> str:
         return f"{toolset_name_for_one_liner(self._toolset.name)}: Get Dashboard {params.get('uid', '')}"
 
 
-class GetHomeDashboard(BaseGrafanaTool):
+class GetHomeDashboard(JsonFilterMixin, BaseGrafanaTool):
     def __init__(self, toolset: GrafanaToolset):
         super().__init__(
             toolset=toolset,
             name="grafana_get_home_dashboard",
             description="Get the home dashboard using the /api/dashboards/home endpoint",
-            parameters={},
+            parameters=self.extend_parameters({}),
         )
 
     def _invoke(self, params: dict, context: ToolInvokeContext) -> StructuredToolResult:
         result = self._make_grafana_request("/api/dashboards/home", params)
-
         config = self._toolset.grafana_config
         dashboard_url = None
         if isinstance(result.data, dict):
@@ -290,12 +289,9 @@ class GetHomeDashboard(BaseGrafanaTool):
             if uid:
                 dashboard_url = _build_grafana_dashboard_url(config, uid=uid)
 
-        return StructuredToolResult(
-            status=result.status,
-            data=result.data,
-            params=result.params,
-            url=dashboard_url if dashboard_url else None,
-        )
+        filtered_result = self.filter_result(result, params)
+        filtered_result.url = dashboard_url if dashboard_url else None
+        return filtered_result
 
     def get_parameterized_one_liner(self, params: Dict) -> str:
         return f"{toolset_name_for_one_liner(self._toolset.name)}: Get Home Dashboard"
