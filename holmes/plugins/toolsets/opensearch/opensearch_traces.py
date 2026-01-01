@@ -199,7 +199,7 @@ class OpenSearchTracesToolset(BaseOpenSearchToolset):
     def __init__(self):
         super().__init__(
             name="opensearch/traces",
-            description="OpenSearch integration to fetch traces",
+            description="OpenSearch integration to fetch traces. NOTE: Consider using opensearch/search toolset for more flexible querying.",
             docs_url="https://holmesgpt.dev/data-sources/builtin-toolsets/opensearch-status/",
             icon_url="https://opensearch.org/assets/brand/PNG/Mark/opensearch_mark_default.png",
             prerequisites=[CallablePrerequisite(callable=self.prerequisites_callable)],
