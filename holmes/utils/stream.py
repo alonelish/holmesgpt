@@ -1,6 +1,7 @@
 import json
 from enum import Enum
 from typing import Generator, Optional, List, Union
+import time
 import litellm
 from pydantic import BaseModel, Field
 from holmes.core.investigation_structured_output import process_response_into_sections
@@ -24,14 +25,83 @@ class StreamEvents(str, Enum):
     CONVERSATION_HISTORY_COMPACTED = "conversation_history_compacted"
 
 
+class TimingEvent(BaseModel):
+    """Represents a single timing event during request processing."""
+    event_type: str  # e.g., "llm_call_start", "llm_call_end", "tool_call_start", etc.
+    timestamp: float  # Time since request start in seconds
+    description: Optional[str] = None  # Additional context about the event
+    metadata: Optional[dict] = None  # Extra metadata (e.g., model name, tool name)
+
+
 class StreamMessage(BaseModel):
     event: StreamEvents
     data: dict = Field(default={})
+    timing: Optional[dict] = None  # Contains elapsed_time_ms and timing_events
 
 
-def create_sse_message(event_type: str, data: Optional[dict] = None):
+class TimingTracker:
+    """Tracks timing events throughout the streaming request lifecycle."""
+
+    def __init__(self):
+        self.start_time = time.time()
+        self.events: List[TimingEvent] = []
+        self._add_event("request_start", "Request processing started")
+
+    def _add_event(self, event_type: str, description: Optional[str] = None, metadata: Optional[dict] = None):
+        """Add a timing event."""
+        elapsed = time.time() - self.start_time
+        self.events.append(TimingEvent(
+            event_type=event_type,
+            timestamp=elapsed,
+            description=description,
+            metadata=metadata
+        ))
+
+    def record_llm_call_start(self, model: Optional[str] = None, iteration: Optional[int] = None):
+        """Record the start of an LLM completion call."""
+        metadata: dict = {}
+        if model:
+            metadata["model"] = model
+        if iteration is not None:
+            metadata["iteration"] = str(iteration)
+        self._add_event("llm_call_start", f"LLM completion call started (iteration {iteration})", metadata)
+
+    def record_llm_call_end(self, model: Optional[str] = None, iteration: Optional[int] = None):
+        """Record the end of an LLM completion call."""
+        metadata: dict = {}
+        if model:
+            metadata["model"] = model
+        if iteration is not None:
+            metadata["iteration"] = str(iteration)
+        self._add_event("llm_call_end", f"LLM completion call completed (iteration {iteration})", metadata)
+
+    def record_tool_call_start(self, tool_name: str, tool_id: str):
+        """Record the start of a tool call."""
+        self._add_event("tool_call_start", f"Tool call started: {tool_name}", {"tool_name": tool_name, "tool_id": tool_id})
+
+    def record_tool_call_end(self, tool_name: str, tool_id: str):
+        """Record the end of a tool call."""
+        self._add_event("tool_call_end", f"Tool call completed: {tool_name}", {"tool_name": tool_name, "tool_id": tool_id})
+
+    def record_history_compaction(self):
+        """Record when conversation history is compacted."""
+        self._add_event("history_compacted", "Conversation history was compacted")
+
+    def get_timing_info(self) -> dict:
+        """Get current timing information as a dictionary."""
+        elapsed_ms = (time.time() - self.start_time) * 1000
+        return {
+            "elapsed_time_ms": round(elapsed_ms, 2),
+            "timing_events": [event.model_dump() for event in self.events]
+        }
+
+
+def create_sse_message(event_type: str, data: Optional[dict] = None, timing_info: Optional[dict] = None):
     if data is None:
         data = {}
+    # Add timing information to the data payload
+    if timing_info:
+        data["timing"] = timing_info
     return f"event: {event_type}\ndata: {json.dumps(data)}\n\n"
 
 
@@ -55,10 +125,15 @@ create_rate_limit_error_message = partial(
 
 
 def stream_investigate_formatter(
-    call_stream: Generator[StreamMessage, None, None], runbooks
+    call_stream: Generator[StreamMessage, None, None],
+    runbooks,
+    timing_tracker: Optional[TimingTracker] = None,
 ):
     try:
         for message in call_stream:
+            # Get current timing info if tracker is available
+            timing_info = timing_tracker.get_timing_info() if timing_tracker else None
+
             if message.event == StreamEvents.ANSWER_END:
                 (text_response, sections) = process_response_into_sections(  # type: ignore
                     message.data.get("content")
@@ -77,9 +152,10 @@ def stream_investigate_formatter(
                         "instructions": runbooks or [],
                         "metadata": message.data.get("metadata") or {},
                     },
+                    timing_info,
                 )
             else:
-                yield create_sse_message(message.event.value, message.data)
+                yield create_sse_message(message.event.value, message.data, timing_info)
     except litellm.exceptions.RateLimitError as e:
         yield create_rate_limit_error_message(str(e))
 
@@ -87,9 +163,13 @@ def stream_investigate_formatter(
 def stream_chat_formatter(
     call_stream: Generator[StreamMessage, None, None],
     followups: Optional[List[dict]] = None,
+    timing_tracker: Optional[TimingTracker] = None,
 ):
     try:
         for message in call_stream:
+            # Get current timing info if tracker is available
+            timing_info = timing_tracker.get_timing_info() if timing_tracker else None
+
             if message.event == StreamEvents.ANSWER_END:
                 response_data = {
                     "analysis": message.data.get("content"),
@@ -98,7 +178,7 @@ def stream_chat_formatter(
                     "metadata": message.data.get("metadata") or {},
                 }
 
-                yield create_sse_message(StreamEvents.ANSWER_END.value, response_data)
+                yield create_sse_message(StreamEvents.ANSWER_END.value, response_data, timing_info)
             elif message.event == StreamEvents.APPROVAL_REQUIRED:
                 response_data = {
                     "analysis": message.data.get("content"),
@@ -112,10 +192,10 @@ def stream_chat_formatter(
                 )
 
                 yield create_sse_message(
-                    StreamEvents.APPROVAL_REQUIRED.value, response_data
+                    StreamEvents.APPROVAL_REQUIRED.value, response_data, timing_info
                 )
             else:
-                yield create_sse_message(message.event.value, message.data)
+                yield create_sse_message(message.event.value, message.data, timing_info)
     except litellm.exceptions.RateLimitError as e:
         yield create_rate_limit_error_message(str(e))
     except Exception as e:

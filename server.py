@@ -28,7 +28,7 @@ import time
 from litellm.exceptions import AuthenticationError
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import StreamingResponse
-from holmes.utils.stream import stream_investigate_formatter, stream_chat_formatter
+from holmes.utils.stream import stream_investigate_formatter, stream_chat_formatter, TimingTracker
 from holmes.common.env_vars import (
     ENABLE_CONNECTION_KEEPALIVE,
     HOLMES_HOST,
@@ -187,6 +187,9 @@ def stream_investigate_issues(req: InvestigateRequest):
             investigation.get_investigation_context(req, dal, config)
         )
 
+        # Initialize timing tracker for this request
+        timing_tracker = TimingTracker()
+
         return StreamingResponse(
             stream_investigate_formatter(
                 ai.call_stream(
@@ -194,8 +197,10 @@ def stream_investigate_issues(req: InvestigateRequest):
                     user_prompt=user_prompt,
                     response_format=response_format,
                     sections=sections,
+                    timing_tracker=timing_tracker,
                 ),
                 runbooks,
+                timing_tracker=timing_tracker,
             ),
             media_type="text/event-stream",
         )
@@ -386,14 +391,19 @@ def chat(chat_request: ChatRequest):
             ]
 
         if chat_request.stream:
+            # Initialize timing tracker for this request
+            timing_tracker = TimingTracker()
+
             return StreamingResponse(
                 stream_chat_formatter(
                     ai.call_stream(
                         msgs=messages,
                         enable_tool_approval=chat_request.enable_tool_approval or False,
                         tool_decisions=chat_request.tool_decisions,
+                        timing_tracker=timing_tracker,
                     ),
                     [f.model_dump() for f in follow_up_actions],
+                    timing_tracker=timing_tracker,
                 ),
                 media_type="text/event-stream",
             )
