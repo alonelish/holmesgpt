@@ -25,9 +25,7 @@ from holmes.plugins.toolsets.datadog.toolset_datadog_logs import DatadogLogsTool
 from holmes.plugins.toolsets.datadog.toolset_datadog_metrics import (
     DatadogMetricsToolset,
 )
-from holmes.plugins.toolsets.datadog.toolset_datadog_traces import (
-    DatadogTracesToolset,
-)
+from holmes.plugins.toolsets.datadog.toolset_datadog_traces import DatadogTracesToolset
 from holmes.plugins.toolsets.git import GitToolset
 from holmes.plugins.toolsets.grafana.loki.toolset_grafana_loki import GrafanaLokiToolset
 from holmes.plugins.toolsets.grafana.toolset_grafana import GrafanaToolset
@@ -144,6 +142,7 @@ def load_builtin_toolsets(
 
     # disable built-in toolsets by default, and the user can enable them explicitly in config.
     for toolset in all_toolsets:
+        # It's safe to set type here as we don't have mcp build-in toolsets.
         toolset.type = ToolsetType.BUILTIN
         # dont' expose build-in toolsets path
         toolset.path = None

@@ -11,7 +11,7 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional, Type
 
 import pytest
-from pydantic import BaseModel
+from pydantic import BaseModel, FilePath
 
 from holmes.core.tools import (
     StructuredToolResult,
@@ -20,10 +20,12 @@ from holmes.core.tools import (
     ToolInvokeContext,
     Toolset,
     ToolsetStatusEnum,
+    ToolsetType,
     YAMLTool,
     YAMLToolset,
 )
-from holmes.plugins.toolsets import load_builtin_toolsets, load_toolsets_from_file
+from holmes.core.toolset_manager import ToolsetManager
+from holmes.plugins.toolsets import load_builtin_toolsets
 from tests.llm.utils.mock_dal import load_mock_dal
 
 
@@ -576,7 +578,7 @@ class SimplifiedMockToolset(Toolset):
         return {}
 
 
-class MockToolsetManager:
+class MockToolsetManager(ToolsetManager):
     """Manages mock toolsets for testing."""
 
     def __init__(
@@ -593,6 +595,7 @@ class MockToolsetManager:
         self.mock_overrides = mock_overrides or {}
         self.mock_generation_config = mock_generation_config
         self.allow_toolset_failures = allow_toolset_failures
+        self.custom_toolsets: Optional[List[FilePath]] = None
 
         # Coerce mock_policy string to MockPolicy enum, falling back to INHERIT for unknown values
         if isinstance(mock_policy, str):
@@ -655,43 +658,29 @@ class MockToolsetManager:
         )
         # Load builtin toolsets
         builtin_toolsets = load_builtin_toolsets(mock_dal)
+        builtin_toolsets_names = [ts.name for ts in builtin_toolsets]
 
-        # Load custom toolsets from YAML if present
-        config_path = os.path.join(self.test_case_folder, "toolsets.yaml")
-        custom_definitions = self._load_custom_toolsets(config_path)
-
-        # Always load default toolsets.yaml
+        # Build list of toolset paths: default first, then custom
+        # Later paths override earlier paths when toolsets share the same name
         default_config_path = os.path.join(
             os.path.dirname(__file__), "default_toolsets.yaml"
         )
-        default_definitions = self._load_custom_toolsets(default_config_path)
+        config_path = os.path.join(self.test_case_folder, "toolsets.yaml")
 
-        # If custom toolsets.yaml exists, merge with defaults (custom takes precedence)
-        # Otherwise, use defaults only
-        if custom_definitions:
-            # Merge: custom definitions override defaults for same toolset names
-            # Add default definitions for toolsets not in custom
-            custom_names = {d.name for d in custom_definitions}
-            merged_definitions = list(custom_definitions)
-            for default_def in default_definitions:
-                if default_def.name not in custom_names:
-                    merged_definitions.append(default_def)
-            custom_definitions = merged_definitions
-        else:
-            # No custom toolsets.yaml, use defaults
-            custom_definitions = default_definitions
+        # Store paths in self.custom_toolsets (default first, custom second)
+        self.custom_toolsets = [FilePath(default_config_path)]
+        if os.path.isfile(config_path):
+            self.custom_toolsets.append(FilePath(config_path))
+
+        # Load custom toolsets from paths using parent's method
+        # Later paths override earlier paths for toolsets with the same name
+        custom_definitions = self.load_custom_toolsets(builtin_toolsets_names)
 
         # Configure builtin toolsets with custom definitions
         self.toolsets = self._configure_toolsets(builtin_toolsets, custom_definitions)
 
         # Wrap tools for enabled toolsets based on mode
         self._wrap_enabled_toolsets()
-
-    def _load_custom_toolsets(self, config_path: str) -> List[Toolset]:
-        """Load custom toolsets from a YAML file."""
-        if not os.path.isfile(config_path):
-            return []
-        return load_toolsets_from_file(toolsets_path=config_path, strict_check=False)
 
     def _configure_toolsets(
         self, builtin_toolsets: List[Toolset], custom_definitions: List[Toolset]
@@ -702,7 +691,10 @@ class MockToolsetManager:
         # First, validate that all custom definitions reference existing toolsets
         builtin_names = {ts.name for ts in builtin_toolsets}
         for definition in custom_definitions:
-            if definition.name not in builtin_names:
+            if (
+                definition.name not in builtin_names
+                and definition.type != ToolsetType.MCP
+            ):
                 raise RuntimeError(
                     f"Toolset '{definition.name}' referenced in toolsets.yaml does not exist. "
                     f"Available toolsets: {', '.join(sorted(builtin_names))}"
