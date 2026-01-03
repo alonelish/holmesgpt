@@ -1,86 +1,166 @@
-name: 'Post Evaluation Comment'
-description: 'Post or update evaluation results as a PR comment'
+name: Post Eval Comment
+description: Posts or updates eval progress/results comment (SECURITY: always loads helpers from main branch)
 
 inputs:
-  github-token:
-    description: 'GitHub token for posting comments'
+  mode:
+    description: 'Comment mode: initial, progress-setup, progress-collect, progress-kind, results'
     required: true
-  report-file:
-    description: 'Path to the report file to post'
+  params:
+    description: 'JSON string of eval parameters (base_params from workflow)'
+    required: true
+  comment-id:
+    description: 'Existing comment ID for updates'
     required: false
-    default: 'evals_report.md'
-  comment-identifier:
-    description: 'String to identify bot comments for updates'
+    default: ''
+  duration:
+    description: 'Test duration for results mode'
     required: false
-    default: '## Results of HolmesGPT evals'
-  delete-previous:
-    description: 'Whether to delete previous bot comments'
+    default: ''
+  test-count:
+    description: 'Number of tests for progress modes'
     required: false
-    default: 'true'
+    default: ''
+  test-preview:
+    description: 'Test preview list for progress modes'
+    required: false
+    default: ''
+  valid-markers:
+    description: 'Valid pytest markers comma-separated'
+    required: false
+    default: ''
+  triggered-by:
+    description: 'Username who triggered eval'
+    required: false
+    default: ''
+
+outputs:
+  comment-id:
+    description: 'Created/updated comment ID'
+    value: ${{ steps.post-comment.outputs.comment_id }}
 
 runs:
-  using: 'composite'
+  using: composite
   steps:
-    - name: Post or update PR comment
+    - name: Post or update comment
+      id: post-comment
       uses: actions/github-script@v7
       with:
-        retries: 3
-        github-token: ${{ inputs.github-token }}
         script: |
           const fs = require('fs');
 
-          try {
-            // Only comment on PR if the workflow is run as part of a PR
-            if (!context.issue || !context.issue.number) {
-              console.log('Not a PR context, skipping comment');
-              return;
-            }
+          // SECURITY CRITICAL: Load helpers from action directory
+          // Action directory is ALWAYS from the workflow's ref (main branch),
+          // never from PR code, preventing malicious code execution
+          const { buildParams, buildBody, buildRerunFooter } = require('${{ github.action_path }}/eval-comment-helpers.js');
 
-            // Read the report file
-            const reportPath = '${{ inputs.report-file }}';
-            if (!fs.existsSync(reportPath)) {
-              console.log(`Report file not found: ${reportPath}`);
-              return;
-            }
+          // Parse all inputs into params object
+          const rawParams = JSON.parse(`${{ inputs.params }}`);
+          const p = buildParams({
+            ...rawParams,
+            comment_id: '${{ inputs.comment-id }}',
+            duration: '${{ inputs.duration }}',
+            test_count: '${{ inputs.test-count }}',
+            test_preview: `${{ inputs.test-preview }}`,
+            valid_markers: '${{ inputs.valid-markers }}',
+            triggered_by: '${{ inputs.triggered-by }}'
+          });
 
-            const reportContent = fs.readFileSync(reportPath, 'utf8');
+          let progressSteps = null;
+          let extras = { context };
 
-            // Find existing bot comments (paginate to get all comments)
-            const allComments = await github.paginate(
-              github.rest.issues.listComments,
-              {
+          // Handle different comment modes
+          const mode = '${{ inputs.mode }}';
+
+          if (mode === 'initial') {
+            progressSteps = [
+              [false, 'Setup HolmesGPT environment'],
+              [false, 'Collect evals to run'],
+              [false, 'Setup KIND cluster'],
+              [false, 'Run evals']
+            ];
+          } else if (mode === 'progress-setup') {
+            progressSteps = [
+              [true, 'Setup HolmesGPT environment'],
+              [false, 'Collect evals to run'],
+              [false, 'Setup KIND cluster'],
+              [false, 'Run evals']
+            ];
+          } else if (mode === 'progress-collect') {
+            progressSteps = [
+              [true, 'Setup HolmesGPT environment'],
+              [true, `Collect evals to run (${p.testCount} tests)`],
+              [false, 'Setup KIND cluster'],
+              [false, 'Run evals']
+            ];
+            extras.testPreview = p.testCount !== '0' ? p.testPreview : null;
+          } else if (mode === 'progress-kind') {
+            progressSteps = [
+              [true, 'Setup HolmesGPT environment'],
+              [true, `Collect evals to run (${p.testCount} tests)`],
+              [true, 'Setup KIND cluster'],
+              [false, 'Run evals']
+            ];
+            extras.testPreview = p.testCount !== '0' ? p.testPreview : null;
+          } else if (mode === 'results') {
+            // Read test result files (these are generated by pytest, not from PR checkout)
+            const report = fs.existsSync('evals_report.md') ? fs.readFileSync('evals_report.md', 'utf8') : '';
+            const failures = fs.existsSync('regressions.txt') ? fs.readFileSync('regressions.txt', 'utf8').trim() : '';
+            const hasFailures = failures && failures !== '0';
+
+            // Build notification header for the user who triggered the eval
+            const triggeredBy = p.triggered_by || '';
+            const statusText = hasFailures
+              ? `⚠️ Completed with ${failures} failure${failures === '1' ? '' : 's'}`
+              : '✅ Completed successfully';
+            const notifyHeader = triggeredBy ? `@${triggeredBy} Your eval run has finished. ${statusText}\n\n---\n\n` : '';
+
+            extras.icon = p.isManual ? '🧪' : '✅';
+            extras.title = p.isManual ? 'Manual Eval Results' : 'Results of HolmesGPT evals';
+
+            let body = notifyHeader + buildBody(p, null, extras);
+            body += '\n' + (report || '⚠️ No eval report was generated.\n\n');
+            if (hasFailures) body += `\n### ⚠️ ${failures} Failure${failures === '1' ? '' : 's'} Detected\n\n`;
+            body += buildRerunFooter(p, context, { includeLegend: true });
+
+            // Delete progress comment and create fresh results comment
+            // This ensures the user gets a GitHub notification when evals complete
+            if (p.commentId) {
+              await github.rest.issues.deleteComment({
                 owner: context.repo.owner,
                 repo: context.repo.repo,
-                issue_number: context.issue.number,
-                per_page: 100
-              }
-            );
+                comment_id: p.commentId
+              });
+            }
 
-            const commentIdentifier = '${{ inputs.comment-identifier }}';
-            const botComments = allComments.filter(comment =>
-              comment.user.type === 'Bot' &&
-              comment.body.includes(commentIdentifier)
-            );
-
-            // Post new comment
-            await github.rest.issues.createComment({
+            const comment = await github.rest.issues.createComment({
               owner: context.repo.owner,
               repo: context.repo.repo,
-              issue_number: context.issue.number,
-              body: `<!-- ${commentIdentifier} -->\n${reportContent}`
+              issue_number: p.prNumber,
+              body
             });
 
-            // Delete old comments if requested
-            if ('${{ inputs.delete-previous }}' === 'true' && botComments.length > 0) {
-              for (const comment of botComments) {
-                await github.rest.issues.deleteComment({
-                  owner: context.repo.owner,
-                  repo: context.repo.repo,
-                  comment_id: comment.id
-                });
-              }
-            }
-          } catch (e) {
-            console.error('Error posting comment:', e);
-            // Don't fail the workflow if commenting fails
+            core.setOutput('comment_id', comment.data.id.toString());
+            return;
+          }
+
+          // For progress updates (initial/progress-*)
+          const body = buildBody(p, progressSteps, extras) + buildRerunFooter(p, context);
+
+          if (p.commentId) {
+            // Update existing comment
+            await github.rest.issues.updateComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              comment_id: p.commentId,
+              body
+            });
+          } else {
+            // Create new comment
+            const comment = await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: p.prNumber,
+              body
+            });
+            core.setOutput('comment_id', comment.data.id.toString());
           }
