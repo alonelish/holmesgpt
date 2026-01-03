@@ -65,18 +65,18 @@ runs:
           } = require('${{ github.action_path }}/eval-comment-helpers.js');
 
           // Parse all inputs into params object
-          const rawParams = JSON.parse(`${{ inputs.params }}`);
+          const rawParams = JSON.parse(${{ toJSON(inputs.params) }});
           const p = buildParams({
             ...rawParams,
-            comment_id: '${{ inputs.comment-id }}',
-            duration: '${{ inputs.duration }}',
-            test_count: '${{ inputs.test-count }}',
-            test_preview: `${{ inputs.test-preview }}`,
-            valid_markers: '${{ inputs.valid-markers }}',
-            triggered_by: '${{ inputs.triggered-by }}'
+            comment_id: ${{ toJSON(inputs.comment-id) }},
+            duration: ${{ toJSON(inputs.duration) }},
+            test_count: ${{ toJSON(inputs.test-count) }},
+            test_preview: ${{ toJSON(inputs.test-preview) }},
+            valid_markers: ${{ toJSON(inputs.valid-markers) }},
+            triggered_by: ${{ toJSON(inputs.triggered-by) }}
           });
 
-          const mode = '${{ inputs.mode }}';
+          const mode = ${{ toJSON(inputs.mode) }};
 
           // === INITIAL COMMENT MODE ===
           if (mode === 'initial') {
