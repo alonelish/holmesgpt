@@ -126,43 +126,44 @@ permissions:
 - PRs are issues in GitHub's API
 - `pull-requests: write` was unnecessary
 
-### Layer 7: Automatic Fork PR Blocking ✅ (This commit)
+### Layer 7: Manual Workflow Dispatch Fork Protection ✅ (This commit)
 
-**Problem:** Automatic `pull_request` trigger runs evals on ALL PRs, including untrusted forks
+**Problem:** `workflow_dispatch` can be manually triggered on fork PR branches with full secret access
 
-**Solution:** Detect and block automatic eval runs on fork PRs
+**Solution:** Added `is_pr_trusted` input and fork detection for workflow_dispatch
 ```javascript
-// SECURITY: Detect if automatic pull_request trigger is from a fork
-const pr = context.payload.pull_request;
-const isFork = pr.head.repo.full_name !== pr.base.repo.full_name;
+// SECURITY: Check for fork PRs when running via workflow_dispatch
+if (prNumber) {
+  const pr = await github.rest.pulls.get({ ... });
+  const isFork = pr.data.head.repo.full_name !== pr.data.base.repo.full_name;
+  const isPrTrusted = (inputs.is_pr_trusted || 'false').toLowerCase() === 'true';
 
-if (isFork) {
-  core.setFailed('🚫 Security: Automatic eval runs are blocked on fork PRs.');
-  // Post explanatory comment on PR
-  await github.rest.issues.createComment({ ... });
+  if (isFork && !isPrTrusted) {
+    core.setFailed('🚫 Security: Cannot run workflow_dispatch on untrusted fork PR...');
+  }
 }
 ```
 
 **User Experience:**
-- Automatic runs blocked on all fork PRs (no opt-in for auto trigger)
-- PR receives comment explaining the block with instructions
-- Maintainers can manually trigger with `/eval` + `is_pr_trusted: true`
-- Internal PRs (same repo) run normally
+- workflow_dispatch now has `is_pr_trusted` input (defaults to false)
+- Fork PRs blocked unless input set to true
+- Clear error message explains risk and how to proceed
+- Internal PRs work without extra steps
 
 **Rationale:**
-- No way to get user consent before automatic trigger fires
-- Safest approach: block all automatic fork PR runs
-- Manual `/eval` override available for trusted contributions (Layer 2)
-- Prevents social engineering via "accidental" auto-runs
+- Maintainers might manually select fork branches from dropdown
+- Explicit opt-in required before running on fork PRs
+- Same security model as `/eval` command (Layer 2)
+- Audit trail via workflow logs
 
-## Workflow Dispatch Security
+## Automatic Pull Request Trigger Security
 
-**Question:** Does workflow_dispatch need similar protection?
+**Question:** What about automatic `pull_request` triggers on forks?
 
-**Answer:** No, workflow_dispatch is already safe because:
-1. Requires repository write access to trigger
-2. User manually selects branch/ref (explicit trust decision)
-3. Not susceptible to social engineering (deliberate action)
+**Answer:** No protection needed - GitHub automatically runs fork PR workflows with:
+1. No access to repository secrets (read-only GITHUB_TOKEN only)
+2. Limited permissions by default
+3. This is a GitHub security feature, not a vulnerability
 
 ## Attack Scenarios: Before vs After
 
@@ -181,21 +182,20 @@ if (isFork) {
 4. Maintainer must explicitly type `is_pr_trusted: true` after code review
 5. Action logged in audit trail
 
-### Scenario 1b: Malicious Fork PR (Automatic Trigger)
+### Scenario 1b: Malicious Fork PR (Manual workflow_dispatch)
 
 **Before:**
 1. Attacker opens PR from fork with malicious test code
-2. GitHub automatically triggers workflow on `pull_request` event
+2. Maintainer goes to Actions → Run workflow → selects fork branch
 3. Malicious code executes with all secrets ❌
-4. Secrets exfiltrated (no maintainer action required!)
+4. Secrets exfiltrated
 
 **After:**
 1. Attacker opens PR from fork with malicious test code
-2. GitHub automatically triggers workflow on `pull_request` event
-3. Fork detection step blocks execution immediately ✅
-4. Explanatory comment posted on PR
-5. No code execution, no secrets exposed
-6. Maintainer can manually trigger with `/eval` + `is_pr_trusted: true` after review
+2. Maintainer goes to Actions → Run workflow → selects fork branch
+3. Workflow blocks with security error ✅
+4. Maintainer must explicitly set `is_pr_trusted: true` in form
+5. Action logged in audit trail
 
 ### Scenario 2: Compromised Collaborator Account
 
@@ -231,7 +231,8 @@ if (isFork) {
 |----------------|--------|-------|------------|
 | **JavaScript Execution** | 🔴 PR code | 🟢 Main branch only | Composite action |
 | **Fork PRs (Manual /eval)** | 🔴 No protection | 🟢 Explicit trust required | Fork detection |
-| **Fork PRs (Automatic)** | 🔴 No protection | 🟢 Blocked entirely | Auto-trigger blocking |
+| **Fork PRs (workflow_dispatch)** | 🔴 No protection | 🟢 Explicit trust required | is_pr_trusted input |
+| **Fork PRs (Automatic)** | 🟢 No secrets | 🟢 No secrets | GitHub built-in |
 | **Python Test Code** | 🔴 Executes from PR | 🟠 Executes from PR | Code review needed |
 | **GitHub Permissions** | 🟠 Extra permissions | 🟢 Minimal | Least privilege |
 | **Audit Trail** | 🟠 Basic logs | 🟢 Detailed logging | Trust decisions logged |
@@ -288,9 +289,9 @@ if (isFork) {
 
 **Backwards Compatibility:**
 - ✅ Internal PRs work unchanged
-- ✅ Manual workflow_dispatch unchanged
-- ⚠️ Manual fork PRs now require explicit trust (BREAKING - by design)
-- ⚠️ Automatic fork PR runs now blocked entirely (BREAKING - by design)
+- ✅ Automatic fork PR triggers work unchanged (GitHub already protects these)
+- ⚠️ Manual `/eval` on fork PRs now requires explicit trust (BREAKING - by design)
+- ⚠️ Manual workflow_dispatch on fork PRs now requires explicit trust (BREAKING - by design)
 
 **User Communication:**
 - Security warning displayed automatically
@@ -320,15 +321,18 @@ This approach aligns with how major open-source projects handle untrusted PR tes
 1. `cc8a892` - Security analysis and composite action preparation
 2. `a9752a4` - Updated helpers after master merge
 3. `3c57919` - **Fixed code execution vulnerability** (composite action)
-4. `f5175e7` - **Added fork PR protection** and reduced permissions
-5. This commit - **Added automatic fork PR blocking** for `pull_request` trigger
+4. `f5175e7` - **Added fork PR protection for /eval** and reduced permissions
+5. `93d8763` - Attempted automatic fork PR blocking (reverted)
+6. This commit - **Added fork PR protection for workflow_dispatch**
 
 **Total Impact:**
 - 🔴 Critical vulnerability → 🟢 Secure
 - 7 layers of defense implemented
 - 227 lines of vulnerable code eliminated
-- Manual fork PR attack vector blocked (requires explicit trust)
-- Automatic fork PR attack vector blocked (no opt-in)
+- Manual fork PR attack vectors blocked (requires explicit trust):
+  - `/eval` command (Layer 2)
+  - `workflow_dispatch` (Layer 7)
+- Automatic fork PRs safe by GitHub design (no secrets access)
 - Permissions reduced to minimum
 - Complete audit trail
 
