@@ -1,5 +1,34 @@
 name: Run eval regression tests
 
+# SECURITY: Fork PR Protection
+#
+# ATTACK VECTOR: This workflow executes Python test code with access to repository secrets
+# (OPENAI_API_KEY, ANTHROPIC_API_KEY, AWS_BEARER_TOKEN_BEDROCK, AZURE_API_KEY, BRAINTRUST_API_KEY).
+# Malicious code in fork PRs could exfiltrate secrets if run without review.
+#
+# PROTECTIONS:
+# 1. Composite Action (.github/actions/post-eval-comment): Loads JavaScript helpers from
+#    main branch only, never from PR checkout. Prevents malicious JS execution.
+#
+# 2. Fork PR Detection for /eval: Manual /eval commands on fork PRs require explicit
+#    is_pr_trusted: true flag in comment. Blocks accidental execution on untrusted code.
+#
+# 3. Fork PR Detection for workflow_dispatch: Manual workflow_dispatch on fork PRs requires
+#    explicit is_pr_trusted input set to true. Blocks accidental execution via UI.
+#
+# 4. Automatic pull_request triggers: GitHub runs fork PR workflows WITHOUT repository
+#    secrets (read-only GITHUB_TOKEN only). Safe by design, no additional protection needed.
+#
+# 5. Permission Validation: Only OWNER/MEMBER/COLLABORATOR can trigger /eval commands.
+#
+# 6. Least Privilege: Workflow runs with minimal permissions (contents: read, issues: write).
+#
+# USAGE:
+# - Internal PRs: Work normally, no extra steps
+# - Fork PRs via /eval: Add "is_pr_trusted: true" to comment after code review
+# - Fork PRs via workflow_dispatch: Set is_pr_trusted input to true after code review
+# - Fork PRs automatic: Work normally (no secrets, safe)
+
 on:
   pull_request:
     branches: ["*"]
