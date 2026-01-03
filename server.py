@@ -390,7 +390,7 @@ def chat(chat_request: ChatRequest):
 
         if timing_tracker:
             timing_tracker.record_message_build_end(num_messages=len(messages))
-            timing_tracker.record_prompt_construction_end(num_runbooks=len(runbooks) if runbooks else 0)
+            timing_tracker.record_prompt_construction_end(num_runbooks=len(runbooks.catalog) if runbooks else 0)
 
         follow_up_actions = []
         if not already_answered(chat_request.conversation_history):
