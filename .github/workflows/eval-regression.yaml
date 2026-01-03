@@ -31,9 +31,8 @@ on:
     types: [created]
 
 permissions:
-  pull-requests: write
-  contents: read
-  issues: write
+  contents: read  # Required to checkout code
+  issues: write   # Required for posting/updating PR comments (PRs are issues)
 
 jobs:
   # Handle /list command - outputs available eval names
@@ -182,6 +181,47 @@ jobs:
             });
             core.setOutput('pr_sha', pr.data.head.sha);
             core.setOutput('pr_branch', pr.data.head.ref);
+
+            // SECURITY: Detect if PR is from a fork (untrusted source)
+            const isFork = pr.data.head.repo.full_name !== pr.data.base.repo.full_name;
+            core.setOutput('is_fork', isFork.toString());
+
+            // SECURITY: Parse is_pr_trusted flag from comment (required for fork PRs)
+            let isPrTrusted = false;
+            for (const line of body.split('\n').slice(1)) {
+              const colonIdx = line.indexOf(':');
+              if (colonIdx === -1) continue;
+              const key = line.slice(0, colonIdx).trim().toLowerCase();
+              const value = line.slice(colonIdx + 1).trim().toLowerCase();
+              if (key === 'is_pr_trusted' && (value === 'true' || value === 'yes')) {
+                isPrTrusted = true;
+                break;
+              }
+            }
+
+            // SECURITY: Block /eval on fork PRs unless explicitly trusted
+            if (isFork && !isPrTrusted) {
+              const forkInfo = `Fork: ${pr.data.head.repo.full_name} → ${pr.data.base.repo.full_name}`;
+              core.setFailed(
+                `🚫 Security: Cannot run /eval on untrusted fork PR without explicit approval.\n\n` +
+                `${forkInfo}\n\n` +
+                `⚠️ DANGER: Running /eval on fork PRs executes arbitrary Python code with access to all repository secrets ` +
+                `(API keys, tokens, etc.). This can lead to secret exfiltration and significant financial damage.\n\n` +
+                `To run /eval on this fork PR, a repository OWNER must explicitly approve by adding:\n` +
+                `\`\`\`\n/eval\nis_pr_trusted: true\nmarkers: regression\n\`\`\`\n\n` +
+                `⚠️ Only do this if you have manually reviewed ALL code changes in this PR, including:\n` +
+                `- All Python test files and fixtures\n` +
+                `- All bash scripts in before_test.sh/after_test.sh\n` +
+                `- Any imported Python modules or dependencies\n\n` +
+                `For untrusted contributions, review and merge first, then run evals on the merged code.`
+              );
+              return;
+            }
+
+            // Log trust decision for audit trail
+            if (isFork) {
+              core.warning(`⚠️ Running /eval on fork PR with explicit is_pr_trusted: true approval. Fork: ${pr.data.head.repo.full_name}`);
+            }
 
             // Add eyes reaction to indicate the comment was seen and is being processed
             await github.rest.reactions.createForIssueComment({
