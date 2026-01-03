@@ -21,7 +21,7 @@ This branch implements comprehensive security hardening for the `/eval` workflow
 - `BRAINTRUST_API_KEY` (data poisoning)
 - `GITHUB_TOKEN` (repository access)
 
-## Defense in Depth: 6 Security Layers
+## Defense in Depth: 7 Security Layers
 
 ### Layer 1: Secure Composite Action ✅ (Commit 3c57919)
 
@@ -126,6 +126,35 @@ permissions:
 - PRs are issues in GitHub's API
 - `pull-requests: write` was unnecessary
 
+### Layer 7: Automatic Fork PR Blocking ✅ (This commit)
+
+**Problem:** Automatic `pull_request` trigger runs evals on ALL PRs, including untrusted forks
+
+**Solution:** Detect and block automatic eval runs on fork PRs
+```javascript
+// SECURITY: Detect if automatic pull_request trigger is from a fork
+const pr = context.payload.pull_request;
+const isFork = pr.head.repo.full_name !== pr.base.repo.full_name;
+
+if (isFork) {
+  core.setFailed('🚫 Security: Automatic eval runs are blocked on fork PRs.');
+  // Post explanatory comment on PR
+  await github.rest.issues.createComment({ ... });
+}
+```
+
+**User Experience:**
+- Automatic runs blocked on all fork PRs (no opt-in for auto trigger)
+- PR receives comment explaining the block with instructions
+- Maintainers can manually trigger with `/eval` + `is_pr_trusted: true`
+- Internal PRs (same repo) run normally
+
+**Rationale:**
+- No way to get user consent before automatic trigger fires
+- Safest approach: block all automatic fork PR runs
+- Manual `/eval` override available for trusted contributions (Layer 2)
+- Prevents social engineering via "accidental" auto-runs
+
 ## Workflow Dispatch Security
 
 **Question:** Does workflow_dispatch need similar protection?
@@ -137,7 +166,7 @@ permissions:
 
 ## Attack Scenarios: Before vs After
 
-### Scenario 1: Malicious Fork PR
+### Scenario 1: Malicious Fork PR (Manual /eval)
 
 **Before:**
 1. Attacker opens PR from fork with malicious test code
@@ -151,6 +180,22 @@ permissions:
 3. Workflow blocks with security warning ✅
 4. Maintainer must explicitly type `is_pr_trusted: true` after code review
 5. Action logged in audit trail
+
+### Scenario 1b: Malicious Fork PR (Automatic Trigger)
+
+**Before:**
+1. Attacker opens PR from fork with malicious test code
+2. GitHub automatically triggers workflow on `pull_request` event
+3. Malicious code executes with all secrets ❌
+4. Secrets exfiltrated (no maintainer action required!)
+
+**After:**
+1. Attacker opens PR from fork with malicious test code
+2. GitHub automatically triggers workflow on `pull_request` event
+3. Fork detection step blocks execution immediately ✅
+4. Explanatory comment posted on PR
+5. No code execution, no secrets exposed
+6. Maintainer can manually trigger with `/eval` + `is_pr_trusted: true` after review
 
 ### Scenario 2: Compromised Collaborator Account
 
@@ -185,7 +230,8 @@ permissions:
 | Attack Surface | Before | After | Protection |
 |----------------|--------|-------|------------|
 | **JavaScript Execution** | 🔴 PR code | 🟢 Main branch only | Composite action |
-| **Fork PRs** | 🔴 No protection | 🟢 Explicit trust required | Fork detection |
+| **Fork PRs (Manual /eval)** | 🔴 No protection | 🟢 Explicit trust required | Fork detection |
+| **Fork PRs (Automatic)** | 🔴 No protection | 🟢 Blocked entirely | Auto-trigger blocking |
 | **Python Test Code** | 🔴 Executes from PR | 🟠 Executes from PR | Code review needed |
 | **GitHub Permissions** | 🟠 Extra permissions | 🟢 Minimal | Least privilege |
 | **Audit Trail** | 🟠 Basic logs | 🟢 Detailed logging | Trust decisions logged |
@@ -243,7 +289,8 @@ permissions:
 **Backwards Compatibility:**
 - ✅ Internal PRs work unchanged
 - ✅ Manual workflow_dispatch unchanged
-- ⚠️ Fork PRs now require explicit trust (BREAKING - by design)
+- ⚠️ Manual fork PRs now require explicit trust (BREAKING - by design)
+- ⚠️ Automatic fork PR runs now blocked entirely (BREAKING - by design)
 
 **User Communication:**
 - Security warning displayed automatically
@@ -274,12 +321,14 @@ This approach aligns with how major open-source projects handle untrusted PR tes
 2. `a9752a4` - Updated helpers after master merge
 3. `3c57919` - **Fixed code execution vulnerability** (composite action)
 4. `f5175e7` - **Added fork PR protection** and reduced permissions
+5. This commit - **Added automatic fork PR blocking** for `pull_request` trigger
 
 **Total Impact:**
 - 🔴 Critical vulnerability → 🟢 Secure
-- 6 layers of defense implemented
+- 7 layers of defense implemented
 - 227 lines of vulnerable code eliminated
-- Fork PR attack vector blocked
+- Manual fork PR attack vector blocked (requires explicit trust)
+- Automatic fork PR attack vector blocked (no opt-in)
 - Permissions reduced to minimum
 - Complete audit trail
 

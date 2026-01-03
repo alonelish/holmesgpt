@@ -237,8 +237,53 @@ jobs:
           # For /eval with branch: checkout the specified branch; otherwise checkout PR SHA or current ref
           ref: ${{ steps.eval-comment.outputs.branch || steps.eval-comment.outputs.pr_sha || github.ref }}
 
+      - name: Check fork PR for automatic triggers
+        if: github.event_name == 'pull_request'
+        id: check-fork-pr
+        uses: actions/github-script@v7
+        with:
+          script: |
+            // SECURITY: Detect if automatic pull_request trigger is from a fork (untrusted source)
+            const pr = context.payload.pull_request;
+            const isFork = pr.head.repo.full_name !== pr.base.repo.full_name;
+
+            if (isFork) {
+              const forkInfo = `Fork: ${pr.head.repo.full_name} → ${pr.base.repo.full_name}`;
+              core.setFailed(
+                `🚫 Security: Automatic eval runs are blocked on fork PRs.\n\n` +
+                `${forkInfo}\n\n` +
+                `⚠️ DANGER: Automatic eval runs execute arbitrary Python code with access to all repository secrets ` +
+                `(API keys, tokens, etc.). This can lead to secret exfiltration and significant financial damage.\n\n` +
+                `To run evals on this fork PR, a repository OWNER/MEMBER/COLLABORATOR can manually trigger with:\n` +
+                `\`\`\`\n/eval\nis_pr_trusted: true\nmarkers: regression\n\`\`\`\n\n` +
+                `⚠️ Only do this if you have manually reviewed ALL code changes in this PR, including:\n` +
+                `- All Python test files and fixtures\n` +
+                `- All bash scripts in before_test.sh/after_test.sh\n` +
+                `- Any imported Python modules or dependencies\n\n` +
+                `For untrusted contributions, review and merge first, then run evals on the merged code.`
+              );
+
+              // Post a comment explaining why the run was blocked
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: pr.number,
+                body: `🚫 **Automatic eval run blocked on fork PR**\n\n` +
+                  `For security reasons, automatic eval runs are disabled on fork PRs to prevent malicious code execution with repository secrets.\n\n` +
+                  `A repository maintainer can manually trigger evals after code review by commenting:\n` +
+                  `\`\`\`\n/eval\nis_pr_trusted: true\nmarkers: regression\n\`\`\`\n\n` +
+                  `See the [workflow logs](${context.payload.repository.html_url}/actions/runs/${context.runId}) for details.`
+              });
+
+              return;
+            }
+
+            core.info('✅ Not a fork PR, proceeding with automatic eval run');
+
       - name: Determine eval parameters
-        if: github.event_name != 'issue_comment' || steps.eval-comment.outcome == 'success'
+        if: |
+          (github.event_name != 'issue_comment' || steps.eval-comment.outcome == 'success') &&
+          (github.event_name != 'pull_request' || steps.check-fork-pr.outcome == 'success')
         id: eval-params
         uses: actions/github-script@v7
         with:
@@ -408,7 +453,9 @@ jobs:
 
       - name: Check if tests should run
         id: check-tests
-        if: github.event_name != 'issue_comment' || steps.eval-comment.outcome == 'success'
+        if: |
+          (github.event_name != 'issue_comment' || steps.eval-comment.outcome == 'success') &&
+          (github.event_name != 'pull_request' || steps.check-fork-pr.outcome == 'success')
         shell: bash
         run: |
           # Check one secret as proxy for secrets access (repo has all or none)
