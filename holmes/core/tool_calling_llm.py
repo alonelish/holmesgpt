@@ -764,12 +764,24 @@ class ToolCallingLLM:
             tools = None if i == max_steps else tools
             tool_choice = "auto" if tools else None
 
+            # Track context window limiting
+            if timing_tracker:
+                timing_tracker.record_context_window_limiting_start()
+
             limit_result = limit_input_context_window(
                 llm=self.llm, messages=messages, tools=tools
             )
             yield from limit_result.events
             messages = limit_result.messages
             metadata = metadata | limit_result.metadata
+
+            if timing_tracker:
+                tokens_before = limit_result.metadata.get("tokens_before_compaction")
+                tokens_after = limit_result.metadata.get("tokens_after_compaction")
+                timing_tracker.record_context_window_limiting_end(
+                    tokens_before=tokens_before,
+                    tokens_after=tokens_after
+                )
 
             if (
                 limit_result.conversation_history_compacted

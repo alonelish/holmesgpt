@@ -354,9 +354,30 @@ def already_answered(conversation_history: Optional[List[dict]]) -> bool:
 @app.post("/api/chat")
 def chat(chat_request: ChatRequest):
     try:
+        # Initialize timing tracker early if streaming
+        timing_tracker = TimingTracker() if chat_request.stream else None
+
+        # Track config/toolset loading
+        if timing_tracker:
+            timing_tracker.record_config_load_start()
+
         runbooks = config.get_runbook_catalog()
         ai = config.create_toolcalling_llm(dal=dal, model=chat_request.model)
+
+        if timing_tracker:
+            timing_tracker.record_config_load_end(num_toolsets=len(ai.tool_executor.toolsets) if ai.tool_executor else 0)
+
+        # Track DAL operations
+        dal_start = time.time()
         global_instructions = dal.get_global_instructions_for_account()
+        if timing_tracker:
+            timing_tracker.record_dal_operation("get_global_instructions", (time.time() - dal_start) * 1000)
+
+        # Track message building
+        if timing_tracker:
+            timing_tracker.record_message_build_start()
+            timing_tracker.record_prompt_construction_start()
+
         messages = build_chat_messages(
             chat_request.ask,
             chat_request.conversation_history,
@@ -366,6 +387,10 @@ def chat(chat_request: ChatRequest):
             additional_system_prompt=chat_request.additional_system_prompt,
             runbooks=runbooks,
         )
+
+        if timing_tracker:
+            timing_tracker.record_message_build_end(num_messages=len(messages))
+            timing_tracker.record_prompt_construction_end(num_runbooks=len(runbooks) if runbooks else 0)
 
         follow_up_actions = []
         if not already_answered(chat_request.conversation_history):
@@ -391,9 +416,6 @@ def chat(chat_request: ChatRequest):
             ]
 
         if chat_request.stream:
-            # Initialize timing tracker for this request
-            timing_tracker = TimingTracker()
-
             return StreamingResponse(
                 stream_chat_formatter(
                     ai.call_stream(

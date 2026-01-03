@@ -88,6 +88,53 @@ class TimingTracker:
         """Record when conversation history is compacted."""
         self._add_event("history_compacted", "Conversation history was compacted")
 
+    def record_config_load_start(self):
+        """Record when config/toolset loading starts."""
+        self._add_event("config_load_start", "Loading configuration and toolsets")
+
+    def record_config_load_end(self, num_toolsets: Optional[int] = None):
+        """Record when config/toolset loading completes."""
+        metadata = {"num_toolsets": str(num_toolsets)} if num_toolsets else None
+        self._add_event("config_load_end", f"Configuration loaded with {num_toolsets} toolsets", metadata)
+
+    def record_message_build_start(self):
+        """Record when message building starts."""
+        self._add_event("message_build_start", "Building messages for LLM")
+
+    def record_message_build_end(self, num_messages: Optional[int] = None):
+        """Record when message building completes."""
+        metadata = {"num_messages": str(num_messages)} if num_messages else None
+        self._add_event("message_build_end", f"Built {num_messages} messages", metadata)
+
+    def record_dal_operation(self, operation: str, duration_ms: Optional[float] = None):
+        """Record a database/DAL operation."""
+        metadata = {"operation": operation}
+        if duration_ms is not None:
+            metadata["duration_ms"] = str(round(duration_ms, 2))
+        self._add_event("dal_operation", f"Database operation: {operation}", metadata)
+
+    def record_context_window_limiting_start(self):
+        """Record when context window limiting starts."""
+        self._add_event("context_limiting_start", "Starting context window limiting")
+
+    def record_context_window_limiting_end(self, tokens_before: Optional[int] = None, tokens_after: Optional[int] = None):
+        """Record when context window limiting completes."""
+        metadata = {}
+        if tokens_before is not None:
+            metadata["tokens_before"] = str(tokens_before)
+        if tokens_after is not None:
+            metadata["tokens_after"] = str(tokens_after)
+        self._add_event("context_limiting_end", "Context window limiting completed", metadata)
+
+    def record_prompt_construction_start(self):
+        """Record when prompt construction starts."""
+        self._add_event("prompt_construction_start", "Constructing prompts with runbooks")
+
+    def record_prompt_construction_end(self, num_runbooks: Optional[int] = None):
+        """Record when prompt construction completes."""
+        metadata = {"num_runbooks": str(num_runbooks)} if num_runbooks else None
+        self._add_event("prompt_construction_end", f"Prompts constructed with {num_runbooks} runbooks", metadata)
+
     def get_timing_info(self) -> dict:
         """Get current timing information as a dictionary."""
         elapsed_ms = (time.time() - self.start_time) * 1000
