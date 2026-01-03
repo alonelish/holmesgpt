@@ -25,7 +25,9 @@ name: Run eval regression tests
 #    commit metadata. However, if a maintainer's GitHub account is compromised, the
 #    attacker would have legitimate COLLABORATOR/MEMBER/OWNER status.
 #
-# 6. Least Privilege: Workflow runs with minimal permissions (contents: read, issues: write).
+# 6. Least Privilege: Workflow runs with minimal permissions (contents: read, issues: write,
+#    pull-requests: write). While PRs are issues in GitHub's API, pull-requests: write is
+#    still required for certain comment operations to avoid 403 errors.
 #
 # USAGE:
 # - Internal PRs: Work normally, no extra steps
@@ -68,8 +70,9 @@ on:
     types: [created]
 
 permissions:
-  contents: read  # Required to checkout code
-  issues: write   # Required for posting/updating PR comments (PRs are issues)
+  contents: read       # Required to checkout code
+  issues: write        # Required for posting/updating PR comments (PRs are issues in GitHub API)
+  pull-requests: write # Required by GitHub for some PR comment operations (403 without this)
 
 jobs:
   # Handle /list command - outputs available eval names
