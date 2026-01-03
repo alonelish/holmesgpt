@@ -1,5 +1,5 @@
 name: Post Eval Comment
-description: Posts or updates eval progress/results comment (SECURITY: always loads helpers from main branch)
+description: 'Posts or updates eval progress/results comment (SECURITY: always loads helpers from main branch)'
 
 inputs:
   mode:

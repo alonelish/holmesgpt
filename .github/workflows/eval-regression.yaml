@@ -20,6 +20,10 @@ name: Run eval regression tests
 #    secrets (read-only GITHUB_TOKEN only). Safe by design, no additional protection needed.
 #
 # 5. Permission Validation: Only OWNER/MEMBER/COLLABORATOR can trigger /eval commands.
+#    NOTE: author_association is set by GitHub's API server-side based on the GitHub
+#    account that posted the comment. It CANNOT be spoofed via git config email or
+#    commit metadata. However, if a maintainer's GitHub account is compromised, the
+#    attacker would have legitimate COLLABORATOR/MEMBER/OWNER status.
 #
 # 6. Least Privilege: Workflow runs with minimal permissions (contents: read, issues: write).
 #
