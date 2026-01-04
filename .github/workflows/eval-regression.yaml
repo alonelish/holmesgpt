@@ -219,6 +219,20 @@ jobs:
               repo: context.repo.repo,
               pull_number: context.issue.number
             });
+
+            // Check if head repo exists (null when fork has been deleted)
+            if (!pr.data.head || !pr.data.head.repo) {
+              core.setFailed(
+                `❌ Cannot determine fork status: head repository is unavailable.\n\n` +
+                `This usually happens when:\n` +
+                `- The fork repository has been deleted\n` +
+                `- The PR branch has been force-deleted\n\n` +
+                `Cannot safely run /eval on this PR. If this is a legitimate PR, ` +
+                `ask the contributor to recreate it from an active fork.`
+              );
+              return;
+            }
+
             core.setOutput('pr_sha', pr.data.head.sha);
             core.setOutput('pr_branch', pr.data.head.ref);
 
@@ -395,6 +409,19 @@ jobs:
                   repo: context.repo.repo,
                   pull_number: prNumber
                 });
+
+                // Check if head repo exists (null when fork has been deleted)
+                if (!pr.data.head || !pr.data.head.repo) {
+                  core.setFailed(
+                    `❌ Cannot determine fork status: head repository is unavailable.\n\n` +
+                    `This usually happens when:\n` +
+                    `- The fork repository has been deleted\n` +
+                    `- The PR branch has been force-deleted\n\n` +
+                    `Cannot safely run workflow_dispatch on this PR. If this is a legitimate PR, ` +
+                    `ask the contributor to recreate it from an active fork.`
+                  );
+                  return;
+                }
 
                 const isFork = pr.data.head.repo.full_name !== pr.data.base.repo.full_name;
                 const isPrTrustedInput = (${{ toJSON(github.event.inputs.is_pr_trusted) }} || 'false').toLowerCase();
