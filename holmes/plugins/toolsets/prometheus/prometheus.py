@@ -1608,6 +1608,11 @@ class PrometheusToolset(Toolset):
 
     def get_example_config(self):
         example_config = PrometheusConfig(
-            prometheus_url="http://robusta-kube-prometheus-st-prometheus:9090"
+            prometheus_url="http://prometheus-server.monitoring.svc.cluster.local:9090",
+            headers={"Authorization": "Bearer <token>"},
+            default_metadata_time_window_hrs=1,
+            default_query_timeout_seconds=20,
+            max_query_timeout_seconds=180,
+            prometheus_ssl_enabled=True,
         )
-        return example_config.model_dump()
+        return example_config.model_dump(exclude_none=True)
