@@ -6,6 +6,13 @@ name: Run eval regression tests
 # (OPENAI_API_KEY, ANTHROPIC_API_KEY, AWS_BEARER_TOKEN_BEDROCK, AZURE_API_KEY, BRAINTRUST_API_KEY).
 # Malicious code in fork PRs could exfiltrate secrets if run without review.
 #
+# COMMON SECURITY PATTERNS USED IN THIS WORKFLOW:
+# - Fork detection: pr.data.head.repo.full_name !== pr.data.base.repo.full_name
+# - Null check: if (!pr.data.head || !pr.data.head.repo) for deleted forks
+# - Permission check: ['OWNER', 'MEMBER', 'COLLABORATOR'].includes(author_association)
+# - Trust flag parsing: Parse is_pr_trusted from comment body, must be explicit
+# - TOCTOU prevention: /rerun parses is_pr_trusted from CURRENT comment, not old /eval
+#
 # PROTECTIONS:
 # 1. Composite Action (.github/actions/post-eval-comment): Loads JavaScript helpers from
 #    main branch only, never from PR checkout. Prevents malicious JS execution.
@@ -80,13 +87,45 @@ jobs:
     runs-on: ubuntu-latest
     if: github.event_name == 'issue_comment' && github.event.issue.pull_request && startsWith(github.event.comment.body, '/list')
     steps:
-      - name: Check permissions
+      - name: Check permissions and fork status
         uses: actions/github-script@v7
         with:
           script: |
+            // Check commenter has write access
             const association = context.payload.comment.author_association;
             if (!['OWNER', 'MEMBER', 'COLLABORATOR'].includes(association)) {
               core.setFailed(`Permission denied: ${association} cannot use /list (requires OWNER, MEMBER, or COLLABORATOR)`);
+              return;
+            }
+
+            // Get PR details to check fork status
+            const pr = await github.rest.pulls.get({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              pull_number: context.issue.number
+            });
+
+            // Check if head repo exists (null when fork has been deleted)
+            if (!pr.data.head || !pr.data.head.repo) {
+              core.setFailed(
+                `❌ Cannot determine fork status: head repository is unavailable.\n\n` +
+                `This usually happens when:\n` +
+                `- The fork repository has been deleted\n` +
+                `- The PR branch has been force-deleted`
+              );
+              return;
+            }
+
+            // Check if PR is from a fork
+            const isFork = pr.data.head.repo.full_name !== pr.data.base.repo.full_name;
+            if (isFork) {
+              core.setFailed(
+                `🚫 Security: Cannot run /list on fork PR.\n\n` +
+                `Fork: ${pr.data.head.repo.full_name} → ${pr.data.base.repo.full_name}\n\n` +
+                `/list reads directory structure from PR checkout, which could leak information. ` +
+                `For fork PRs, review the available test names in the repository documentation instead.`
+              );
+              return;
             }
 
       - name: Checkout code
@@ -190,6 +229,8 @@ jobs:
                 return;
               }
 
+              // Use the old /eval comment body for parameters (model, markers, filter, etc.)
+              // but parse is_pr_trusted from the CURRENT /rerun comment to prevent TOCTOU attacks
               body = evalComments[0].body;
               lastEvalCommentId = evalComments[0].id;
               core.info(`Found last /eval comment: ${lastEvalCommentId}`);
@@ -240,9 +281,12 @@ jobs:
             const isFork = pr.data.head.repo.full_name !== pr.data.base.repo.full_name;
             core.setOutput('is_fork', isFork.toString());
 
-            // SECURITY: Parse is_pr_trusted flag from comment (required for fork PRs)
+            // SECURITY: Parse is_pr_trusted flag from CURRENT comment (required for fork PRs)
+            // For /rerun: we parse from the CURRENT comment, not the old /eval comment
+            // This prevents TOCTOU attacks where code changes after original approval
+            const currentCommentBody = context.payload.comment.body;
             let isPrTrusted = false;
-            for (const line of body.split('\n').slice(1)) {
+            for (const line of currentCommentBody.split('\n').slice(1)) {
               const colonIdx = line.indexOf(':');
               if (colonIdx === -1) continue;
               const key = line.slice(0, colonIdx).trim().toLowerCase();
@@ -259,11 +303,11 @@ jobs:
               core.setFailed(
                 `🚫 Security: Cannot run /eval on untrusted fork PR without explicit approval.\n\n` +
                 `${forkInfo}\n\n` +
-                `⚠️ DANGER: Running /eval on fork PRs executes arbitrary Python code with access to all repository secrets ` +
-                `(API keys, tokens, etc.). This can lead to secret exfiltration and significant financial damage.\n\n` +
+                `Running /eval on fork PRs executes arbitrary Python code with access to all repository secrets ` +
+                `(API keys, tokens). This can lead to secret exfiltration.\n\n` +
                 `To run /eval on this fork PR, a repository OWNER must explicitly approve by adding:\n` +
                 `\`\`\`\n/eval\nis_pr_trusted: true\nmarkers: regression\n\`\`\`\n\n` +
-                `⚠️ Only do this if you have manually reviewed ALL code changes in this PR, including:\n` +
+                `Only do this after manually reviewing ALL code changes in this PR, including:\n` +
                 `- All Python test files and fixtures\n` +
                 `- All bash scripts in before_test.sh/after_test.sh\n` +
                 `- Any imported Python modules or dependencies\n\n` +
@@ -394,8 +438,12 @@ jobs:
                   prNumber = prs.data[0].number;
                   core.info(`Auto-detected PR #${prNumber} from branch ${currentBranch}`);
                 } else if (prs.data.length > 1) {
-                  core.warning(`Multiple open PRs found for branch ${currentBranch}, please specify pr_number`);
-                  prNumber = null;
+                  core.setFailed(
+                    `Multiple open PRs found for branch ${currentBranch}. ` +
+                    `Please specify pr_number explicitly in the workflow_dispatch inputs.\n` +
+                    `Found PRs: ${prs.data.map(p => `#${p.number}`).join(', ')}`
+                  );
+                  return;
                 } else {
                   core.info(`No open PR found for branch ${currentBranch}`);
                   prNumber = null;
@@ -432,10 +480,10 @@ jobs:
                   core.setFailed(
                     `🚫 Security: Cannot run workflow_dispatch on untrusted fork PR without explicit approval.\n\n` +
                     `${forkInfo}\n\n` +
-                    `⚠️ DANGER: Running workflow_dispatch on fork PRs executes arbitrary Python code with access to all repository secrets ` +
-                    `(API keys, tokens, etc.). This can lead to secret exfiltration and significant financial damage.\n\n` +
+                    `Running workflow_dispatch on fork PRs executes arbitrary Python code with access to all repository secrets ` +
+                    `(API keys, tokens). This can lead to secret exfiltration.\n\n` +
                     `To run workflow_dispatch on this fork PR, set the is_pr_trusted input to true in the workflow dispatch form.\n\n` +
-                    `⚠️ Only do this if you have manually reviewed ALL code changes in this PR, including:\n` +
+                    `Only do this after manually reviewing ALL code changes in this PR, including:\n` +
                     `- All Python test files and fixtures\n` +
                     `- All bash scripts in before_test.sh/after_test.sh\n` +
                     `- Any imported Python modules or dependencies\n\n` +
