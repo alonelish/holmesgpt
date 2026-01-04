@@ -99,7 +99,10 @@ class PrometheusConfig(BaseModel):
     headers: Dict = Field(default_factory=dict)
     rules_cache_duration_seconds: Optional[int] = 1800  # 30 minutes
     additional_labels: Optional[Dict[str, str]] = None
-    prometheus_ssl_enabled: bool = True
+    verify_ssl: bool = True
+
+    # DEPRECATED: Old name for verify_ssl
+    prometheus_ssl_enabled: Optional[bool] = None  # DEPRECATED - use verify_ssl
 
     # Custom limit to the max number of tokens that a query result can take to proactively
     #   prevent token limit issues. Expressed in % of the model's context window.
@@ -153,6 +156,9 @@ class PrometheusConfig(BaseModel):
             deprecated_with_replacement.append(
                 "metrics_labels_time_window_hrs -> discover_metrics_from_last_hours"
             )
+        if self.prometheus_ssl_enabled is not None:
+            self.verify_ssl = self.prometheus_ssl_enabled
+            deprecated_with_replacement.append("prometheus_ssl_enabled -> verify_ssl")
 
         if deprecated_with_replacement:
             logging.warning(
@@ -196,7 +202,7 @@ class AMPConfig(PrometheusConfig):
     aws_secret_access_key: Optional[str] = None
     aws_region: str
     aws_service_name: str = "aps"
-    prometheus_ssl_enabled: bool = False
+    verify_ssl: bool = False
     assume_role_arn: Optional[str] = None
 
     # Refresh the AWS client (and its STS creds) every N seconds (default: 15 minutes)
@@ -220,7 +226,7 @@ class AMPConfig(PrometheusConfig):
             try:
                 base_config = BasePrometheusConfig(
                     url=self.prometheus_url,
-                    disable_ssl=not self.prometheus_ssl_enabled,
+                    disable_ssl=not self.verify_ssl,
                     additional_labels=self.additional_labels,
                 )
                 self._aws_client = AWSPrometheusConnect(
@@ -261,7 +267,7 @@ def do_request(
     method defaults to GET so callers can omit it for reads.
     """
     if verify is None:
-        verify = config.prometheus_ssl_enabled
+        verify = config.verify_ssl
     if headers is None:
         headers = config.headers or {}
 
@@ -534,7 +540,7 @@ class ListPrometheusRules(BasePrometheusTool):
                 url=rules_url,
                 params=params,
                 timeout=40,
-                verify=self.toolset.config.prometheus_ssl_enabled,
+                verify=self.toolset.config.verify_ssl,
                 headers=self.toolset.config.headers,
                 method="GET",
             )
@@ -660,7 +666,7 @@ class GetMetricNames(BasePrometheusTool):
                 url=url,
                 params=query_params,
                 timeout=self.toolset.config.metadata_timeout_seconds_default,
-                verify=self.toolset.config.prometheus_ssl_enabled,
+                verify=self.toolset.config.verify_ssl,
                 headers=self.toolset.config.headers,
                 method="GET",
             )
@@ -778,7 +784,7 @@ class GetLabelValues(BasePrometheusTool):
                 url=url,
                 params=query_params,
                 timeout=self.toolset.config.metadata_timeout_seconds_default,
-                verify=self.toolset.config.prometheus_ssl_enabled,
+                verify=self.toolset.config.verify_ssl,
                 headers=self.toolset.config.headers,
                 method="GET",
             )
@@ -882,7 +888,7 @@ class GetAllLabels(BasePrometheusTool):
                 url=url,
                 params=query_params,
                 timeout=self.toolset.config.metadata_timeout_seconds_default,
-                verify=self.toolset.config.prometheus_ssl_enabled,
+                verify=self.toolset.config.verify_ssl,
                 headers=self.toolset.config.headers,
                 method="GET",
             )
@@ -996,7 +1002,7 @@ class GetSeries(BasePrometheusTool):
                 url=url,
                 params=query_params,
                 timeout=self.toolset.config.metadata_timeout_seconds_default,
-                verify=self.toolset.config.prometheus_ssl_enabled,
+                verify=self.toolset.config.verify_ssl,
                 headers=self.toolset.config.headers,
                 method="GET",
             )
@@ -1075,7 +1081,7 @@ class GetMetricMetadata(BasePrometheusTool):
                 url=url,
                 params=query_params,
                 timeout=self.toolset.config.metadata_timeout_seconds_default,
-                verify=self.toolset.config.prometheus_ssl_enabled,
+                verify=self.toolset.config.verify_ssl,
                 headers=self.toolset.config.headers,
                 method="GET",
             )
@@ -1178,7 +1184,7 @@ class ExecuteInstantQuery(BasePrometheusTool):
                 headers=self.toolset.config.headers,
                 data=payload,
                 timeout=timeout,
-                verify=self.toolset.config.prometheus_ssl_enabled,
+                verify=self.toolset.config.verify_ssl,
                 method="POST",
             )
 
@@ -1420,7 +1426,7 @@ class ExecuteRangeQuery(BasePrometheusTool):
                 headers=self.toolset.config.headers,
                 data=payload,
                 timeout=timeout,
-                verify=self.toolset.config.prometheus_ssl_enabled,
+                verify=self.toolset.config.verify_ssl,
                 method="POST",
             )
 
@@ -1636,7 +1642,7 @@ class PrometheusToolset(Toolset):
                 url=url,
                 headers=self.config.headers,
                 timeout=10,
-                verify=self.config.prometheus_ssl_enabled,
+                verify=self.config.verify_ssl,
                 method="GET",
             )
 
@@ -1662,6 +1668,6 @@ class PrometheusToolset(Toolset):
             discover_metrics_from_last_hours=1,
             query_timeout_seconds_default=20,
             query_timeout_seconds_hard_max=180,
-            prometheus_ssl_enabled=True,
+            verify_ssl=True,
         )
         return example_config.model_dump(exclude_none=True)
