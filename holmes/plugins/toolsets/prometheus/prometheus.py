@@ -9,7 +9,7 @@ import dateutil.parser
 import requests  # type: ignore
 from prometrix.connect.aws_connect import AWSPrometheusConnect
 from prometrix.models.prometheus_config import PrometheusConfig as BasePrometheusConfig
-from pydantic import BaseModel, Field, field_validator, model_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 from requests import RequestException
 
 from holmes.common.env_vars import IS_OPENSHIFT, MAX_GRAPH_POINTS
@@ -53,8 +53,25 @@ DEFAULT_METADATA_TIME_WINDOW_HRS = 1
 
 
 class PrometheusConfig(BaseModel):
+    """Prometheus toolset configuration.
+
+    Deprecated config names (still accepted but not in schema):
+    - default_metadata_time_window_hrs -> discover_metrics_from_last_hours
+    - default_query_timeout_seconds -> query_timeout_seconds_default
+    - max_query_timeout_seconds -> query_timeout_seconds_hard_max
+    - default_metadata_timeout_seconds -> metadata_timeout_seconds_default
+    - max_metadata_timeout_seconds -> metadata_timeout_seconds_hard_max
+    - metrics_labels_time_window_hrs -> discover_metrics_from_last_hours
+    - prometheus_ssl_enabled -> verify_ssl
+    - metrics_labels_cache_duration_hrs (no longer used)
+    - fetch_labels_with_labels_api (no longer used)
+    - fetch_metadata_with_series_api (no longer used)
+    """
+
+    model_config = ConfigDict(extra="allow")
+
     # URL is optional because it can be set with an env var
-    prometheus_url: Optional[str]
+    prometheus_url: Optional[str] = None
 
     # Discovery API time window - only return metrics with data in the last N hours
     discover_metrics_from_last_hours: int = DEFAULT_METADATA_TIME_WINDOW_HRS
@@ -67,42 +84,11 @@ class PrometheusConfig(BaseModel):
     metadata_timeout_seconds_default: int = DEFAULT_METADATA_TIMEOUT_SECONDS
     metadata_timeout_seconds_hard_max: int = MAX_METADATA_TIMEOUT_SECONDS
 
-    # DEPRECATED: Old names for config values - use new names instead
-    # Using None as default so we can detect if user explicitly set them
-    default_metadata_time_window_hrs: Optional[int] = (
-        None  # DEPRECATED - use discover_metrics_from_last_hours
-    )
-    default_query_timeout_seconds: Optional[int] = (
-        None  # DEPRECATED - use query_timeout_seconds_default
-    )
-    max_query_timeout_seconds: Optional[int] = (
-        None  # DEPRECATED - use query_timeout_seconds_hard_max
-    )
-    default_metadata_timeout_seconds: Optional[int] = (
-        None  # DEPRECATED - use metadata_timeout_seconds_default
-    )
-    max_metadata_timeout_seconds: Optional[int] = (
-        None  # DEPRECATED - use metadata_timeout_seconds_hard_max
-    )
-
-    # DEPRECATED: These config values are deprecated and will be removed in a future version
-    metrics_labels_time_window_hrs: Optional[int] = (
-        None  # DEPRECATED - use discover_metrics_from_last_hours
-    )
-    metrics_labels_cache_duration_hrs: Optional[int] = (
-        None  # DEPRECATED - no longer used
-    )
-    fetch_labels_with_labels_api: Optional[bool] = None  # DEPRECATED - no longer used
-    fetch_metadata_with_series_api: Optional[bool] = None  # DEPRECATED - no longer used
-
     tool_calls_return_data: bool = True
     headers: Dict = Field(default_factory=dict)
     rules_cache_duration_seconds: Optional[int] = 1800  # 30 minutes
     additional_labels: Optional[Dict[str, str]] = None
     verify_ssl: bool = True
-
-    # DEPRECATED: Old name for verify_ssl
-    prometheus_ssl_enabled: Optional[bool] = None  # DEPRECATED - use verify_ssl
 
     # Custom limit to the max number of tokens that a query result can take to proactively
     #   prevent token limit issues. Expressed in % of the model's context window.
@@ -118,47 +104,44 @@ class PrometheusConfig(BaseModel):
 
     @model_validator(mode="after")
     def validate_prom_config(self):
-        # Handle deprecated config names - copy values to new names if old names were used
+        # Handle deprecated config names passed as extra fields
+        # These are accepted via extra="allow" but not defined in schema
+        extra = self.model_extra or {}
         deprecated_with_replacement = []
 
-        # Map old names to new names and copy values
-        if self.default_metadata_time_window_hrs is not None:
-            self.discover_metrics_from_last_hours = (
-                self.default_metadata_time_window_hrs
-            )
-            deprecated_with_replacement.append(
-                "default_metadata_time_window_hrs -> discover_metrics_from_last_hours"
-            )
-        if self.default_query_timeout_seconds is not None:
-            self.query_timeout_seconds_default = self.default_query_timeout_seconds
-            deprecated_with_replacement.append(
-                "default_query_timeout_seconds -> query_timeout_seconds_default"
-            )
-        if self.max_query_timeout_seconds is not None:
-            self.query_timeout_seconds_hard_max = self.max_query_timeout_seconds
-            deprecated_with_replacement.append(
-                "max_query_timeout_seconds -> query_timeout_seconds_hard_max"
-            )
-        if self.default_metadata_timeout_seconds is not None:
-            self.metadata_timeout_seconds_default = (
-                self.default_metadata_timeout_seconds
-            )
-            deprecated_with_replacement.append(
-                "default_metadata_timeout_seconds -> metadata_timeout_seconds_default"
-            )
-        if self.max_metadata_timeout_seconds is not None:
-            self.metadata_timeout_seconds_hard_max = self.max_metadata_timeout_seconds
-            deprecated_with_replacement.append(
-                "max_metadata_timeout_seconds -> metadata_timeout_seconds_hard_max"
-            )
-        if self.metrics_labels_time_window_hrs is not None:
-            self.discover_metrics_from_last_hours = self.metrics_labels_time_window_hrs
-            deprecated_with_replacement.append(
-                "metrics_labels_time_window_hrs -> discover_metrics_from_last_hours"
-            )
-        if self.prometheus_ssl_enabled is not None:
-            self.verify_ssl = self.prometheus_ssl_enabled
-            deprecated_with_replacement.append("prometheus_ssl_enabled -> verify_ssl")
+        # Map of old names -> (new field name, new field attr)
+        deprecated_mappings = {
+            "default_metadata_time_window_hrs": (
+                "discover_metrics_from_last_hours",
+                "discover_metrics_from_last_hours",
+            ),
+            "default_query_timeout_seconds": (
+                "query_timeout_seconds_default",
+                "query_timeout_seconds_default",
+            ),
+            "max_query_timeout_seconds": (
+                "query_timeout_seconds_hard_max",
+                "query_timeout_seconds_hard_max",
+            ),
+            "default_metadata_timeout_seconds": (
+                "metadata_timeout_seconds_default",
+                "metadata_timeout_seconds_default",
+            ),
+            "max_metadata_timeout_seconds": (
+                "metadata_timeout_seconds_hard_max",
+                "metadata_timeout_seconds_hard_max",
+            ),
+            "metrics_labels_time_window_hrs": (
+                "discover_metrics_from_last_hours",
+                "discover_metrics_from_last_hours",
+            ),
+            "prometheus_ssl_enabled": ("verify_ssl", "verify_ssl"),
+        }
+
+        for old_name, (new_name, attr_name) in deprecated_mappings.items():
+            if old_name in extra:
+                setattr(self, attr_name, extra[old_name])
+                deprecated_with_replacement.append(f"{old_name} -> {new_name}")
 
         if deprecated_with_replacement:
             logging.warning(
@@ -167,13 +150,15 @@ class PrometheusConfig(BaseModel):
             )
 
         # Check for deprecated config values that no longer have any effect
-        deprecated_no_effect = []
-        if self.metrics_labels_cache_duration_hrs is not None:
-            deprecated_no_effect.append("metrics_labels_cache_duration_hrs")
-        if self.fetch_labels_with_labels_api is not None:
-            deprecated_no_effect.append("fetch_labels_with_labels_api")
-        if self.fetch_metadata_with_series_api is not None:
-            deprecated_no_effect.append("fetch_metadata_with_series_api")
+        deprecated_no_effect = [
+            name
+            for name in [
+                "metrics_labels_cache_duration_hrs",
+                "fetch_labels_with_labels_api",
+                "fetch_metadata_with_series_api",
+            ]
+            if name in extra
+        ]
 
         if deprecated_no_effect:
             logging.warning(
@@ -1670,4 +1655,4 @@ class PrometheusToolset(Toolset):
             query_timeout_seconds_hard_max=180,
             verify_ssl=True,
         )
-        return example_config.model_dump(exclude_none=True)
+        return example_config.model_dump()
