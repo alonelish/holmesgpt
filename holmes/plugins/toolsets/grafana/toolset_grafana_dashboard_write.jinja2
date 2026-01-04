@@ -1,0 +1,102 @@
+---
+## **Grafana Dashboard Write Tools - Usage Guide**
+
+**All write operations require user approval before execution.**
+
+### **Choosing the Right Tool**
+
+| Scenario | Tool | When to Use |
+|----------|------|-------------|
+| Create new dashboard | `grafana_create_or_update_dashboard` | You have complete dashboard JSON |
+| Replace entire dashboard | `grafana_create_or_update_dashboard` | Full overwrite with new definition |
+| Update metadata (title, tags, variables) | `grafana_merge_dashboard_update` | Changing dashboard-level fields |
+| Update single panel in large dashboard | `grafana_patch_dashboard_panel` | Dashboard is too large for context window |
+| Delete dashboard | `grafana_delete_dashboard` | Removing a dashboard |
+
+---
+
+### **Handling Large Dashboards**
+
+**For dashboards that don't fit in the context window:**
+
+1. **First, list panels only:**
+   ```
+   grafana_get_dashboard_by_uid(uid="...", json_filter="dashboard.panels[].{id,title,type}")
+   ```
+   This returns just panel metadata, not full definitions.
+
+2. **Then patch the specific panel:**
+   ```
+   grafana_patch_dashboard_panel(
+       dashboard_uid="...",
+       panel_id=5,
+       panel_updates_json='{"title": "New Title", "targets": [...]}'
+   )
+   ```
+
+---
+
+### **Dashboard JSON Structure**
+
+When creating dashboards, the minimum required structure is:
+```json
+{
+  "title": "My Dashboard",
+  "panels": [],
+  "schemaVersion": 39,
+  "timezone": "browser"
+}
+```
+
+For updating existing dashboards, always include:
+- `uid` - to identify the dashboard
+- `version` - to prevent conflicts (fetched from existing dashboard)
+
+---
+
+### **Merge Update vs Full Replacement**
+
+**Use `grafana_merge_dashboard_update` when:**
+- Updating title, description, or tags
+- Adding/modifying template variables
+- Changing time picker settings
+- Making targeted changes without risk of data loss
+
+**Use `grafana_create_or_update_dashboard` when:**
+- Creating a brand new dashboard
+- You have the complete dashboard definition
+- Restructuring the entire dashboard
+
+---
+
+### **Panel Patching Best Practices**
+
+**Identify panels by ID (preferred) or title:**
+```
+grafana_patch_dashboard_panel(
+    dashboard_uid="abc123",
+    panel_id=7,  # More reliable than title
+    panel_updates_json='{"targets": [{"expr": "up{job=\"prometheus\"}"}]}'
+)
+```
+
+**Common panel fields to patch:**
+- `title` - Panel display name
+- `targets` - Query definitions
+- `fieldConfig` - Thresholds, units, colors
+- `options` - Visualization-specific settings
+- `gridPos` - Panel position and size
+
+---
+
+### **Error Handling**
+
+**412 Precondition Failed** - Usually means:
+- Version conflict: Another user modified the dashboard
+- Use `overwrite: true` to force update
+
+**404 Not Found** - Dashboard or panel doesn't exist
+
+**403 Forbidden** - API key lacks write permissions
+
+---

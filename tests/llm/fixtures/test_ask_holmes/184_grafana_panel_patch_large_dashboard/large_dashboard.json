@@ -1,0 +1,5136 @@
+{
+  "dashboard": {
+    "uid": "infra-monitoring-dash",
+    "title": "Infrastructure Monitoring",
+    "description": "A comprehensive dashboard for monitoring infrastructure metrics including CPU, memory, disk, and network usage across all nodes in the cluster.",
+    "tags": [
+      "infrastructure",
+      "monitoring",
+      "kubernetes",
+      "prometheus"
+    ],
+    "panels": [
+      {
+        "id": 1,
+        "title": "Panel 1: Metric 1",
+        "type": "timeseries",
+        "gridPos": {
+          "x": 0,
+          "y": 0,
+          "w": 4,
+          "h": 8
+        },
+        "targets": [
+          {
+            "expr": "some_metric_1 {instance=~\".*\"}",
+            "legendFormat": "{{instance}} - Metric 1",
+            "refId": "A"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "percent",
+            "thresholds": {
+              "mode": "percentage",
+              "steps": [
+                {
+                  "color": "green",
+                  "value": null
+                },
+                {
+                  "color": "yellow",
+                  "value": 70
+                },
+                {
+                  "color": "red",
+                  "value": 90
+                }
+              ]
+            }
+          },
+          "overrides": []
+        },
+        "options": {
+          "legend": {
+            "displayMode": "list",
+            "placement": "bottom"
+          },
+          "tooltip": {
+            "mode": "single"
+          }
+        },
+        "description": "This panel shows metric 1 data from the infrastructure monitoring system. This panel shows metric 1 data from the infrastructure monitoring system. This panel shows metric 1 data from the infrastructure monitoring system. "
+      },
+      {
+        "id": 2,
+        "title": "Panel 2: Metric 2",
+        "type": "timeseries",
+        "gridPos": {
+          "x": 4,
+          "y": 0,
+          "w": 4,
+          "h": 8
+        },
+        "targets": [
+          {
+            "expr": "some_metric_2 {instance=~\".*\"}",
+            "legendFormat": "{{instance}} - Metric 2",
+            "refId": "A"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "bytes",
+            "thresholds": {
+              "mode": "percentage",
+              "steps": [
+                {
+                  "color": "green",
+                  "value": null
+                },
+                {
+                  "color": "yellow",
+                  "value": 70
+                },
+                {
+                  "color": "red",
+                  "value": 90
+                }
+              ]
+            }
+          },
+          "overrides": []
+        },
+        "options": {
+          "legend": {
+            "displayMode": "list",
+            "placement": "bottom"
+          },
+          "tooltip": {
+            "mode": "single"
+          }
+        },
+        "description": "This panel shows metric 2 data from the infrastructure monitoring system. This panel shows metric 2 data from the infrastructure monitoring system. This panel shows metric 2 data from the infrastructure monitoring system. "
+      },
+      {
+        "id": 3,
+        "title": "Panel 3: Metric 3",
+        "type": "stat",
+        "gridPos": {
+          "x": 8,
+          "y": 0,
+          "w": 4,
+          "h": 8
+        },
+        "targets": [
+          {
+            "expr": "some_metric_3 {instance=~\".*\"}",
+            "legendFormat": "{{instance}} - Metric 3",
+            "refId": "A"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "percent",
+            "thresholds": {
+              "mode": "percentage",
+              "steps": [
+                {
+                  "color": "green",
+                  "value": null
+                },
+                {
+                  "color": "yellow",
+                  "value": 70
+                },
+                {
+                  "color": "red",
+                  "value": 90
+                }
+              ]
+            }
+          },
+          "overrides": []
+        },
+        "options": {
+          "legend": {
+            "displayMode": "list",
+            "placement": "bottom"
+          },
+          "tooltip": {
+            "mode": "single"
+          }
+        },
+        "description": "This panel shows metric 3 data from the infrastructure monitoring system. This panel shows metric 3 data from the infrastructure monitoring system. This panel shows metric 3 data from the infrastructure monitoring system. "
+      },
+      {
+        "id": 4,
+        "title": "Panel 4: Metric 4",
+        "type": "timeseries",
+        "gridPos": {
+          "x": 12,
+          "y": 0,
+          "w": 4,
+          "h": 8
+        },
+        "targets": [
+          {
+            "expr": "some_metric_4 {instance=~\".*\"}",
+            "legendFormat": "{{instance}} - Metric 4",
+            "refId": "A"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "bytes",
+            "thresholds": {
+              "mode": "percentage",
+              "steps": [
+                {
+                  "color": "green",
+                  "value": null
+                },
+                {
+                  "color": "yellow",
+                  "value": 70
+                },
+                {
+                  "color": "red",
+                  "value": 90
+                }
+              ]
+            }
+          },
+          "overrides": []
+        },
+        "options": {
+          "legend": {
+            "displayMode": "list",
+            "placement": "bottom"
+          },
+          "tooltip": {
+            "mode": "single"
+          }
+        },
+        "description": "This panel shows metric 4 data from the infrastructure monitoring system. This panel shows metric 4 data from the infrastructure monitoring system. This panel shows metric 4 data from the infrastructure monitoring system. "
+      },
+      {
+        "id": 5,
+        "title": "Panel 5: Metric 5",
+        "type": "timeseries",
+        "gridPos": {
+          "x": 16,
+          "y": 0,
+          "w": 4,
+          "h": 8
+        },
+        "targets": [
+          {
+            "expr": "some_metric_5 {instance=~\".*\"}",
+            "legendFormat": "{{instance}} - Metric 5",
+            "refId": "A"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "percent",
+            "thresholds": {
+              "mode": "percentage",
+              "steps": [
+                {
+                  "color": "green",
+                  "value": null
+                },
+                {
+                  "color": "yellow",
+                  "value": 70
+                },
+                {
+                  "color": "red",
+                  "value": 90
+                }
+              ]
+            }
+          },
+          "overrides": []
+        },
+        "options": {
+          "legend": {
+            "displayMode": "list",
+            "placement": "bottom"
+          },
+          "tooltip": {
+            "mode": "single"
+          }
+        },
+        "description": "This panel shows metric 5 data from the infrastructure monitoring system. This panel shows metric 5 data from the infrastructure monitoring system. This panel shows metric 5 data from the infrastructure monitoring system. "
+      },
+      {
+        "id": 6,
+        "title": "Panel 6: Metric 6",
+        "type": "stat",
+        "gridPos": {
+          "x": 20,
+          "y": 0,
+          "w": 4,
+          "h": 8
+        },
+        "targets": [
+          {
+            "expr": "some_metric_6 {instance=~\".*\"}",
+            "legendFormat": "{{instance}} - Metric 6",
+            "refId": "A"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "bytes",
+            "thresholds": {
+              "mode": "percentage",
+              "steps": [
+                {
+                  "color": "green",
+                  "value": null
+                },
+                {
+                  "color": "yellow",
+                  "value": 70
+                },
+                {
+                  "color": "red",
+                  "value": 90
+                }
+              ]
+            }
+          },
+          "overrides": []
+        },
+        "options": {
+          "legend": {
+            "displayMode": "list",
+            "placement": "bottom"
+          },
+          "tooltip": {
+            "mode": "single"
+          }
+        },
+        "description": "This panel shows metric 6 data from the infrastructure monitoring system. This panel shows metric 6 data from the infrastructure monitoring system. This panel shows metric 6 data from the infrastructure monitoring system. "
+      },
+      {
+        "id": 7,
+        "title": "Panel 7: Metric 7",
+        "type": "timeseries",
+        "gridPos": {
+          "x": 0,
+          "y": 8,
+          "w": 4,
+          "h": 8
+        },
+        "targets": [
+          {
+            "expr": "some_metric_7 {instance=~\".*\"}",
+            "legendFormat": "{{instance}} - Metric 7",
+            "refId": "A"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "percent",
+            "thresholds": {
+              "mode": "percentage",
+              "steps": [
+                {
+                  "color": "green",
+                  "value": null
+                },
+                {
+                  "color": "yellow",
+                  "value": 70
+                },
+                {
+                  "color": "red",
+                  "value": 90
+                }
+              ]
+            }
+          },
+          "overrides": []
+        },
+        "options": {
+          "legend": {
+            "displayMode": "list",
+            "placement": "bottom"
+          },
+          "tooltip": {
+            "mode": "single"
+          }
+        },
+        "description": "This panel shows metric 7 data from the infrastructure monitoring system. This panel shows metric 7 data from the infrastructure monitoring system. This panel shows metric 7 data from the infrastructure monitoring system. "
+      },
+      {
+        "id": 8,
+        "title": "Panel 8: Metric 8",
+        "type": "timeseries",
+        "gridPos": {
+          "x": 4,
+          "y": 8,
+          "w": 4,
+          "h": 8
+        },
+        "targets": [
+          {
+            "expr": "some_metric_8 {instance=~\".*\"}",
+            "legendFormat": "{{instance}} - Metric 8",
+            "refId": "A"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "bytes",
+            "thresholds": {
+              "mode": "percentage",
+              "steps": [
+                {
+                  "color": "green",
+                  "value": null
+                },
+                {
+                  "color": "yellow",
+                  "value": 70
+                },
+                {
+                  "color": "red",
+                  "value": 90
+                }
+              ]
+            }
+          },
+          "overrides": []
+        },
+        "options": {
+          "legend": {
+            "displayMode": "list",
+            "placement": "bottom"
+          },
+          "tooltip": {
+            "mode": "single"
+          }
+        },
+        "description": "This panel shows metric 8 data from the infrastructure monitoring system. This panel shows metric 8 data from the infrastructure monitoring system. This panel shows metric 8 data from the infrastructure monitoring system. "
+      },
+      {
+        "id": 9,
+        "title": "Panel 9: Metric 9",
+        "type": "stat",
+        "gridPos": {
+          "x": 8,
+          "y": 8,
+          "w": 4,
+          "h": 8
+        },
+        "targets": [
+          {
+            "expr": "some_metric_9 {instance=~\".*\"}",
+            "legendFormat": "{{instance}} - Metric 9",
+            "refId": "A"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "percent",
+            "thresholds": {
+              "mode": "percentage",
+              "steps": [
+                {
+                  "color": "green",
+                  "value": null
+                },
+                {
+                  "color": "yellow",
+                  "value": 70
+                },
+                {
+                  "color": "red",
+                  "value": 90
+                }
+              ]
+            }
+          },
+          "overrides": []
+        },
+        "options": {
+          "legend": {
+            "displayMode": "list",
+            "placement": "bottom"
+          },
+          "tooltip": {
+            "mode": "single"
+          }
+        },
+        "description": "This panel shows metric 9 data from the infrastructure monitoring system. This panel shows metric 9 data from the infrastructure monitoring system. This panel shows metric 9 data from the infrastructure monitoring system. "
+      },
+      {
+        "id": 10,
+        "title": "Panel 10: Metric 10",
+        "type": "timeseries",
+        "gridPos": {
+          "x": 12,
+          "y": 8,
+          "w": 4,
+          "h": 8
+        },
+        "targets": [
+          {
+            "expr": "some_metric_10 {instance=~\".*\"}",
+            "legendFormat": "{{instance}} - Metric 10",
+            "refId": "A"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "bytes",
+            "thresholds": {
+              "mode": "percentage",
+              "steps": [
+                {
+                  "color": "green",
+                  "value": null
+                },
+                {
+                  "color": "yellow",
+                  "value": 70
+                },
+                {
+                  "color": "red",
+                  "value": 90
+                }
+              ]
+            }
+          },
+          "overrides": []
+        },
+        "options": {
+          "legend": {
+            "displayMode": "list",
+            "placement": "bottom"
+          },
+          "tooltip": {
+            "mode": "single"
+          }
+        },
+        "description": "This panel shows metric 10 data from the infrastructure monitoring system. This panel shows metric 10 data from the infrastructure monitoring system. This panel shows metric 10 data from the infrastructure monitoring system. "
+      },
+      {
+        "id": 11,
+        "title": "Panel 11: Metric 11",
+        "type": "timeseries",
+        "gridPos": {
+          "x": 16,
+          "y": 8,
+          "w": 4,
+          "h": 8
+        },
+        "targets": [
+          {
+            "expr": "some_metric_11 {instance=~\".*\"}",
+            "legendFormat": "{{instance}} - Metric 11",
+            "refId": "A"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "percent",
+            "thresholds": {
+              "mode": "percentage",
+              "steps": [
+                {
+                  "color": "green",
+                  "value": null
+                },
+                {
+                  "color": "yellow",
+                  "value": 70
+                },
+                {
+                  "color": "red",
+                  "value": 90
+                }
+              ]
+            }
+          },
+          "overrides": []
+        },
+        "options": {
+          "legend": {
+            "displayMode": "list",
+            "placement": "bottom"
+          },
+          "tooltip": {
+            "mode": "single"
+          }
+        },
+        "description": "This panel shows metric 11 data from the infrastructure monitoring system. This panel shows metric 11 data from the infrastructure monitoring system. This panel shows metric 11 data from the infrastructure monitoring system. "
+      },
+      {
+        "id": 12,
+        "title": "Panel 12: Metric 12",
+        "type": "stat",
+        "gridPos": {
+          "x": 20,
+          "y": 8,
+          "w": 4,
+          "h": 8
+        },
+        "targets": [
+          {
+            "expr": "some_metric_12 {instance=~\".*\"}",
+            "legendFormat": "{{instance}} - Metric 12",
+            "refId": "A"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "bytes",
+            "thresholds": {
+              "mode": "percentage",
+              "steps": [
+                {
+                  "color": "green",
+                  "value": null
+                },
+                {
+                  "color": "yellow",
+                  "value": 70
+                },
+                {
+                  "color": "red",
+                  "value": 90
+                }
+              ]
+            }
+          },
+          "overrides": []
+        },
+        "options": {
+          "legend": {
+            "displayMode": "list",
+            "placement": "bottom"
+          },
+          "tooltip": {
+            "mode": "single"
+          }
+        },
+        "description": "This panel shows metric 12 data from the infrastructure monitoring system. This panel shows metric 12 data from the infrastructure monitoring system. This panel shows metric 12 data from the infrastructure monitoring system. "
+      },
+      {
+        "id": 13,
+        "title": "Panel 13: Metric 13",
+        "type": "timeseries",
+        "gridPos": {
+          "x": 0,
+          "y": 16,
+          "w": 4,
+          "h": 8
+        },
+        "targets": [
+          {
+            "expr": "some_metric_13 {instance=~\".*\"}",
+            "legendFormat": "{{instance}} - Metric 13",
+            "refId": "A"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "percent",
+            "thresholds": {
+              "mode": "percentage",
+              "steps": [
+                {
+                  "color": "green",
+                  "value": null
+                },
+                {
+                  "color": "yellow",
+                  "value": 70
+                },
+                {
+                  "color": "red",
+                  "value": 90
+                }
+              ]
+            }
+          },
+          "overrides": []
+        },
+        "options": {
+          "legend": {
+            "displayMode": "list",
+            "placement": "bottom"
+          },
+          "tooltip": {
+            "mode": "single"
+          }
+        },
+        "description": "This panel shows metric 13 data from the infrastructure monitoring system. This panel shows metric 13 data from the infrastructure monitoring system. This panel shows metric 13 data from the infrastructure monitoring system. "
+      },
+      {
+        "id": 14,
+        "title": "Panel 14: Metric 14",
+        "type": "timeseries",
+        "gridPos": {
+          "x": 4,
+          "y": 16,
+          "w": 4,
+          "h": 8
+        },
+        "targets": [
+          {
+            "expr": "some_metric_14 {instance=~\".*\"}",
+            "legendFormat": "{{instance}} - Metric 14",
+            "refId": "A"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "bytes",
+            "thresholds": {
+              "mode": "percentage",
+              "steps": [
+                {
+                  "color": "green",
+                  "value": null
+                },
+                {
+                  "color": "yellow",
+                  "value": 70
+                },
+                {
+                  "color": "red",
+                  "value": 90
+                }
+              ]
+            }
+          },
+          "overrides": []
+        },
+        "options": {
+          "legend": {
+            "displayMode": "list",
+            "placement": "bottom"
+          },
+          "tooltip": {
+            "mode": "single"
+          }
+        },
+        "description": "This panel shows metric 14 data from the infrastructure monitoring system. This panel shows metric 14 data from the infrastructure monitoring system. This panel shows metric 14 data from the infrastructure monitoring system. "
+      },
+      {
+        "id": 15,
+        "title": "Panel 15: Metric 15",
+        "type": "stat",
+        "gridPos": {
+          "x": 8,
+          "y": 16,
+          "w": 4,
+          "h": 8
+        },
+        "targets": [
+          {
+            "expr": "some_metric_15 {instance=~\".*\"}",
+            "legendFormat": "{{instance}} - Metric 15",
+            "refId": "A"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "percent",
+            "thresholds": {
+              "mode": "percentage",
+              "steps": [
+                {
+                  "color": "green",
+                  "value": null
+                },
+                {
+                  "color": "yellow",
+                  "value": 70
+                },
+                {
+                  "color": "red",
+                  "value": 90
+                }
+              ]
+            }
+          },
+          "overrides": []
+        },
+        "options": {
+          "legend": {
+            "displayMode": "list",
+            "placement": "bottom"
+          },
+          "tooltip": {
+            "mode": "single"
+          }
+        },
+        "description": "This panel shows metric 15 data from the infrastructure monitoring system. This panel shows metric 15 data from the infrastructure monitoring system. This panel shows metric 15 data from the infrastructure monitoring system. "
+      },
+      {
+        "id": 16,
+        "title": "Panel 16: Metric 16",
+        "type": "timeseries",
+        "gridPos": {
+          "x": 12,
+          "y": 16,
+          "w": 4,
+          "h": 8
+        },
+        "targets": [
+          {
+            "expr": "some_metric_16 {instance=~\".*\"}",
+            "legendFormat": "{{instance}} - Metric 16",
+            "refId": "A"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "bytes",
+            "thresholds": {
+              "mode": "percentage",
+              "steps": [
+                {
+                  "color": "green",
+                  "value": null
+                },
+                {
+                  "color": "yellow",
+                  "value": 70
+                },
+                {
+                  "color": "red",
+                  "value": 90
+                }
+              ]
+            }
+          },
+          "overrides": []
+        },
+        "options": {
+          "legend": {
+            "displayMode": "list",
+            "placement": "bottom"
+          },
+          "tooltip": {
+            "mode": "single"
+          }
+        },
+        "description": "This panel shows metric 16 data from the infrastructure monitoring system. This panel shows metric 16 data from the infrastructure monitoring system. This panel shows metric 16 data from the infrastructure monitoring system. "
+      },
+      {
+        "id": 17,
+        "title": "Panel 17: Metric 17",
+        "type": "timeseries",
+        "gridPos": {
+          "x": 16,
+          "y": 16,
+          "w": 4,
+          "h": 8
+        },
+        "targets": [
+          {
+            "expr": "some_metric_17 {instance=~\".*\"}",
+            "legendFormat": "{{instance}} - Metric 17",
+            "refId": "A"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "percent",
+            "thresholds": {
+              "mode": "percentage",
+              "steps": [
+                {
+                  "color": "green",
+                  "value": null
+                },
+                {
+                  "color": "yellow",
+                  "value": 70
+                },
+                {
+                  "color": "red",
+                  "value": 90
+                }
+              ]
+            }
+          },
+          "overrides": []
+        },
+        "options": {
+          "legend": {
+            "displayMode": "list",
+            "placement": "bottom"
+          },
+          "tooltip": {
+            "mode": "single"
+          }
+        },
+        "description": "This panel shows metric 17 data from the infrastructure monitoring system. This panel shows metric 17 data from the infrastructure monitoring system. This panel shows metric 17 data from the infrastructure monitoring system. "
+      },
+      {
+        "id": 18,
+        "title": "Panel 18: Metric 18",
+        "type": "stat",
+        "gridPos": {
+          "x": 20,
+          "y": 16,
+          "w": 4,
+          "h": 8
+        },
+        "targets": [
+          {
+            "expr": "some_metric_18 {instance=~\".*\"}",
+            "legendFormat": "{{instance}} - Metric 18",
+            "refId": "A"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "bytes",
+            "thresholds": {
+              "mode": "percentage",
+              "steps": [
+                {
+                  "color": "green",
+                  "value": null
+                },
+                {
+                  "color": "yellow",
+                  "value": 70
+                },
+                {
+                  "color": "red",
+                  "value": 90
+                }
+              ]
+            }
+          },
+          "overrides": []
+        },
+        "options": {
+          "legend": {
+            "displayMode": "list",
+            "placement": "bottom"
+          },
+          "tooltip": {
+            "mode": "single"
+          }
+        },
+        "description": "This panel shows metric 18 data from the infrastructure monitoring system. This panel shows metric 18 data from the infrastructure monitoring system. This panel shows metric 18 data from the infrastructure monitoring system. "
+      },
+      {
+        "id": 19,
+        "title": "Panel 19: Metric 19",
+        "type": "timeseries",
+        "gridPos": {
+          "x": 0,
+          "y": 24,
+          "w": 4,
+          "h": 8
+        },
+        "targets": [
+          {
+            "expr": "some_metric_19 {instance=~\".*\"}",
+            "legendFormat": "{{instance}} - Metric 19",
+            "refId": "A"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "percent",
+            "thresholds": {
+              "mode": "percentage",
+              "steps": [
+                {
+                  "color": "green",
+                  "value": null
+                },
+                {
+                  "color": "yellow",
+                  "value": 70
+                },
+                {
+                  "color": "red",
+                  "value": 90
+                }
+              ]
+            }
+          },
+          "overrides": []
+        },
+        "options": {
+          "legend": {
+            "displayMode": "list",
+            "placement": "bottom"
+          },
+          "tooltip": {
+            "mode": "single"
+          }
+        },
+        "description": "This panel shows metric 19 data from the infrastructure monitoring system. This panel shows metric 19 data from the infrastructure monitoring system. This panel shows metric 19 data from the infrastructure monitoring system. "
+      },
+      {
+        "id": 20,
+        "title": "Panel 20: Metric 20",
+        "type": "timeseries",
+        "gridPos": {
+          "x": 4,
+          "y": 24,
+          "w": 4,
+          "h": 8
+        },
+        "targets": [
+          {
+            "expr": "some_metric_20 {instance=~\".*\"}",
+            "legendFormat": "{{instance}} - Metric 20",
+            "refId": "A"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "bytes",
+            "thresholds": {
+              "mode": "percentage",
+              "steps": [
+                {
+                  "color": "green",
+                  "value": null
+                },
+                {
+                  "color": "yellow",
+                  "value": 70
+                },
+                {
+                  "color": "red",
+                  "value": 90
+                }
+              ]
+            }
+          },
+          "overrides": []
+        },
+        "options": {
+          "legend": {
+            "displayMode": "list",
+            "placement": "bottom"
+          },
+          "tooltip": {
+            "mode": "single"
+          }
+        },
+        "description": "This panel shows metric 20 data from the infrastructure monitoring system. This panel shows metric 20 data from the infrastructure monitoring system. This panel shows metric 20 data from the infrastructure monitoring system. "
+      },
+      {
+        "id": 21,
+        "title": "Panel 21: Metric 21",
+        "type": "stat",
+        "gridPos": {
+          "x": 8,
+          "y": 24,
+          "w": 4,
+          "h": 8
+        },
+        "targets": [
+          {
+            "expr": "some_metric_21 {instance=~\".*\"}",
+            "legendFormat": "{{instance}} - Metric 21",
+            "refId": "A"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "percent",
+            "thresholds": {
+              "mode": "percentage",
+              "steps": [
+                {
+                  "color": "green",
+                  "value": null
+                },
+                {
+                  "color": "yellow",
+                  "value": 70
+                },
+                {
+                  "color": "red",
+                  "value": 90
+                }
+              ]
+            }
+          },
+          "overrides": []
+        },
+        "options": {
+          "legend": {
+            "displayMode": "list",
+            "placement": "bottom"
+          },
+          "tooltip": {
+            "mode": "single"
+          }
+        },
+        "description": "This panel shows metric 21 data from the infrastructure monitoring system. This panel shows metric 21 data from the infrastructure monitoring system. This panel shows metric 21 data from the infrastructure monitoring system. "
+      },
+      {
+        "id": 22,
+        "title": "Panel 22: Metric 22",
+        "type": "timeseries",
+        "gridPos": {
+          "x": 12,
+          "y": 24,
+          "w": 4,
+          "h": 8
+        },
+        "targets": [
+          {
+            "expr": "some_metric_22 {instance=~\".*\"}",
+            "legendFormat": "{{instance}} - Metric 22",
+            "refId": "A"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "bytes",
+            "thresholds": {
+              "mode": "percentage",
+              "steps": [
+                {
+                  "color": "green",
+                  "value": null
+                },
+                {
+                  "color": "yellow",
+                  "value": 70
+                },
+                {
+                  "color": "red",
+                  "value": 90
+                }
+              ]
+            }
+          },
+          "overrides": []
+        },
+        "options": {
+          "legend": {
+            "displayMode": "list",
+            "placement": "bottom"
+          },
+          "tooltip": {
+            "mode": "single"
+          }
+        },
+        "description": "This panel shows metric 22 data from the infrastructure monitoring system. This panel shows metric 22 data from the infrastructure monitoring system. This panel shows metric 22 data from the infrastructure monitoring system. "
+      },
+      {
+        "id": 23,
+        "title": "Panel 23: Metric 23",
+        "type": "timeseries",
+        "gridPos": {
+          "x": 16,
+          "y": 24,
+          "w": 4,
+          "h": 8
+        },
+        "targets": [
+          {
+            "expr": "some_metric_23 {instance=~\".*\"}",
+            "legendFormat": "{{instance}} - Metric 23",
+            "refId": "A"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "percent",
+            "thresholds": {
+              "mode": "percentage",
+              "steps": [
+                {
+                  "color": "green",
+                  "value": null
+                },
+                {
+                  "color": "yellow",
+                  "value": 70
+                },
+                {
+                  "color": "red",
+                  "value": 90
+                }
+              ]
+            }
+          },
+          "overrides": []
+        },
+        "options": {
+          "legend": {
+            "displayMode": "list",
+            "placement": "bottom"
+          },
+          "tooltip": {
+            "mode": "single"
+          }
+        },
+        "description": "This panel shows metric 23 data from the infrastructure monitoring system. This panel shows metric 23 data from the infrastructure monitoring system. This panel shows metric 23 data from the infrastructure monitoring system. "
+      },
+      {
+        "id": 24,
+        "title": "Panel 24: Metric 24",
+        "type": "stat",
+        "gridPos": {
+          "x": 20,
+          "y": 24,
+          "w": 4,
+          "h": 8
+        },
+        "targets": [
+          {
+            "expr": "some_metric_24 {instance=~\".*\"}",
+            "legendFormat": "{{instance}} - Metric 24",
+            "refId": "A"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "bytes",
+            "thresholds": {
+              "mode": "percentage",
+              "steps": [
+                {
+                  "color": "green",
+                  "value": null
+                },
+                {
+                  "color": "yellow",
+                  "value": 70
+                },
+                {
+                  "color": "red",
+                  "value": 90
+                }
+              ]
+            }
+          },
+          "overrides": []
+        },
+        "options": {
+          "legend": {
+            "displayMode": "list",
+            "placement": "bottom"
+          },
+          "tooltip": {
+            "mode": "single"
+          }
+        },
+        "description": "This panel shows metric 24 data from the infrastructure monitoring system. This panel shows metric 24 data from the infrastructure monitoring system. This panel shows metric 24 data from the infrastructure monitoring system. "
+      },
+      {
+        "id": 25,
+        "title": "Panel 25: Metric 25",
+        "type": "timeseries",
+        "gridPos": {
+          "x": 0,
+          "y": 32,
+          "w": 4,
+          "h": 8
+        },
+        "targets": [
+          {
+            "expr": "some_metric_25 {instance=~\".*\"}",
+            "legendFormat": "{{instance}} - Metric 25",
+            "refId": "A"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "percent",
+            "thresholds": {
+              "mode": "percentage",
+              "steps": [
+                {
+                  "color": "green",
+                  "value": null
+                },
+                {
+                  "color": "yellow",
+                  "value": 70
+                },
+                {
+                  "color": "red",
+                  "value": 90
+                }
+              ]
+            }
+          },
+          "overrides": []
+        },
+        "options": {
+          "legend": {
+            "displayMode": "list",
+            "placement": "bottom"
+          },
+          "tooltip": {
+            "mode": "single"
+          }
+        },
+        "description": "This panel shows metric 25 data from the infrastructure monitoring system. This panel shows metric 25 data from the infrastructure monitoring system. This panel shows metric 25 data from the infrastructure monitoring system. "
+      },
+      {
+        "id": 26,
+        "title": "Panel 26: Metric 26",
+        "type": "timeseries",
+        "gridPos": {
+          "x": 4,
+          "y": 32,
+          "w": 4,
+          "h": 8
+        },
+        "targets": [
+          {
+            "expr": "some_metric_26 {instance=~\".*\"}",
+            "legendFormat": "{{instance}} - Metric 26",
+            "refId": "A"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "bytes",
+            "thresholds": {
+              "mode": "percentage",
+              "steps": [
+                {
+                  "color": "green",
+                  "value": null
+                },
+                {
+                  "color": "yellow",
+                  "value": 70
+                },
+                {
+                  "color": "red",
+                  "value": 90
+                }
+              ]
+            }
+          },
+          "overrides": []
+        },
+        "options": {
+          "legend": {
+            "displayMode": "list",
+            "placement": "bottom"
+          },
+          "tooltip": {
+            "mode": "single"
+          }
+        },
+        "description": "This panel shows metric 26 data from the infrastructure monitoring system. This panel shows metric 26 data from the infrastructure monitoring system. This panel shows metric 26 data from the infrastructure monitoring system. "
+      },
+      {
+        "id": 27,
+        "title": "Panel 27: Metric 27",
+        "type": "stat",
+        "gridPos": {
+          "x": 8,
+          "y": 32,
+          "w": 4,
+          "h": 8
+        },
+        "targets": [
+          {
+            "expr": "some_metric_27 {instance=~\".*\"}",
+            "legendFormat": "{{instance}} - Metric 27",
+            "refId": "A"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "percent",
+            "thresholds": {
+              "mode": "percentage",
+              "steps": [
+                {
+                  "color": "green",
+                  "value": null
+                },
+                {
+                  "color": "yellow",
+                  "value": 70
+                },
+                {
+                  "color": "red",
+                  "value": 90
+                }
+              ]
+            }
+          },
+          "overrides": []
+        },
+        "options": {
+          "legend": {
+            "displayMode": "list",
+            "placement": "bottom"
+          },
+          "tooltip": {
+            "mode": "single"
+          }
+        },
+        "description": "This panel shows metric 27 data from the infrastructure monitoring system. This panel shows metric 27 data from the infrastructure monitoring system. This panel shows metric 27 data from the infrastructure monitoring system. "
+      },
+      {
+        "id": 28,
+        "title": "Panel 28: Metric 28",
+        "type": "timeseries",
+        "gridPos": {
+          "x": 12,
+          "y": 32,
+          "w": 4,
+          "h": 8
+        },
+        "targets": [
+          {
+            "expr": "some_metric_28 {instance=~\".*\"}",
+            "legendFormat": "{{instance}} - Metric 28",
+            "refId": "A"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "bytes",
+            "thresholds": {
+              "mode": "percentage",
+              "steps": [
+                {
+                  "color": "green",
+                  "value": null
+                },
+                {
+                  "color": "yellow",
+                  "value": 70
+                },
+                {
+                  "color": "red",
+                  "value": 90
+                }
+              ]
+            }
+          },
+          "overrides": []
+        },
+        "options": {
+          "legend": {
+            "displayMode": "list",
+            "placement": "bottom"
+          },
+          "tooltip": {
+            "mode": "single"
+          }
+        },
+        "description": "This panel shows metric 28 data from the infrastructure monitoring system. This panel shows metric 28 data from the infrastructure monitoring system. This panel shows metric 28 data from the infrastructure monitoring system. "
+      },
+      {
+        "id": 29,
+        "title": "Panel 29: Metric 29",
+        "type": "timeseries",
+        "gridPos": {
+          "x": 16,
+          "y": 32,
+          "w": 4,
+          "h": 8
+        },
+        "targets": [
+          {
+            "expr": "some_metric_29 {instance=~\".*\"}",
+            "legendFormat": "{{instance}} - Metric 29",
+            "refId": "A"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "percent",
+            "thresholds": {
+              "mode": "percentage",
+              "steps": [
+                {
+                  "color": "green",
+                  "value": null
+                },
+                {
+                  "color": "yellow",
+                  "value": 70
+                },
+                {
+                  "color": "red",
+                  "value": 90
+                }
+              ]
+            }
+          },
+          "overrides": []
+        },
+        "options": {
+          "legend": {
+            "displayMode": "list",
+            "placement": "bottom"
+          },
+          "tooltip": {
+            "mode": "single"
+          }
+        },
+        "description": "This panel shows metric 29 data from the infrastructure monitoring system. This panel shows metric 29 data from the infrastructure monitoring system. This panel shows metric 29 data from the infrastructure monitoring system. "
+      },
+      {
+        "id": 30,
+        "title": "Panel 30: Metric 30",
+        "type": "stat",
+        "gridPos": {
+          "x": 20,
+          "y": 32,
+          "w": 4,
+          "h": 8
+        },
+        "targets": [
+          {
+            "expr": "some_metric_30 {instance=~\".*\"}",
+            "legendFormat": "{{instance}} - Metric 30",
+            "refId": "A"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "bytes",
+            "thresholds": {
+              "mode": "percentage",
+              "steps": [
+                {
+                  "color": "green",
+                  "value": null
+                },
+                {
+                  "color": "yellow",
+                  "value": 70
+                },
+                {
+                  "color": "red",
+                  "value": 90
+                }
+              ]
+            }
+          },
+          "overrides": []
+        },
+        "options": {
+          "legend": {
+            "displayMode": "list",
+            "placement": "bottom"
+          },
+          "tooltip": {
+            "mode": "single"
+          }
+        },
+        "description": "This panel shows metric 30 data from the infrastructure monitoring system. This panel shows metric 30 data from the infrastructure monitoring system. This panel shows metric 30 data from the infrastructure monitoring system. "
+      },
+      {
+        "id": 31,
+        "title": "Panel 31: Metric 31",
+        "type": "timeseries",
+        "gridPos": {
+          "x": 0,
+          "y": 40,
+          "w": 4,
+          "h": 8
+        },
+        "targets": [
+          {
+            "expr": "some_metric_31 {instance=~\".*\"}",
+            "legendFormat": "{{instance}} - Metric 31",
+            "refId": "A"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "percent",
+            "thresholds": {
+              "mode": "percentage",
+              "steps": [
+                {
+                  "color": "green",
+                  "value": null
+                },
+                {
+                  "color": "yellow",
+                  "value": 70
+                },
+                {
+                  "color": "red",
+                  "value": 90
+                }
+              ]
+            }
+          },
+          "overrides": []
+        },
+        "options": {
+          "legend": {
+            "displayMode": "list",
+            "placement": "bottom"
+          },
+          "tooltip": {
+            "mode": "single"
+          }
+        },
+        "description": "This panel shows metric 31 data from the infrastructure monitoring system. This panel shows metric 31 data from the infrastructure monitoring system. This panel shows metric 31 data from the infrastructure monitoring system. "
+      },
+      {
+        "id": 32,
+        "title": "Panel 32: Metric 32",
+        "type": "timeseries",
+        "gridPos": {
+          "x": 4,
+          "y": 40,
+          "w": 4,
+          "h": 8
+        },
+        "targets": [
+          {
+            "expr": "some_metric_32 {instance=~\".*\"}",
+            "legendFormat": "{{instance}} - Metric 32",
+            "refId": "A"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "bytes",
+            "thresholds": {
+              "mode": "percentage",
+              "steps": [
+                {
+                  "color": "green",
+                  "value": null
+                },
+                {
+                  "color": "yellow",
+                  "value": 70
+                },
+                {
+                  "color": "red",
+                  "value": 90
+                }
+              ]
+            }
+          },
+          "overrides": []
+        },
+        "options": {
+          "legend": {
+            "displayMode": "list",
+            "placement": "bottom"
+          },
+          "tooltip": {
+            "mode": "single"
+          }
+        },
+        "description": "This panel shows metric 32 data from the infrastructure monitoring system. This panel shows metric 32 data from the infrastructure monitoring system. This panel shows metric 32 data from the infrastructure monitoring system. "
+      },
+      {
+        "id": 33,
+        "title": "Panel 33: Metric 33",
+        "type": "stat",
+        "gridPos": {
+          "x": 8,
+          "y": 40,
+          "w": 4,
+          "h": 8
+        },
+        "targets": [
+          {
+            "expr": "some_metric_33 {instance=~\".*\"}",
+            "legendFormat": "{{instance}} - Metric 33",
+            "refId": "A"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "percent",
+            "thresholds": {
+              "mode": "percentage",
+              "steps": [
+                {
+                  "color": "green",
+                  "value": null
+                },
+                {
+                  "color": "yellow",
+                  "value": 70
+                },
+                {
+                  "color": "red",
+                  "value": 90
+                }
+              ]
+            }
+          },
+          "overrides": []
+        },
+        "options": {
+          "legend": {
+            "displayMode": "list",
+            "placement": "bottom"
+          },
+          "tooltip": {
+            "mode": "single"
+          }
+        },
+        "description": "This panel shows metric 33 data from the infrastructure monitoring system. This panel shows metric 33 data from the infrastructure monitoring system. This panel shows metric 33 data from the infrastructure monitoring system. "
+      },
+      {
+        "id": 34,
+        "title": "Panel 34: Metric 34",
+        "type": "timeseries",
+        "gridPos": {
+          "x": 12,
+          "y": 40,
+          "w": 4,
+          "h": 8
+        },
+        "targets": [
+          {
+            "expr": "some_metric_34 {instance=~\".*\"}",
+            "legendFormat": "{{instance}} - Metric 34",
+            "refId": "A"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "bytes",
+            "thresholds": {
+              "mode": "percentage",
+              "steps": [
+                {
+                  "color": "green",
+                  "value": null
+                },
+                {
+                  "color": "yellow",
+                  "value": 70
+                },
+                {
+                  "color": "red",
+                  "value": 90
+                }
+              ]
+            }
+          },
+          "overrides": []
+        },
+        "options": {
+          "legend": {
+            "displayMode": "list",
+            "placement": "bottom"
+          },
+          "tooltip": {
+            "mode": "single"
+          }
+        },
+        "description": "This panel shows metric 34 data from the infrastructure monitoring system. This panel shows metric 34 data from the infrastructure monitoring system. This panel shows metric 34 data from the infrastructure monitoring system. "
+      },
+      {
+        "id": 35,
+        "title": "Panel 35: Metric 35",
+        "type": "timeseries",
+        "gridPos": {
+          "x": 16,
+          "y": 40,
+          "w": 4,
+          "h": 8
+        },
+        "targets": [
+          {
+            "expr": "some_metric_35 {instance=~\".*\"}",
+            "legendFormat": "{{instance}} - Metric 35",
+            "refId": "A"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "percent",
+            "thresholds": {
+              "mode": "percentage",
+              "steps": [
+                {
+                  "color": "green",
+                  "value": null
+                },
+                {
+                  "color": "yellow",
+                  "value": 70
+                },
+                {
+                  "color": "red",
+                  "value": 90
+                }
+              ]
+            }
+          },
+          "overrides": []
+        },
+        "options": {
+          "legend": {
+            "displayMode": "list",
+            "placement": "bottom"
+          },
+          "tooltip": {
+            "mode": "single"
+          }
+        },
+        "description": "This panel shows metric 35 data from the infrastructure monitoring system. This panel shows metric 35 data from the infrastructure monitoring system. This panel shows metric 35 data from the infrastructure monitoring system. "
+      },
+      {
+        "id": 36,
+        "title": "Panel 36: Metric 36",
+        "type": "stat",
+        "gridPos": {
+          "x": 20,
+          "y": 40,
+          "w": 4,
+          "h": 8
+        },
+        "targets": [
+          {
+            "expr": "some_metric_36 {instance=~\".*\"}",
+            "legendFormat": "{{instance}} - Metric 36",
+            "refId": "A"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "bytes",
+            "thresholds": {
+              "mode": "percentage",
+              "steps": [
+                {
+                  "color": "green",
+                  "value": null
+                },
+                {
+                  "color": "yellow",
+                  "value": 70
+                },
+                {
+                  "color": "red",
+                  "value": 90
+                }
+              ]
+            }
+          },
+          "overrides": []
+        },
+        "options": {
+          "legend": {
+            "displayMode": "list",
+            "placement": "bottom"
+          },
+          "tooltip": {
+            "mode": "single"
+          }
+        },
+        "description": "This panel shows metric 36 data from the infrastructure monitoring system. This panel shows metric 36 data from the infrastructure monitoring system. This panel shows metric 36 data from the infrastructure monitoring system. "
+      },
+      {
+        "id": 37,
+        "title": "Panel 37: Metric 37",
+        "type": "timeseries",
+        "gridPos": {
+          "x": 0,
+          "y": 48,
+          "w": 4,
+          "h": 8
+        },
+        "targets": [
+          {
+            "expr": "some_metric_37 {instance=~\".*\"}",
+            "legendFormat": "{{instance}} - Metric 37",
+            "refId": "A"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "percent",
+            "thresholds": {
+              "mode": "percentage",
+              "steps": [
+                {
+                  "color": "green",
+                  "value": null
+                },
+                {
+                  "color": "yellow",
+                  "value": 70
+                },
+                {
+                  "color": "red",
+                  "value": 90
+                }
+              ]
+            }
+          },
+          "overrides": []
+        },
+        "options": {
+          "legend": {
+            "displayMode": "list",
+            "placement": "bottom"
+          },
+          "tooltip": {
+            "mode": "single"
+          }
+        },
+        "description": "This panel shows metric 37 data from the infrastructure monitoring system. This panel shows metric 37 data from the infrastructure monitoring system. This panel shows metric 37 data from the infrastructure monitoring system. "
+      },
+      {
+        "id": 38,
+        "title": "Panel 38: Metric 38",
+        "type": "timeseries",
+        "gridPos": {
+          "x": 4,
+          "y": 48,
+          "w": 4,
+          "h": 8
+        },
+        "targets": [
+          {
+            "expr": "some_metric_38 {instance=~\".*\"}",
+            "legendFormat": "{{instance}} - Metric 38",
+            "refId": "A"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "bytes",
+            "thresholds": {
+              "mode": "percentage",
+              "steps": [
+                {
+                  "color": "green",
+                  "value": null
+                },
+                {
+                  "color": "yellow",
+                  "value": 70
+                },
+                {
+                  "color": "red",
+                  "value": 90
+                }
+              ]
+            }
+          },
+          "overrides": []
+        },
+        "options": {
+          "legend": {
+            "displayMode": "list",
+            "placement": "bottom"
+          },
+          "tooltip": {
+            "mode": "single"
+          }
+        },
+        "description": "This panel shows metric 38 data from the infrastructure monitoring system. This panel shows metric 38 data from the infrastructure monitoring system. This panel shows metric 38 data from the infrastructure monitoring system. "
+      },
+      {
+        "id": 39,
+        "title": "Panel 39: Metric 39",
+        "type": "stat",
+        "gridPos": {
+          "x": 8,
+          "y": 48,
+          "w": 4,
+          "h": 8
+        },
+        "targets": [
+          {
+            "expr": "some_metric_39 {instance=~\".*\"}",
+            "legendFormat": "{{instance}} - Metric 39",
+            "refId": "A"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "percent",
+            "thresholds": {
+              "mode": "percentage",
+              "steps": [
+                {
+                  "color": "green",
+                  "value": null
+                },
+                {
+                  "color": "yellow",
+                  "value": 70
+                },
+                {
+                  "color": "red",
+                  "value": 90
+                }
+              ]
+            }
+          },
+          "overrides": []
+        },
+        "options": {
+          "legend": {
+            "displayMode": "list",
+            "placement": "bottom"
+          },
+          "tooltip": {
+            "mode": "single"
+          }
+        },
+        "description": "This panel shows metric 39 data from the infrastructure monitoring system. This panel shows metric 39 data from the infrastructure monitoring system. This panel shows metric 39 data from the infrastructure monitoring system. "
+      },
+      {
+        "id": 40,
+        "title": "Panel 40: Metric 40",
+        "type": "timeseries",
+        "gridPos": {
+          "x": 12,
+          "y": 48,
+          "w": 4,
+          "h": 8
+        },
+        "targets": [
+          {
+            "expr": "some_metric_40 {instance=~\".*\"}",
+            "legendFormat": "{{instance}} - Metric 40",
+            "refId": "A"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "bytes",
+            "thresholds": {
+              "mode": "percentage",
+              "steps": [
+                {
+                  "color": "green",
+                  "value": null
+                },
+                {
+                  "color": "yellow",
+                  "value": 70
+                },
+                {
+                  "color": "red",
+                  "value": 90
+                }
+              ]
+            }
+          },
+          "overrides": []
+        },
+        "options": {
+          "legend": {
+            "displayMode": "list",
+            "placement": "bottom"
+          },
+          "tooltip": {
+            "mode": "single"
+          }
+        },
+        "description": "This panel shows metric 40 data from the infrastructure monitoring system. This panel shows metric 40 data from the infrastructure monitoring system. This panel shows metric 40 data from the infrastructure monitoring system. "
+      },
+      {
+        "id": 41,
+        "title": "Panel 41: Metric 41",
+        "type": "timeseries",
+        "gridPos": {
+          "x": 16,
+          "y": 48,
+          "w": 4,
+          "h": 8
+        },
+        "targets": [
+          {
+            "expr": "some_metric_41 {instance=~\".*\"}",
+            "legendFormat": "{{instance}} - Metric 41",
+            "refId": "A"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "percent",
+            "thresholds": {
+              "mode": "percentage",
+              "steps": [
+                {
+                  "color": "green",
+                  "value": null
+                },
+                {
+                  "color": "yellow",
+                  "value": 70
+                },
+                {
+                  "color": "red",
+                  "value": 90
+                }
+              ]
+            }
+          },
+          "overrides": []
+        },
+        "options": {
+          "legend": {
+            "displayMode": "list",
+            "placement": "bottom"
+          },
+          "tooltip": {
+            "mode": "single"
+          }
+        },
+        "description": "This panel shows metric 41 data from the infrastructure monitoring system. This panel shows metric 41 data from the infrastructure monitoring system. This panel shows metric 41 data from the infrastructure monitoring system. "
+      },
+      {
+        "id": 42,
+        "title": "Panel 42: Memory Pressure",
+        "type": "stat",
+        "gridPos": {
+          "x": 20,
+          "y": 48,
+          "w": 4,
+          "h": 8
+        },
+        "targets": [
+          {
+            "expr": "node_memory_Buffers_bytes {instance=~\".*\"}",
+            "legendFormat": "{{instance}} - Metric 42",
+            "refId": "A"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "bytes",
+            "thresholds": {
+              "mode": "percentage",
+              "steps": [
+                {
+                  "color": "green",
+                  "value": null
+                },
+                {
+                  "color": "yellow",
+                  "value": 70
+                },
+                {
+                  "color": "red",
+                  "value": 90
+                }
+              ]
+            }
+          },
+          "overrides": []
+        },
+        "options": {
+          "legend": {
+            "displayMode": "list",
+            "placement": "bottom"
+          },
+          "tooltip": {
+            "mode": "single"
+          }
+        },
+        "description": "This panel shows metric 42 data from the infrastructure monitoring system. This panel shows metric 42 data from the infrastructure monitoring system. This panel shows metric 42 data from the infrastructure monitoring system. "
+      },
+      {
+        "id": 43,
+        "title": "Panel 43: Metric 43",
+        "type": "timeseries",
+        "gridPos": {
+          "x": 0,
+          "y": 56,
+          "w": 4,
+          "h": 8
+        },
+        "targets": [
+          {
+            "expr": "some_metric_43 {instance=~\".*\"}",
+            "legendFormat": "{{instance}} - Metric 43",
+            "refId": "A"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "percent",
+            "thresholds": {
+              "mode": "percentage",
+              "steps": [
+                {
+                  "color": "green",
+                  "value": null
+                },
+                {
+                  "color": "yellow",
+                  "value": 70
+                },
+                {
+                  "color": "red",
+                  "value": 90
+                }
+              ]
+            }
+          },
+          "overrides": []
+        },
+        "options": {
+          "legend": {
+            "displayMode": "list",
+            "placement": "bottom"
+          },
+          "tooltip": {
+            "mode": "single"
+          }
+        },
+        "description": "This panel shows metric 43 data from the infrastructure monitoring system. This panel shows metric 43 data from the infrastructure monitoring system. This panel shows metric 43 data from the infrastructure monitoring system. "
+      },
+      {
+        "id": 44,
+        "title": "Panel 44: Metric 44",
+        "type": "timeseries",
+        "gridPos": {
+          "x": 4,
+          "y": 56,
+          "w": 4,
+          "h": 8
+        },
+        "targets": [
+          {
+            "expr": "some_metric_44 {instance=~\".*\"}",
+            "legendFormat": "{{instance}} - Metric 44",
+            "refId": "A"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "bytes",
+            "thresholds": {
+              "mode": "percentage",
+              "steps": [
+                {
+                  "color": "green",
+                  "value": null
+                },
+                {
+                  "color": "yellow",
+                  "value": 70
+                },
+                {
+                  "color": "red",
+                  "value": 90
+                }
+              ]
+            }
+          },
+          "overrides": []
+        },
+        "options": {
+          "legend": {
+            "displayMode": "list",
+            "placement": "bottom"
+          },
+          "tooltip": {
+            "mode": "single"
+          }
+        },
+        "description": "This panel shows metric 44 data from the infrastructure monitoring system. This panel shows metric 44 data from the infrastructure monitoring system. This panel shows metric 44 data from the infrastructure monitoring system. "
+      },
+      {
+        "id": 45,
+        "title": "Panel 45: Metric 45",
+        "type": "stat",
+        "gridPos": {
+          "x": 8,
+          "y": 56,
+          "w": 4,
+          "h": 8
+        },
+        "targets": [
+          {
+            "expr": "some_metric_45 {instance=~\".*\"}",
+            "legendFormat": "{{instance}} - Metric 45",
+            "refId": "A"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "percent",
+            "thresholds": {
+              "mode": "percentage",
+              "steps": [
+                {
+                  "color": "green",
+                  "value": null
+                },
+                {
+                  "color": "yellow",
+                  "value": 70
+                },
+                {
+                  "color": "red",
+                  "value": 90
+                }
+              ]
+            }
+          },
+          "overrides": []
+        },
+        "options": {
+          "legend": {
+            "displayMode": "list",
+            "placement": "bottom"
+          },
+          "tooltip": {
+            "mode": "single"
+          }
+        },
+        "description": "This panel shows metric 45 data from the infrastructure monitoring system. This panel shows metric 45 data from the infrastructure monitoring system. This panel shows metric 45 data from the infrastructure monitoring system. "
+      },
+      {
+        "id": 46,
+        "title": "Panel 46: Metric 46",
+        "type": "timeseries",
+        "gridPos": {
+          "x": 12,
+          "y": 56,
+          "w": 4,
+          "h": 8
+        },
+        "targets": [
+          {
+            "expr": "some_metric_46 {instance=~\".*\"}",
+            "legendFormat": "{{instance}} - Metric 46",
+            "refId": "A"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "bytes",
+            "thresholds": {
+              "mode": "percentage",
+              "steps": [
+                {
+                  "color": "green",
+                  "value": null
+                },
+                {
+                  "color": "yellow",
+                  "value": 70
+                },
+                {
+                  "color": "red",
+                  "value": 90
+                }
+              ]
+            }
+          },
+          "overrides": []
+        },
+        "options": {
+          "legend": {
+            "displayMode": "list",
+            "placement": "bottom"
+          },
+          "tooltip": {
+            "mode": "single"
+          }
+        },
+        "description": "This panel shows metric 46 data from the infrastructure monitoring system. This panel shows metric 46 data from the infrastructure monitoring system. This panel shows metric 46 data from the infrastructure monitoring system. "
+      },
+      {
+        "id": 47,
+        "title": "Panel 47: Metric 47",
+        "type": "timeseries",
+        "gridPos": {
+          "x": 16,
+          "y": 56,
+          "w": 4,
+          "h": 8
+        },
+        "targets": [
+          {
+            "expr": "some_metric_47 {instance=~\".*\"}",
+            "legendFormat": "{{instance}} - Metric 47",
+            "refId": "A"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "percent",
+            "thresholds": {
+              "mode": "percentage",
+              "steps": [
+                {
+                  "color": "green",
+                  "value": null
+                },
+                {
+                  "color": "yellow",
+                  "value": 70
+                },
+                {
+                  "color": "red",
+                  "value": 90
+                }
+              ]
+            }
+          },
+          "overrides": []
+        },
+        "options": {
+          "legend": {
+            "displayMode": "list",
+            "placement": "bottom"
+          },
+          "tooltip": {
+            "mode": "single"
+          }
+        },
+        "description": "This panel shows metric 47 data from the infrastructure monitoring system. This panel shows metric 47 data from the infrastructure monitoring system. This panel shows metric 47 data from the infrastructure monitoring system. "
+      },
+      {
+        "id": 48,
+        "title": "Panel 48: Metric 48",
+        "type": "stat",
+        "gridPos": {
+          "x": 20,
+          "y": 56,
+          "w": 4,
+          "h": 8
+        },
+        "targets": [
+          {
+            "expr": "some_metric_48 {instance=~\".*\"}",
+            "legendFormat": "{{instance}} - Metric 48",
+            "refId": "A"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "bytes",
+            "thresholds": {
+              "mode": "percentage",
+              "steps": [
+                {
+                  "color": "green",
+                  "value": null
+                },
+                {
+                  "color": "yellow",
+                  "value": 70
+                },
+                {
+                  "color": "red",
+                  "value": 90
+                }
+              ]
+            }
+          },
+          "overrides": []
+        },
+        "options": {
+          "legend": {
+            "displayMode": "list",
+            "placement": "bottom"
+          },
+          "tooltip": {
+            "mode": "single"
+          }
+        },
+        "description": "This panel shows metric 48 data from the infrastructure monitoring system. This panel shows metric 48 data from the infrastructure monitoring system. This panel shows metric 48 data from the infrastructure monitoring system. "
+      },
+      {
+        "id": 49,
+        "title": "Panel 49: Metric 49",
+        "type": "timeseries",
+        "gridPos": {
+          "x": 0,
+          "y": 64,
+          "w": 4,
+          "h": 8
+        },
+        "targets": [
+          {
+            "expr": "some_metric_49 {instance=~\".*\"}",
+            "legendFormat": "{{instance}} - Metric 49",
+            "refId": "A"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "percent",
+            "thresholds": {
+              "mode": "percentage",
+              "steps": [
+                {
+                  "color": "green",
+                  "value": null
+                },
+                {
+                  "color": "yellow",
+                  "value": 70
+                },
+                {
+                  "color": "red",
+                  "value": 90
+                }
+              ]
+            }
+          },
+          "overrides": []
+        },
+        "options": {
+          "legend": {
+            "displayMode": "list",
+            "placement": "bottom"
+          },
+          "tooltip": {
+            "mode": "single"
+          }
+        },
+        "description": "This panel shows metric 49 data from the infrastructure monitoring system. This panel shows metric 49 data from the infrastructure monitoring system. This panel shows metric 49 data from the infrastructure monitoring system. "
+      },
+      {
+        "id": 50,
+        "title": "Panel 50: Metric 50",
+        "type": "timeseries",
+        "gridPos": {
+          "x": 4,
+          "y": 64,
+          "w": 4,
+          "h": 8
+        },
+        "targets": [
+          {
+            "expr": "some_metric_50 {instance=~\".*\"}",
+            "legendFormat": "{{instance}} - Metric 50",
+            "refId": "A"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "bytes",
+            "thresholds": {
+              "mode": "percentage",
+              "steps": [
+                {
+                  "color": "green",
+                  "value": null
+                },
+                {
+                  "color": "yellow",
+                  "value": 70
+                },
+                {
+                  "color": "red",
+                  "value": 90
+                }
+              ]
+            }
+          },
+          "overrides": []
+        },
+        "options": {
+          "legend": {
+            "displayMode": "list",
+            "placement": "bottom"
+          },
+          "tooltip": {
+            "mode": "single"
+          }
+        },
+        "description": "This panel shows metric 50 data from the infrastructure monitoring system. This panel shows metric 50 data from the infrastructure monitoring system. This panel shows metric 50 data from the infrastructure monitoring system. "
+      },
+      {
+        "id": 51,
+        "title": "Panel 51: Metric 51",
+        "type": "stat",
+        "gridPos": {
+          "x": 8,
+          "y": 64,
+          "w": 4,
+          "h": 8
+        },
+        "targets": [
+          {
+            "expr": "some_metric_51 {instance=~\".*\"}",
+            "legendFormat": "{{instance}} - Metric 51",
+            "refId": "A"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "percent",
+            "thresholds": {
+              "mode": "percentage",
+              "steps": [
+                {
+                  "color": "green",
+                  "value": null
+                },
+                {
+                  "color": "yellow",
+                  "value": 70
+                },
+                {
+                  "color": "red",
+                  "value": 90
+                }
+              ]
+            }
+          },
+          "overrides": []
+        },
+        "options": {
+          "legend": {
+            "displayMode": "list",
+            "placement": "bottom"
+          },
+          "tooltip": {
+            "mode": "single"
+          }
+        },
+        "description": "This panel shows metric 51 data from the infrastructure monitoring system. This panel shows metric 51 data from the infrastructure monitoring system. This panel shows metric 51 data from the infrastructure monitoring system. "
+      },
+      {
+        "id": 52,
+        "title": "Panel 52: Metric 52",
+        "type": "timeseries",
+        "gridPos": {
+          "x": 12,
+          "y": 64,
+          "w": 4,
+          "h": 8
+        },
+        "targets": [
+          {
+            "expr": "some_metric_52 {instance=~\".*\"}",
+            "legendFormat": "{{instance}} - Metric 52",
+            "refId": "A"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "bytes",
+            "thresholds": {
+              "mode": "percentage",
+              "steps": [
+                {
+                  "color": "green",
+                  "value": null
+                },
+                {
+                  "color": "yellow",
+                  "value": 70
+                },
+                {
+                  "color": "red",
+                  "value": 90
+                }
+              ]
+            }
+          },
+          "overrides": []
+        },
+        "options": {
+          "legend": {
+            "displayMode": "list",
+            "placement": "bottom"
+          },
+          "tooltip": {
+            "mode": "single"
+          }
+        },
+        "description": "This panel shows metric 52 data from the infrastructure monitoring system. This panel shows metric 52 data from the infrastructure monitoring system. This panel shows metric 52 data from the infrastructure monitoring system. "
+      },
+      {
+        "id": 53,
+        "title": "Panel 53: Metric 53",
+        "type": "timeseries",
+        "gridPos": {
+          "x": 16,
+          "y": 64,
+          "w": 4,
+          "h": 8
+        },
+        "targets": [
+          {
+            "expr": "some_metric_53 {instance=~\".*\"}",
+            "legendFormat": "{{instance}} - Metric 53",
+            "refId": "A"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "percent",
+            "thresholds": {
+              "mode": "percentage",
+              "steps": [
+                {
+                  "color": "green",
+                  "value": null
+                },
+                {
+                  "color": "yellow",
+                  "value": 70
+                },
+                {
+                  "color": "red",
+                  "value": 90
+                }
+              ]
+            }
+          },
+          "overrides": []
+        },
+        "options": {
+          "legend": {
+            "displayMode": "list",
+            "placement": "bottom"
+          },
+          "tooltip": {
+            "mode": "single"
+          }
+        },
+        "description": "This panel shows metric 53 data from the infrastructure monitoring system. This panel shows metric 53 data from the infrastructure monitoring system. This panel shows metric 53 data from the infrastructure monitoring system. "
+      },
+      {
+        "id": 54,
+        "title": "Panel 54: Metric 54",
+        "type": "stat",
+        "gridPos": {
+          "x": 20,
+          "y": 64,
+          "w": 4,
+          "h": 8
+        },
+        "targets": [
+          {
+            "expr": "some_metric_54 {instance=~\".*\"}",
+            "legendFormat": "{{instance}} - Metric 54",
+            "refId": "A"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "bytes",
+            "thresholds": {
+              "mode": "percentage",
+              "steps": [
+                {
+                  "color": "green",
+                  "value": null
+                },
+                {
+                  "color": "yellow",
+                  "value": 70
+                },
+                {
+                  "color": "red",
+                  "value": 90
+                }
+              ]
+            }
+          },
+          "overrides": []
+        },
+        "options": {
+          "legend": {
+            "displayMode": "list",
+            "placement": "bottom"
+          },
+          "tooltip": {
+            "mode": "single"
+          }
+        },
+        "description": "This panel shows metric 54 data from the infrastructure monitoring system. This panel shows metric 54 data from the infrastructure monitoring system. This panel shows metric 54 data from the infrastructure monitoring system. "
+      },
+      {
+        "id": 55,
+        "title": "Panel 55: Metric 55",
+        "type": "timeseries",
+        "gridPos": {
+          "x": 0,
+          "y": 72,
+          "w": 4,
+          "h": 8
+        },
+        "targets": [
+          {
+            "expr": "some_metric_55 {instance=~\".*\"}",
+            "legendFormat": "{{instance}} - Metric 55",
+            "refId": "A"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "percent",
+            "thresholds": {
+              "mode": "percentage",
+              "steps": [
+                {
+                  "color": "green",
+                  "value": null
+                },
+                {
+                  "color": "yellow",
+                  "value": 70
+                },
+                {
+                  "color": "red",
+                  "value": 90
+                }
+              ]
+            }
+          },
+          "overrides": []
+        },
+        "options": {
+          "legend": {
+            "displayMode": "list",
+            "placement": "bottom"
+          },
+          "tooltip": {
+            "mode": "single"
+          }
+        },
+        "description": "This panel shows metric 55 data from the infrastructure monitoring system. This panel shows metric 55 data from the infrastructure monitoring system. This panel shows metric 55 data from the infrastructure monitoring system. "
+      },
+      {
+        "id": 56,
+        "title": "Panel 56: Metric 56",
+        "type": "timeseries",
+        "gridPos": {
+          "x": 4,
+          "y": 72,
+          "w": 4,
+          "h": 8
+        },
+        "targets": [
+          {
+            "expr": "some_metric_56 {instance=~\".*\"}",
+            "legendFormat": "{{instance}} - Metric 56",
+            "refId": "A"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "bytes",
+            "thresholds": {
+              "mode": "percentage",
+              "steps": [
+                {
+                  "color": "green",
+                  "value": null
+                },
+                {
+                  "color": "yellow",
+                  "value": 70
+                },
+                {
+                  "color": "red",
+                  "value": 90
+                }
+              ]
+            }
+          },
+          "overrides": []
+        },
+        "options": {
+          "legend": {
+            "displayMode": "list",
+            "placement": "bottom"
+          },
+          "tooltip": {
+            "mode": "single"
+          }
+        },
+        "description": "This panel shows metric 56 data from the infrastructure monitoring system. This panel shows metric 56 data from the infrastructure monitoring system. This panel shows metric 56 data from the infrastructure monitoring system. "
+      },
+      {
+        "id": 57,
+        "title": "Panel 57: Metric 57",
+        "type": "stat",
+        "gridPos": {
+          "x": 8,
+          "y": 72,
+          "w": 4,
+          "h": 8
+        },
+        "targets": [
+          {
+            "expr": "some_metric_57 {instance=~\".*\"}",
+            "legendFormat": "{{instance}} - Metric 57",
+            "refId": "A"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "percent",
+            "thresholds": {
+              "mode": "percentage",
+              "steps": [
+                {
+                  "color": "green",
+                  "value": null
+                },
+                {
+                  "color": "yellow",
+                  "value": 70
+                },
+                {
+                  "color": "red",
+                  "value": 90
+                }
+              ]
+            }
+          },
+          "overrides": []
+        },
+        "options": {
+          "legend": {
+            "displayMode": "list",
+            "placement": "bottom"
+          },
+          "tooltip": {
+            "mode": "single"
+          }
+        },
+        "description": "This panel shows metric 57 data from the infrastructure monitoring system. This panel shows metric 57 data from the infrastructure monitoring system. This panel shows metric 57 data from the infrastructure monitoring system. "
+      },
+      {
+        "id": 58,
+        "title": "Panel 58: Metric 58",
+        "type": "timeseries",
+        "gridPos": {
+          "x": 12,
+          "y": 72,
+          "w": 4,
+          "h": 8
+        },
+        "targets": [
+          {
+            "expr": "some_metric_58 {instance=~\".*\"}",
+            "legendFormat": "{{instance}} - Metric 58",
+            "refId": "A"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "bytes",
+            "thresholds": {
+              "mode": "percentage",
+              "steps": [
+                {
+                  "color": "green",
+                  "value": null
+                },
+                {
+                  "color": "yellow",
+                  "value": 70
+                },
+                {
+                  "color": "red",
+                  "value": 90
+                }
+              ]
+            }
+          },
+          "overrides": []
+        },
+        "options": {
+          "legend": {
+            "displayMode": "list",
+            "placement": "bottom"
+          },
+          "tooltip": {
+            "mode": "single"
+          }
+        },
+        "description": "This panel shows metric 58 data from the infrastructure monitoring system. This panel shows metric 58 data from the infrastructure monitoring system. This panel shows metric 58 data from the infrastructure monitoring system. "
+      },
+      {
+        "id": 59,
+        "title": "Panel 59: Metric 59",
+        "type": "timeseries",
+        "gridPos": {
+          "x": 16,
+          "y": 72,
+          "w": 4,
+          "h": 8
+        },
+        "targets": [
+          {
+            "expr": "some_metric_59 {instance=~\".*\"}",
+            "legendFormat": "{{instance}} - Metric 59",
+            "refId": "A"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "percent",
+            "thresholds": {
+              "mode": "percentage",
+              "steps": [
+                {
+                  "color": "green",
+                  "value": null
+                },
+                {
+                  "color": "yellow",
+                  "value": 70
+                },
+                {
+                  "color": "red",
+                  "value": 90
+                }
+              ]
+            }
+          },
+          "overrides": []
+        },
+        "options": {
+          "legend": {
+            "displayMode": "list",
+            "placement": "bottom"
+          },
+          "tooltip": {
+            "mode": "single"
+          }
+        },
+        "description": "This panel shows metric 59 data from the infrastructure monitoring system. This panel shows metric 59 data from the infrastructure monitoring system. This panel shows metric 59 data from the infrastructure monitoring system. "
+      },
+      {
+        "id": 60,
+        "title": "Panel 60: Metric 60",
+        "type": "stat",
+        "gridPos": {
+          "x": 20,
+          "y": 72,
+          "w": 4,
+          "h": 8
+        },
+        "targets": [
+          {
+            "expr": "some_metric_60 {instance=~\".*\"}",
+            "legendFormat": "{{instance}} - Metric 60",
+            "refId": "A"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "bytes",
+            "thresholds": {
+              "mode": "percentage",
+              "steps": [
+                {
+                  "color": "green",
+                  "value": null
+                },
+                {
+                  "color": "yellow",
+                  "value": 70
+                },
+                {
+                  "color": "red",
+                  "value": 90
+                }
+              ]
+            }
+          },
+          "overrides": []
+        },
+        "options": {
+          "legend": {
+            "displayMode": "list",
+            "placement": "bottom"
+          },
+          "tooltip": {
+            "mode": "single"
+          }
+        },
+        "description": "This panel shows metric 60 data from the infrastructure monitoring system. This panel shows metric 60 data from the infrastructure monitoring system. This panel shows metric 60 data from the infrastructure monitoring system. "
+      },
+      {
+        "id": 61,
+        "title": "Panel 61: Metric 61",
+        "type": "timeseries",
+        "gridPos": {
+          "x": 0,
+          "y": 80,
+          "w": 4,
+          "h": 8
+        },
+        "targets": [
+          {
+            "expr": "some_metric_61 {instance=~\".*\"}",
+            "legendFormat": "{{instance}} - Metric 61",
+            "refId": "A"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "percent",
+            "thresholds": {
+              "mode": "percentage",
+              "steps": [
+                {
+                  "color": "green",
+                  "value": null
+                },
+                {
+                  "color": "yellow",
+                  "value": 70
+                },
+                {
+                  "color": "red",
+                  "value": 90
+                }
+              ]
+            }
+          },
+          "overrides": []
+        },
+        "options": {
+          "legend": {
+            "displayMode": "list",
+            "placement": "bottom"
+          },
+          "tooltip": {
+            "mode": "single"
+          }
+        },
+        "description": "This panel shows metric 61 data from the infrastructure monitoring system. This panel shows metric 61 data from the infrastructure monitoring system. This panel shows metric 61 data from the infrastructure monitoring system. "
+      },
+      {
+        "id": 62,
+        "title": "Panel 62: Metric 62",
+        "type": "timeseries",
+        "gridPos": {
+          "x": 4,
+          "y": 80,
+          "w": 4,
+          "h": 8
+        },
+        "targets": [
+          {
+            "expr": "some_metric_62 {instance=~\".*\"}",
+            "legendFormat": "{{instance}} - Metric 62",
+            "refId": "A"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "bytes",
+            "thresholds": {
+              "mode": "percentage",
+              "steps": [
+                {
+                  "color": "green",
+                  "value": null
+                },
+                {
+                  "color": "yellow",
+                  "value": 70
+                },
+                {
+                  "color": "red",
+                  "value": 90
+                }
+              ]
+            }
+          },
+          "overrides": []
+        },
+        "options": {
+          "legend": {
+            "displayMode": "list",
+            "placement": "bottom"
+          },
+          "tooltip": {
+            "mode": "single"
+          }
+        },
+        "description": "This panel shows metric 62 data from the infrastructure monitoring system. This panel shows metric 62 data from the infrastructure monitoring system. This panel shows metric 62 data from the infrastructure monitoring system. "
+      },
+      {
+        "id": 63,
+        "title": "Panel 63: Metric 63",
+        "type": "stat",
+        "gridPos": {
+          "x": 8,
+          "y": 80,
+          "w": 4,
+          "h": 8
+        },
+        "targets": [
+          {
+            "expr": "some_metric_63 {instance=~\".*\"}",
+            "legendFormat": "{{instance}} - Metric 63",
+            "refId": "A"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "percent",
+            "thresholds": {
+              "mode": "percentage",
+              "steps": [
+                {
+                  "color": "green",
+                  "value": null
+                },
+                {
+                  "color": "yellow",
+                  "value": 70
+                },
+                {
+                  "color": "red",
+                  "value": 90
+                }
+              ]
+            }
+          },
+          "overrides": []
+        },
+        "options": {
+          "legend": {
+            "displayMode": "list",
+            "placement": "bottom"
+          },
+          "tooltip": {
+            "mode": "single"
+          }
+        },
+        "description": "This panel shows metric 63 data from the infrastructure monitoring system. This panel shows metric 63 data from the infrastructure monitoring system. This panel shows metric 63 data from the infrastructure monitoring system. "
+      },
+      {
+        "id": 64,
+        "title": "Panel 64: Metric 64",
+        "type": "timeseries",
+        "gridPos": {
+          "x": 12,
+          "y": 80,
+          "w": 4,
+          "h": 8
+        },
+        "targets": [
+          {
+            "expr": "some_metric_64 {instance=~\".*\"}",
+            "legendFormat": "{{instance}} - Metric 64",
+            "refId": "A"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "bytes",
+            "thresholds": {
+              "mode": "percentage",
+              "steps": [
+                {
+                  "color": "green",
+                  "value": null
+                },
+                {
+                  "color": "yellow",
+                  "value": 70
+                },
+                {
+                  "color": "red",
+                  "value": 90
+                }
+              ]
+            }
+          },
+          "overrides": []
+        },
+        "options": {
+          "legend": {
+            "displayMode": "list",
+            "placement": "bottom"
+          },
+          "tooltip": {
+            "mode": "single"
+          }
+        },
+        "description": "This panel shows metric 64 data from the infrastructure monitoring system. This panel shows metric 64 data from the infrastructure monitoring system. This panel shows metric 64 data from the infrastructure monitoring system. "
+      },
+      {
+        "id": 65,
+        "title": "Panel 65: Metric 65",
+        "type": "timeseries",
+        "gridPos": {
+          "x": 16,
+          "y": 80,
+          "w": 4,
+          "h": 8
+        },
+        "targets": [
+          {
+            "expr": "some_metric_65 {instance=~\".*\"}",
+            "legendFormat": "{{instance}} - Metric 65",
+            "refId": "A"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "percent",
+            "thresholds": {
+              "mode": "percentage",
+              "steps": [
+                {
+                  "color": "green",
+                  "value": null
+                },
+                {
+                  "color": "yellow",
+                  "value": 70
+                },
+                {
+                  "color": "red",
+                  "value": 90
+                }
+              ]
+            }
+          },
+          "overrides": []
+        },
+        "options": {
+          "legend": {
+            "displayMode": "list",
+            "placement": "bottom"
+          },
+          "tooltip": {
+            "mode": "single"
+          }
+        },
+        "description": "This panel shows metric 65 data from the infrastructure monitoring system. This panel shows metric 65 data from the infrastructure monitoring system. This panel shows metric 65 data from the infrastructure monitoring system. "
+      },
+      {
+        "id": 66,
+        "title": "Panel 66: Metric 66",
+        "type": "stat",
+        "gridPos": {
+          "x": 20,
+          "y": 80,
+          "w": 4,
+          "h": 8
+        },
+        "targets": [
+          {
+            "expr": "some_metric_66 {instance=~\".*\"}",
+            "legendFormat": "{{instance}} - Metric 66",
+            "refId": "A"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "bytes",
+            "thresholds": {
+              "mode": "percentage",
+              "steps": [
+                {
+                  "color": "green",
+                  "value": null
+                },
+                {
+                  "color": "yellow",
+                  "value": 70
+                },
+                {
+                  "color": "red",
+                  "value": 90
+                }
+              ]
+            }
+          },
+          "overrides": []
+        },
+        "options": {
+          "legend": {
+            "displayMode": "list",
+            "placement": "bottom"
+          },
+          "tooltip": {
+            "mode": "single"
+          }
+        },
+        "description": "This panel shows metric 66 data from the infrastructure monitoring system. This panel shows metric 66 data from the infrastructure monitoring system. This panel shows metric 66 data from the infrastructure monitoring system. "
+      },
+      {
+        "id": 67,
+        "title": "Panel 67: Metric 67",
+        "type": "timeseries",
+        "gridPos": {
+          "x": 0,
+          "y": 88,
+          "w": 4,
+          "h": 8
+        },
+        "targets": [
+          {
+            "expr": "some_metric_67 {instance=~\".*\"}",
+            "legendFormat": "{{instance}} - Metric 67",
+            "refId": "A"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "percent",
+            "thresholds": {
+              "mode": "percentage",
+              "steps": [
+                {
+                  "color": "green",
+                  "value": null
+                },
+                {
+                  "color": "yellow",
+                  "value": 70
+                },
+                {
+                  "color": "red",
+                  "value": 90
+                }
+              ]
+            }
+          },
+          "overrides": []
+        },
+        "options": {
+          "legend": {
+            "displayMode": "list",
+            "placement": "bottom"
+          },
+          "tooltip": {
+            "mode": "single"
+          }
+        },
+        "description": "This panel shows metric 67 data from the infrastructure monitoring system. This panel shows metric 67 data from the infrastructure monitoring system. This panel shows metric 67 data from the infrastructure monitoring system. "
+      },
+      {
+        "id": 68,
+        "title": "Panel 68: Metric 68",
+        "type": "timeseries",
+        "gridPos": {
+          "x": 4,
+          "y": 88,
+          "w": 4,
+          "h": 8
+        },
+        "targets": [
+          {
+            "expr": "some_metric_68 {instance=~\".*\"}",
+            "legendFormat": "{{instance}} - Metric 68",
+            "refId": "A"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "bytes",
+            "thresholds": {
+              "mode": "percentage",
+              "steps": [
+                {
+                  "color": "green",
+                  "value": null
+                },
+                {
+                  "color": "yellow",
+                  "value": 70
+                },
+                {
+                  "color": "red",
+                  "value": 90
+                }
+              ]
+            }
+          },
+          "overrides": []
+        },
+        "options": {
+          "legend": {
+            "displayMode": "list",
+            "placement": "bottom"
+          },
+          "tooltip": {
+            "mode": "single"
+          }
+        },
+        "description": "This panel shows metric 68 data from the infrastructure monitoring system. This panel shows metric 68 data from the infrastructure monitoring system. This panel shows metric 68 data from the infrastructure monitoring system. "
+      },
+      {
+        "id": 69,
+        "title": "Panel 69: Metric 69",
+        "type": "stat",
+        "gridPos": {
+          "x": 8,
+          "y": 88,
+          "w": 4,
+          "h": 8
+        },
+        "targets": [
+          {
+            "expr": "some_metric_69 {instance=~\".*\"}",
+            "legendFormat": "{{instance}} - Metric 69",
+            "refId": "A"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "percent",
+            "thresholds": {
+              "mode": "percentage",
+              "steps": [
+                {
+                  "color": "green",
+                  "value": null
+                },
+                {
+                  "color": "yellow",
+                  "value": 70
+                },
+                {
+                  "color": "red",
+                  "value": 90
+                }
+              ]
+            }
+          },
+          "overrides": []
+        },
+        "options": {
+          "legend": {
+            "displayMode": "list",
+            "placement": "bottom"
+          },
+          "tooltip": {
+            "mode": "single"
+          }
+        },
+        "description": "This panel shows metric 69 data from the infrastructure monitoring system. This panel shows metric 69 data from the infrastructure monitoring system. This panel shows metric 69 data from the infrastructure monitoring system. "
+      },
+      {
+        "id": 70,
+        "title": "Panel 70: Metric 70",
+        "type": "timeseries",
+        "gridPos": {
+          "x": 12,
+          "y": 88,
+          "w": 4,
+          "h": 8
+        },
+        "targets": [
+          {
+            "expr": "some_metric_70 {instance=~\".*\"}",
+            "legendFormat": "{{instance}} - Metric 70",
+            "refId": "A"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "bytes",
+            "thresholds": {
+              "mode": "percentage",
+              "steps": [
+                {
+                  "color": "green",
+                  "value": null
+                },
+                {
+                  "color": "yellow",
+                  "value": 70
+                },
+                {
+                  "color": "red",
+                  "value": 90
+                }
+              ]
+            }
+          },
+          "overrides": []
+        },
+        "options": {
+          "legend": {
+            "displayMode": "list",
+            "placement": "bottom"
+          },
+          "tooltip": {
+            "mode": "single"
+          }
+        },
+        "description": "This panel shows metric 70 data from the infrastructure monitoring system. This panel shows metric 70 data from the infrastructure monitoring system. This panel shows metric 70 data from the infrastructure monitoring system. "
+      },
+      {
+        "id": 71,
+        "title": "Panel 71: Metric 71",
+        "type": "timeseries",
+        "gridPos": {
+          "x": 16,
+          "y": 88,
+          "w": 4,
+          "h": 8
+        },
+        "targets": [
+          {
+            "expr": "some_metric_71 {instance=~\".*\"}",
+            "legendFormat": "{{instance}} - Metric 71",
+            "refId": "A"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "percent",
+            "thresholds": {
+              "mode": "percentage",
+              "steps": [
+                {
+                  "color": "green",
+                  "value": null
+                },
+                {
+                  "color": "yellow",
+                  "value": 70
+                },
+                {
+                  "color": "red",
+                  "value": 90
+                }
+              ]
+            }
+          },
+          "overrides": []
+        },
+        "options": {
+          "legend": {
+            "displayMode": "list",
+            "placement": "bottom"
+          },
+          "tooltip": {
+            "mode": "single"
+          }
+        },
+        "description": "This panel shows metric 71 data from the infrastructure monitoring system. This panel shows metric 71 data from the infrastructure monitoring system. This panel shows metric 71 data from the infrastructure monitoring system. "
+      },
+      {
+        "id": 72,
+        "title": "Panel 72: Metric 72",
+        "type": "stat",
+        "gridPos": {
+          "x": 20,
+          "y": 88,
+          "w": 4,
+          "h": 8
+        },
+        "targets": [
+          {
+            "expr": "some_metric_72 {instance=~\".*\"}",
+            "legendFormat": "{{instance}} - Metric 72",
+            "refId": "A"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "bytes",
+            "thresholds": {
+              "mode": "percentage",
+              "steps": [
+                {
+                  "color": "green",
+                  "value": null
+                },
+                {
+                  "color": "yellow",
+                  "value": 70
+                },
+                {
+                  "color": "red",
+                  "value": 90
+                }
+              ]
+            }
+          },
+          "overrides": []
+        },
+        "options": {
+          "legend": {
+            "displayMode": "list",
+            "placement": "bottom"
+          },
+          "tooltip": {
+            "mode": "single"
+          }
+        },
+        "description": "This panel shows metric 72 data from the infrastructure monitoring system. This panel shows metric 72 data from the infrastructure monitoring system. This panel shows metric 72 data from the infrastructure monitoring system. "
+      },
+      {
+        "id": 73,
+        "title": "Panel 73: Metric 73",
+        "type": "timeseries",
+        "gridPos": {
+          "x": 0,
+          "y": 96,
+          "w": 4,
+          "h": 8
+        },
+        "targets": [
+          {
+            "expr": "some_metric_73 {instance=~\".*\"}",
+            "legendFormat": "{{instance}} - Metric 73",
+            "refId": "A"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "percent",
+            "thresholds": {
+              "mode": "percentage",
+              "steps": [
+                {
+                  "color": "green",
+                  "value": null
+                },
+                {
+                  "color": "yellow",
+                  "value": 70
+                },
+                {
+                  "color": "red",
+                  "value": 90
+                }
+              ]
+            }
+          },
+          "overrides": []
+        },
+        "options": {
+          "legend": {
+            "displayMode": "list",
+            "placement": "bottom"
+          },
+          "tooltip": {
+            "mode": "single"
+          }
+        },
+        "description": "This panel shows metric 73 data from the infrastructure monitoring system. This panel shows metric 73 data from the infrastructure monitoring system. This panel shows metric 73 data from the infrastructure monitoring system. "
+      },
+      {
+        "id": 74,
+        "title": "Panel 74: Metric 74",
+        "type": "timeseries",
+        "gridPos": {
+          "x": 4,
+          "y": 96,
+          "w": 4,
+          "h": 8
+        },
+        "targets": [
+          {
+            "expr": "some_metric_74 {instance=~\".*\"}",
+            "legendFormat": "{{instance}} - Metric 74",
+            "refId": "A"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "bytes",
+            "thresholds": {
+              "mode": "percentage",
+              "steps": [
+                {
+                  "color": "green",
+                  "value": null
+                },
+                {
+                  "color": "yellow",
+                  "value": 70
+                },
+                {
+                  "color": "red",
+                  "value": 90
+                }
+              ]
+            }
+          },
+          "overrides": []
+        },
+        "options": {
+          "legend": {
+            "displayMode": "list",
+            "placement": "bottom"
+          },
+          "tooltip": {
+            "mode": "single"
+          }
+        },
+        "description": "This panel shows metric 74 data from the infrastructure monitoring system. This panel shows metric 74 data from the infrastructure monitoring system. This panel shows metric 74 data from the infrastructure monitoring system. "
+      },
+      {
+        "id": 75,
+        "title": "Panel 75: Metric 75",
+        "type": "stat",
+        "gridPos": {
+          "x": 8,
+          "y": 96,
+          "w": 4,
+          "h": 8
+        },
+        "targets": [
+          {
+            "expr": "some_metric_75 {instance=~\".*\"}",
+            "legendFormat": "{{instance}} - Metric 75",
+            "refId": "A"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "percent",
+            "thresholds": {
+              "mode": "percentage",
+              "steps": [
+                {
+                  "color": "green",
+                  "value": null
+                },
+                {
+                  "color": "yellow",
+                  "value": 70
+                },
+                {
+                  "color": "red",
+                  "value": 90
+                }
+              ]
+            }
+          },
+          "overrides": []
+        },
+        "options": {
+          "legend": {
+            "displayMode": "list",
+            "placement": "bottom"
+          },
+          "tooltip": {
+            "mode": "single"
+          }
+        },
+        "description": "This panel shows metric 75 data from the infrastructure monitoring system. This panel shows metric 75 data from the infrastructure monitoring system. This panel shows metric 75 data from the infrastructure monitoring system. "
+      },
+      {
+        "id": 76,
+        "title": "Panel 76: Metric 76",
+        "type": "timeseries",
+        "gridPos": {
+          "x": 12,
+          "y": 96,
+          "w": 4,
+          "h": 8
+        },
+        "targets": [
+          {
+            "expr": "some_metric_76 {instance=~\".*\"}",
+            "legendFormat": "{{instance}} - Metric 76",
+            "refId": "A"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "bytes",
+            "thresholds": {
+              "mode": "percentage",
+              "steps": [
+                {
+                  "color": "green",
+                  "value": null
+                },
+                {
+                  "color": "yellow",
+                  "value": 70
+                },
+                {
+                  "color": "red",
+                  "value": 90
+                }
+              ]
+            }
+          },
+          "overrides": []
+        },
+        "options": {
+          "legend": {
+            "displayMode": "list",
+            "placement": "bottom"
+          },
+          "tooltip": {
+            "mode": "single"
+          }
+        },
+        "description": "This panel shows metric 76 data from the infrastructure monitoring system. This panel shows metric 76 data from the infrastructure monitoring system. This panel shows metric 76 data from the infrastructure monitoring system. "
+      },
+      {
+        "id": 77,
+        "title": "Panel 77: Metric 77",
+        "type": "timeseries",
+        "gridPos": {
+          "x": 16,
+          "y": 96,
+          "w": 4,
+          "h": 8
+        },
+        "targets": [
+          {
+            "expr": "some_metric_77 {instance=~\".*\"}",
+            "legendFormat": "{{instance}} - Metric 77",
+            "refId": "A"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "percent",
+            "thresholds": {
+              "mode": "percentage",
+              "steps": [
+                {
+                  "color": "green",
+                  "value": null
+                },
+                {
+                  "color": "yellow",
+                  "value": 70
+                },
+                {
+                  "color": "red",
+                  "value": 90
+                }
+              ]
+            }
+          },
+          "overrides": []
+        },
+        "options": {
+          "legend": {
+            "displayMode": "list",
+            "placement": "bottom"
+          },
+          "tooltip": {
+            "mode": "single"
+          }
+        },
+        "description": "This panel shows metric 77 data from the infrastructure monitoring system. This panel shows metric 77 data from the infrastructure monitoring system. This panel shows metric 77 data from the infrastructure monitoring system. "
+      },
+      {
+        "id": 78,
+        "title": "Panel 78: Metric 78",
+        "type": "stat",
+        "gridPos": {
+          "x": 20,
+          "y": 96,
+          "w": 4,
+          "h": 8
+        },
+        "targets": [
+          {
+            "expr": "some_metric_78 {instance=~\".*\"}",
+            "legendFormat": "{{instance}} - Metric 78",
+            "refId": "A"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "bytes",
+            "thresholds": {
+              "mode": "percentage",
+              "steps": [
+                {
+                  "color": "green",
+                  "value": null
+                },
+                {
+                  "color": "yellow",
+                  "value": 70
+                },
+                {
+                  "color": "red",
+                  "value": 90
+                }
+              ]
+            }
+          },
+          "overrides": []
+        },
+        "options": {
+          "legend": {
+            "displayMode": "list",
+            "placement": "bottom"
+          },
+          "tooltip": {
+            "mode": "single"
+          }
+        },
+        "description": "This panel shows metric 78 data from the infrastructure monitoring system. This panel shows metric 78 data from the infrastructure monitoring system. This panel shows metric 78 data from the infrastructure monitoring system. "
+      },
+      {
+        "id": 79,
+        "title": "Panel 79: Metric 79",
+        "type": "timeseries",
+        "gridPos": {
+          "x": 0,
+          "y": 104,
+          "w": 4,
+          "h": 8
+        },
+        "targets": [
+          {
+            "expr": "some_metric_79 {instance=~\".*\"}",
+            "legendFormat": "{{instance}} - Metric 79",
+            "refId": "A"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "percent",
+            "thresholds": {
+              "mode": "percentage",
+              "steps": [
+                {
+                  "color": "green",
+                  "value": null
+                },
+                {
+                  "color": "yellow",
+                  "value": 70
+                },
+                {
+                  "color": "red",
+                  "value": 90
+                }
+              ]
+            }
+          },
+          "overrides": []
+        },
+        "options": {
+          "legend": {
+            "displayMode": "list",
+            "placement": "bottom"
+          },
+          "tooltip": {
+            "mode": "single"
+          }
+        },
+        "description": "This panel shows metric 79 data from the infrastructure monitoring system. This panel shows metric 79 data from the infrastructure monitoring system. This panel shows metric 79 data from the infrastructure monitoring system. "
+      },
+      {
+        "id": 80,
+        "title": "Panel 80: Metric 80",
+        "type": "timeseries",
+        "gridPos": {
+          "x": 4,
+          "y": 104,
+          "w": 4,
+          "h": 8
+        },
+        "targets": [
+          {
+            "expr": "some_metric_80 {instance=~\".*\"}",
+            "legendFormat": "{{instance}} - Metric 80",
+            "refId": "A"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "bytes",
+            "thresholds": {
+              "mode": "percentage",
+              "steps": [
+                {
+                  "color": "green",
+                  "value": null
+                },
+                {
+                  "color": "yellow",
+                  "value": 70
+                },
+                {
+                  "color": "red",
+                  "value": 90
+                }
+              ]
+            }
+          },
+          "overrides": []
+        },
+        "options": {
+          "legend": {
+            "displayMode": "list",
+            "placement": "bottom"
+          },
+          "tooltip": {
+            "mode": "single"
+          }
+        },
+        "description": "This panel shows metric 80 data from the infrastructure monitoring system. This panel shows metric 80 data from the infrastructure monitoring system. This panel shows metric 80 data from the infrastructure monitoring system. "
+      },
+      {
+        "id": 81,
+        "title": "Panel 81: Metric 81",
+        "type": "stat",
+        "gridPos": {
+          "x": 8,
+          "y": 104,
+          "w": 4,
+          "h": 8
+        },
+        "targets": [
+          {
+            "expr": "some_metric_81 {instance=~\".*\"}",
+            "legendFormat": "{{instance}} - Metric 81",
+            "refId": "A"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "percent",
+            "thresholds": {
+              "mode": "percentage",
+              "steps": [
+                {
+                  "color": "green",
+                  "value": null
+                },
+                {
+                  "color": "yellow",
+                  "value": 70
+                },
+                {
+                  "color": "red",
+                  "value": 90
+                }
+              ]
+            }
+          },
+          "overrides": []
+        },
+        "options": {
+          "legend": {
+            "displayMode": "list",
+            "placement": "bottom"
+          },
+          "tooltip": {
+            "mode": "single"
+          }
+        },
+        "description": "This panel shows metric 81 data from the infrastructure monitoring system. This panel shows metric 81 data from the infrastructure monitoring system. This panel shows metric 81 data from the infrastructure monitoring system. "
+      },
+      {
+        "id": 82,
+        "title": "Panel 82: Metric 82",
+        "type": "timeseries",
+        "gridPos": {
+          "x": 12,
+          "y": 104,
+          "w": 4,
+          "h": 8
+        },
+        "targets": [
+          {
+            "expr": "some_metric_82 {instance=~\".*\"}",
+            "legendFormat": "{{instance}} - Metric 82",
+            "refId": "A"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "bytes",
+            "thresholds": {
+              "mode": "percentage",
+              "steps": [
+                {
+                  "color": "green",
+                  "value": null
+                },
+                {
+                  "color": "yellow",
+                  "value": 70
+                },
+                {
+                  "color": "red",
+                  "value": 90
+                }
+              ]
+            }
+          },
+          "overrides": []
+        },
+        "options": {
+          "legend": {
+            "displayMode": "list",
+            "placement": "bottom"
+          },
+          "tooltip": {
+            "mode": "single"
+          }
+        },
+        "description": "This panel shows metric 82 data from the infrastructure monitoring system. This panel shows metric 82 data from the infrastructure monitoring system. This panel shows metric 82 data from the infrastructure monitoring system. "
+      },
+      {
+        "id": 83,
+        "title": "Panel 83: Metric 83",
+        "type": "timeseries",
+        "gridPos": {
+          "x": 16,
+          "y": 104,
+          "w": 4,
+          "h": 8
+        },
+        "targets": [
+          {
+            "expr": "some_metric_83 {instance=~\".*\"}",
+            "legendFormat": "{{instance}} - Metric 83",
+            "refId": "A"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "percent",
+            "thresholds": {
+              "mode": "percentage",
+              "steps": [
+                {
+                  "color": "green",
+                  "value": null
+                },
+                {
+                  "color": "yellow",
+                  "value": 70
+                },
+                {
+                  "color": "red",
+                  "value": 90
+                }
+              ]
+            }
+          },
+          "overrides": []
+        },
+        "options": {
+          "legend": {
+            "displayMode": "list",
+            "placement": "bottom"
+          },
+          "tooltip": {
+            "mode": "single"
+          }
+        },
+        "description": "This panel shows metric 83 data from the infrastructure monitoring system. This panel shows metric 83 data from the infrastructure monitoring system. This panel shows metric 83 data from the infrastructure monitoring system. "
+      },
+      {
+        "id": 84,
+        "title": "Panel 84: Metric 84",
+        "type": "stat",
+        "gridPos": {
+          "x": 20,
+          "y": 104,
+          "w": 4,
+          "h": 8
+        },
+        "targets": [
+          {
+            "expr": "some_metric_84 {instance=~\".*\"}",
+            "legendFormat": "{{instance}} - Metric 84",
+            "refId": "A"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "bytes",
+            "thresholds": {
+              "mode": "percentage",
+              "steps": [
+                {
+                  "color": "green",
+                  "value": null
+                },
+                {
+                  "color": "yellow",
+                  "value": 70
+                },
+                {
+                  "color": "red",
+                  "value": 90
+                }
+              ]
+            }
+          },
+          "overrides": []
+        },
+        "options": {
+          "legend": {
+            "displayMode": "list",
+            "placement": "bottom"
+          },
+          "tooltip": {
+            "mode": "single"
+          }
+        },
+        "description": "This panel shows metric 84 data from the infrastructure monitoring system. This panel shows metric 84 data from the infrastructure monitoring system. This panel shows metric 84 data from the infrastructure monitoring system. "
+      },
+      {
+        "id": 85,
+        "title": "Panel 85: Metric 85",
+        "type": "timeseries",
+        "gridPos": {
+          "x": 0,
+          "y": 112,
+          "w": 4,
+          "h": 8
+        },
+        "targets": [
+          {
+            "expr": "some_metric_85 {instance=~\".*\"}",
+            "legendFormat": "{{instance}} - Metric 85",
+            "refId": "A"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "percent",
+            "thresholds": {
+              "mode": "percentage",
+              "steps": [
+                {
+                  "color": "green",
+                  "value": null
+                },
+                {
+                  "color": "yellow",
+                  "value": 70
+                },
+                {
+                  "color": "red",
+                  "value": 90
+                }
+              ]
+            }
+          },
+          "overrides": []
+        },
+        "options": {
+          "legend": {
+            "displayMode": "list",
+            "placement": "bottom"
+          },
+          "tooltip": {
+            "mode": "single"
+          }
+        },
+        "description": "This panel shows metric 85 data from the infrastructure monitoring system. This panel shows metric 85 data from the infrastructure monitoring system. This panel shows metric 85 data from the infrastructure monitoring system. "
+      },
+      {
+        "id": 86,
+        "title": "Panel 86: Metric 86",
+        "type": "timeseries",
+        "gridPos": {
+          "x": 4,
+          "y": 112,
+          "w": 4,
+          "h": 8
+        },
+        "targets": [
+          {
+            "expr": "some_metric_86 {instance=~\".*\"}",
+            "legendFormat": "{{instance}} - Metric 86",
+            "refId": "A"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "bytes",
+            "thresholds": {
+              "mode": "percentage",
+              "steps": [
+                {
+                  "color": "green",
+                  "value": null
+                },
+                {
+                  "color": "yellow",
+                  "value": 70
+                },
+                {
+                  "color": "red",
+                  "value": 90
+                }
+              ]
+            }
+          },
+          "overrides": []
+        },
+        "options": {
+          "legend": {
+            "displayMode": "list",
+            "placement": "bottom"
+          },
+          "tooltip": {
+            "mode": "single"
+          }
+        },
+        "description": "This panel shows metric 86 data from the infrastructure monitoring system. This panel shows metric 86 data from the infrastructure monitoring system. This panel shows metric 86 data from the infrastructure monitoring system. "
+      },
+      {
+        "id": 87,
+        "title": "Panel 87: Metric 87",
+        "type": "stat",
+        "gridPos": {
+          "x": 8,
+          "y": 112,
+          "w": 4,
+          "h": 8
+        },
+        "targets": [
+          {
+            "expr": "some_metric_87 {instance=~\".*\"}",
+            "legendFormat": "{{instance}} - Metric 87",
+            "refId": "A"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "percent",
+            "thresholds": {
+              "mode": "percentage",
+              "steps": [
+                {
+                  "color": "green",
+                  "value": null
+                },
+                {
+                  "color": "yellow",
+                  "value": 70
+                },
+                {
+                  "color": "red",
+                  "value": 90
+                }
+              ]
+            }
+          },
+          "overrides": []
+        },
+        "options": {
+          "legend": {
+            "displayMode": "list",
+            "placement": "bottom"
+          },
+          "tooltip": {
+            "mode": "single"
+          }
+        },
+        "description": "This panel shows metric 87 data from the infrastructure monitoring system. This panel shows metric 87 data from the infrastructure monitoring system. This panel shows metric 87 data from the infrastructure monitoring system. "
+      },
+      {
+        "id": 88,
+        "title": "Panel 88: Metric 88",
+        "type": "timeseries",
+        "gridPos": {
+          "x": 12,
+          "y": 112,
+          "w": 4,
+          "h": 8
+        },
+        "targets": [
+          {
+            "expr": "some_metric_88 {instance=~\".*\"}",
+            "legendFormat": "{{instance}} - Metric 88",
+            "refId": "A"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "bytes",
+            "thresholds": {
+              "mode": "percentage",
+              "steps": [
+                {
+                  "color": "green",
+                  "value": null
+                },
+                {
+                  "color": "yellow",
+                  "value": 70
+                },
+                {
+                  "color": "red",
+                  "value": 90
+                }
+              ]
+            }
+          },
+          "overrides": []
+        },
+        "options": {
+          "legend": {
+            "displayMode": "list",
+            "placement": "bottom"
+          },
+          "tooltip": {
+            "mode": "single"
+          }
+        },
+        "description": "This panel shows metric 88 data from the infrastructure monitoring system. This panel shows metric 88 data from the infrastructure monitoring system. This panel shows metric 88 data from the infrastructure monitoring system. "
+      },
+      {
+        "id": 89,
+        "title": "Panel 89: Metric 89",
+        "type": "timeseries",
+        "gridPos": {
+          "x": 16,
+          "y": 112,
+          "w": 4,
+          "h": 8
+        },
+        "targets": [
+          {
+            "expr": "some_metric_89 {instance=~\".*\"}",
+            "legendFormat": "{{instance}} - Metric 89",
+            "refId": "A"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "percent",
+            "thresholds": {
+              "mode": "percentage",
+              "steps": [
+                {
+                  "color": "green",
+                  "value": null
+                },
+                {
+                  "color": "yellow",
+                  "value": 70
+                },
+                {
+                  "color": "red",
+                  "value": 90
+                }
+              ]
+            }
+          },
+          "overrides": []
+        },
+        "options": {
+          "legend": {
+            "displayMode": "list",
+            "placement": "bottom"
+          },
+          "tooltip": {
+            "mode": "single"
+          }
+        },
+        "description": "This panel shows metric 89 data from the infrastructure monitoring system. This panel shows metric 89 data from the infrastructure monitoring system. This panel shows metric 89 data from the infrastructure monitoring system. "
+      },
+      {
+        "id": 90,
+        "title": "Panel 90: Metric 90",
+        "type": "stat",
+        "gridPos": {
+          "x": 20,
+          "y": 112,
+          "w": 4,
+          "h": 8
+        },
+        "targets": [
+          {
+            "expr": "some_metric_90 {instance=~\".*\"}",
+            "legendFormat": "{{instance}} - Metric 90",
+            "refId": "A"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "bytes",
+            "thresholds": {
+              "mode": "percentage",
+              "steps": [
+                {
+                  "color": "green",
+                  "value": null
+                },
+                {
+                  "color": "yellow",
+                  "value": 70
+                },
+                {
+                  "color": "red",
+                  "value": 90
+                }
+              ]
+            }
+          },
+          "overrides": []
+        },
+        "options": {
+          "legend": {
+            "displayMode": "list",
+            "placement": "bottom"
+          },
+          "tooltip": {
+            "mode": "single"
+          }
+        },
+        "description": "This panel shows metric 90 data from the infrastructure monitoring system. This panel shows metric 90 data from the infrastructure monitoring system. This panel shows metric 90 data from the infrastructure monitoring system. "
+      },
+      {
+        "id": 91,
+        "title": "Panel 91: Metric 91",
+        "type": "timeseries",
+        "gridPos": {
+          "x": 0,
+          "y": 120,
+          "w": 4,
+          "h": 8
+        },
+        "targets": [
+          {
+            "expr": "some_metric_91 {instance=~\".*\"}",
+            "legendFormat": "{{instance}} - Metric 91",
+            "refId": "A"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "percent",
+            "thresholds": {
+              "mode": "percentage",
+              "steps": [
+                {
+                  "color": "green",
+                  "value": null
+                },
+                {
+                  "color": "yellow",
+                  "value": 70
+                },
+                {
+                  "color": "red",
+                  "value": 90
+                }
+              ]
+            }
+          },
+          "overrides": []
+        },
+        "options": {
+          "legend": {
+            "displayMode": "list",
+            "placement": "bottom"
+          },
+          "tooltip": {
+            "mode": "single"
+          }
+        },
+        "description": "This panel shows metric 91 data from the infrastructure monitoring system. This panel shows metric 91 data from the infrastructure monitoring system. This panel shows metric 91 data from the infrastructure monitoring system. "
+      },
+      {
+        "id": 92,
+        "title": "Panel 92: Metric 92",
+        "type": "timeseries",
+        "gridPos": {
+          "x": 4,
+          "y": 120,
+          "w": 4,
+          "h": 8
+        },
+        "targets": [
+          {
+            "expr": "some_metric_92 {instance=~\".*\"}",
+            "legendFormat": "{{instance}} - Metric 92",
+            "refId": "A"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "bytes",
+            "thresholds": {
+              "mode": "percentage",
+              "steps": [
+                {
+                  "color": "green",
+                  "value": null
+                },
+                {
+                  "color": "yellow",
+                  "value": 70
+                },
+                {
+                  "color": "red",
+                  "value": 90
+                }
+              ]
+            }
+          },
+          "overrides": []
+        },
+        "options": {
+          "legend": {
+            "displayMode": "list",
+            "placement": "bottom"
+          },
+          "tooltip": {
+            "mode": "single"
+          }
+        },
+        "description": "This panel shows metric 92 data from the infrastructure monitoring system. This panel shows metric 92 data from the infrastructure monitoring system. This panel shows metric 92 data from the infrastructure monitoring system. "
+      },
+      {
+        "id": 93,
+        "title": "Panel 93: Metric 93",
+        "type": "stat",
+        "gridPos": {
+          "x": 8,
+          "y": 120,
+          "w": 4,
+          "h": 8
+        },
+        "targets": [
+          {
+            "expr": "some_metric_93 {instance=~\".*\"}",
+            "legendFormat": "{{instance}} - Metric 93",
+            "refId": "A"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "percent",
+            "thresholds": {
+              "mode": "percentage",
+              "steps": [
+                {
+                  "color": "green",
+                  "value": null
+                },
+                {
+                  "color": "yellow",
+                  "value": 70
+                },
+                {
+                  "color": "red",
+                  "value": 90
+                }
+              ]
+            }
+          },
+          "overrides": []
+        },
+        "options": {
+          "legend": {
+            "displayMode": "list",
+            "placement": "bottom"
+          },
+          "tooltip": {
+            "mode": "single"
+          }
+        },
+        "description": "This panel shows metric 93 data from the infrastructure monitoring system. This panel shows metric 93 data from the infrastructure monitoring system. This panel shows metric 93 data from the infrastructure monitoring system. "
+      },
+      {
+        "id": 94,
+        "title": "Panel 94: Metric 94",
+        "type": "timeseries",
+        "gridPos": {
+          "x": 12,
+          "y": 120,
+          "w": 4,
+          "h": 8
+        },
+        "targets": [
+          {
+            "expr": "some_metric_94 {instance=~\".*\"}",
+            "legendFormat": "{{instance}} - Metric 94",
+            "refId": "A"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "bytes",
+            "thresholds": {
+              "mode": "percentage",
+              "steps": [
+                {
+                  "color": "green",
+                  "value": null
+                },
+                {
+                  "color": "yellow",
+                  "value": 70
+                },
+                {
+                  "color": "red",
+                  "value": 90
+                }
+              ]
+            }
+          },
+          "overrides": []
+        },
+        "options": {
+          "legend": {
+            "displayMode": "list",
+            "placement": "bottom"
+          },
+          "tooltip": {
+            "mode": "single"
+          }
+        },
+        "description": "This panel shows metric 94 data from the infrastructure monitoring system. This panel shows metric 94 data from the infrastructure monitoring system. This panel shows metric 94 data from the infrastructure monitoring system. "
+      },
+      {
+        "id": 95,
+        "title": "Panel 95: Metric 95",
+        "type": "timeseries",
+        "gridPos": {
+          "x": 16,
+          "y": 120,
+          "w": 4,
+          "h": 8
+        },
+        "targets": [
+          {
+            "expr": "some_metric_95 {instance=~\".*\"}",
+            "legendFormat": "{{instance}} - Metric 95",
+            "refId": "A"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "percent",
+            "thresholds": {
+              "mode": "percentage",
+              "steps": [
+                {
+                  "color": "green",
+                  "value": null
+                },
+                {
+                  "color": "yellow",
+                  "value": 70
+                },
+                {
+                  "color": "red",
+                  "value": 90
+                }
+              ]
+            }
+          },
+          "overrides": []
+        },
+        "options": {
+          "legend": {
+            "displayMode": "list",
+            "placement": "bottom"
+          },
+          "tooltip": {
+            "mode": "single"
+          }
+        },
+        "description": "This panel shows metric 95 data from the infrastructure monitoring system. This panel shows metric 95 data from the infrastructure monitoring system. This panel shows metric 95 data from the infrastructure monitoring system. "
+      },
+      {
+        "id": 96,
+        "title": "Panel 96: Metric 96",
+        "type": "stat",
+        "gridPos": {
+          "x": 20,
+          "y": 120,
+          "w": 4,
+          "h": 8
+        },
+        "targets": [
+          {
+            "expr": "some_metric_96 {instance=~\".*\"}",
+            "legendFormat": "{{instance}} - Metric 96",
+            "refId": "A"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "bytes",
+            "thresholds": {
+              "mode": "percentage",
+              "steps": [
+                {
+                  "color": "green",
+                  "value": null
+                },
+                {
+                  "color": "yellow",
+                  "value": 70
+                },
+                {
+                  "color": "red",
+                  "value": 90
+                }
+              ]
+            }
+          },
+          "overrides": []
+        },
+        "options": {
+          "legend": {
+            "displayMode": "list",
+            "placement": "bottom"
+          },
+          "tooltip": {
+            "mode": "single"
+          }
+        },
+        "description": "This panel shows metric 96 data from the infrastructure monitoring system. This panel shows metric 96 data from the infrastructure monitoring system. This panel shows metric 96 data from the infrastructure monitoring system. "
+      },
+      {
+        "id": 97,
+        "title": "Panel 97: Metric 97",
+        "type": "timeseries",
+        "gridPos": {
+          "x": 0,
+          "y": 128,
+          "w": 4,
+          "h": 8
+        },
+        "targets": [
+          {
+            "expr": "some_metric_97 {instance=~\".*\"}",
+            "legendFormat": "{{instance}} - Metric 97",
+            "refId": "A"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "percent",
+            "thresholds": {
+              "mode": "percentage",
+              "steps": [
+                {
+                  "color": "green",
+                  "value": null
+                },
+                {
+                  "color": "yellow",
+                  "value": 70
+                },
+                {
+                  "color": "red",
+                  "value": 90
+                }
+              ]
+            }
+          },
+          "overrides": []
+        },
+        "options": {
+          "legend": {
+            "displayMode": "list",
+            "placement": "bottom"
+          },
+          "tooltip": {
+            "mode": "single"
+          }
+        },
+        "description": "This panel shows metric 97 data from the infrastructure monitoring system. This panel shows metric 97 data from the infrastructure monitoring system. This panel shows metric 97 data from the infrastructure monitoring system. "
+      },
+      {
+        "id": 98,
+        "title": "Panel 98: Metric 98",
+        "type": "timeseries",
+        "gridPos": {
+          "x": 4,
+          "y": 128,
+          "w": 4,
+          "h": 8
+        },
+        "targets": [
+          {
+            "expr": "some_metric_98 {instance=~\".*\"}",
+            "legendFormat": "{{instance}} - Metric 98",
+            "refId": "A"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "bytes",
+            "thresholds": {
+              "mode": "percentage",
+              "steps": [
+                {
+                  "color": "green",
+                  "value": null
+                },
+                {
+                  "color": "yellow",
+                  "value": 70
+                },
+                {
+                  "color": "red",
+                  "value": 90
+                }
+              ]
+            }
+          },
+          "overrides": []
+        },
+        "options": {
+          "legend": {
+            "displayMode": "list",
+            "placement": "bottom"
+          },
+          "tooltip": {
+            "mode": "single"
+          }
+        },
+        "description": "This panel shows metric 98 data from the infrastructure monitoring system. This panel shows metric 98 data from the infrastructure monitoring system. This panel shows metric 98 data from the infrastructure monitoring system. "
+      },
+      {
+        "id": 99,
+        "title": "Panel 99: Metric 99",
+        "type": "stat",
+        "gridPos": {
+          "x": 8,
+          "y": 128,
+          "w": 4,
+          "h": 8
+        },
+        "targets": [
+          {
+            "expr": "some_metric_99 {instance=~\".*\"}",
+            "legendFormat": "{{instance}} - Metric 99",
+            "refId": "A"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "percent",
+            "thresholds": {
+              "mode": "percentage",
+              "steps": [
+                {
+                  "color": "green",
+                  "value": null
+                },
+                {
+                  "color": "yellow",
+                  "value": 70
+                },
+                {
+                  "color": "red",
+                  "value": 90
+                }
+              ]
+            }
+          },
+          "overrides": []
+        },
+        "options": {
+          "legend": {
+            "displayMode": "list",
+            "placement": "bottom"
+          },
+          "tooltip": {
+            "mode": "single"
+          }
+        },
+        "description": "This panel shows metric 99 data from the infrastructure monitoring system. This panel shows metric 99 data from the infrastructure monitoring system. This panel shows metric 99 data from the infrastructure monitoring system. "
+      },
+      {
+        "id": 100,
+        "title": "Panel 100: Metric 100",
+        "type": "timeseries",
+        "gridPos": {
+          "x": 12,
+          "y": 128,
+          "w": 4,
+          "h": 8
+        },
+        "targets": [
+          {
+            "expr": "some_metric_100 {instance=~\".*\"}",
+            "legendFormat": "{{instance}} - Metric 100",
+            "refId": "A"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "bytes",
+            "thresholds": {
+              "mode": "percentage",
+              "steps": [
+                {
+                  "color": "green",
+                  "value": null
+                },
+                {
+                  "color": "yellow",
+                  "value": 70
+                },
+                {
+                  "color": "red",
+                  "value": 90
+                }
+              ]
+            }
+          },
+          "overrides": []
+        },
+        "options": {
+          "legend": {
+            "displayMode": "list",
+            "placement": "bottom"
+          },
+          "tooltip": {
+            "mode": "single"
+          }
+        },
+        "description": "This panel shows metric 100 data from the infrastructure monitoring system. This panel shows metric 100 data from the infrastructure monitoring system. This panel shows metric 100 data from the infrastructure monitoring system. "
+      }
+    ],
+    "schemaVersion": 39,
+    "timezone": "browser",
+    "time": {
+      "from": "now-6h",
+      "to": "now"
+    },
+    "refresh": "30s",
+    "templating": {
+      "list": [
+        {
+          "name": "instance",
+          "type": "query",
+          "datasource": "Prometheus",
+          "query": "label_values(up, instance)",
+          "refresh": 1,
+          "multi": true,
+          "includeAll": true
+        }
+      ]
+    }
+  },
+  "overwrite": true
+}

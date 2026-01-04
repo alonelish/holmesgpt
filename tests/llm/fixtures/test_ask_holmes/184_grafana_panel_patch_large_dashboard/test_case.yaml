@@ -1,0 +1,121 @@
+# This test verifies the panel patch tool works for huge dashboards
+# where the full JSON doesn't fit in the LLM context window.
+# The LLM should:
+# 1. First list panel IDs/titles using json_filter
+# 2. Then patch the specific panel by ID
+
+user_prompt: "In the 'Infrastructure Monitoring' dashboard, update the panel titled 'Memory Pressure' to use a different Prometheus query: 'node_memory_MemFree_bytes / node_memory_MemTotal_bytes * 100'"
+
+expected_output:
+  - Holmes should request user approval before patching the panel
+  - The tool grafana_patch_dashboard_panel should be used
+  - The dashboard_uid 'infra-monitoring-dash' should be targeted
+  - Panel 'Memory Pressure' or panel_id 42 should be targeted
+  - The new query expression should be 'node_memory_MemFree_bytes / node_memory_MemTotal_bytes * 100'
+
+before_test: |
+  set -e  # Exit immediately if any command fails
+  kubectl create namespace app-184 --save-config --dry-run=client -o yaml | kubectl apply -f - || true
+  kubectl apply -f ../../shared/grafana.yaml -n app-184
+
+  # Wait for Grafana pod to be ready
+  echo "Waiting for Grafana pod to be ready..."
+  POD_READY=false
+  for i in {1..60}; do
+    if kubectl wait --for=condition=ready pod -l app=grafana -n app-184 --timeout=5s 2>/dev/null; then
+      echo "Grafana pod is ready!"
+      POD_READY=true
+      break
+    else
+      echo "Attempt $i/60: Grafana pod not ready yet, waiting 1s..."
+      sleep 1
+    fi
+  done
+
+  if [ "$POD_READY" = false ]; then
+    echo "Grafana pod failed to become ready after 60 seconds"
+    kubectl get pods -n app-184
+    kubectl describe pod -l app=grafana -n app-184
+    exit 1
+  fi
+
+  # Verify Grafana API is working
+  echo "Verifying Grafana API..."
+  API_READY=false
+  for i in {1..30}; do
+    if kubectl exec -n app-184 deployment/grafana -- wget -q -O- http://localhost:3000/api/health 2>/dev/null | grep -q "ok"; then
+      echo "Grafana API is working!"
+      API_READY=true
+      break
+    else
+      echo "Attempt $i/30: Grafana API not ready yet, waiting 1s..."
+      sleep 1
+    fi
+  done
+
+  if [ "$API_READY" = false ]; then
+    echo "Grafana API failed verification"
+    kubectl logs -l app=grafana -n app-184 --tail=20
+    exit 1
+  fi
+
+  # Copy large dashboard file to pod and create it
+  POD_NAME=$(kubectl get pods -n app-184 -l app=grafana -o jsonpath='{.items[0].metadata.name}')
+  echo "Copying large dashboard to pod: $POD_NAME"
+  if ! kubectl cp large_dashboard.json app-184/$POD_NAME:/tmp/large-dashboard.json; then
+    echo "Failed to copy dashboard file to pod"
+    exit 1
+  fi
+
+  # Create dashboard using file reference
+  DASHBOARD_CREATED=false
+  for i in {1..10}; do
+    echo "Attempt $i/10: Creating large dashboard via API..."
+    RESULT=$(kubectl exec -n app-184 deployment/grafana -- curl -s -w "\nHTTP_CODE:%{http_code}" \
+      -X POST -H "Content-Type: application/json" \
+      -d @/tmp/large-dashboard.json \
+      http://localhost:3000/api/dashboards/db 2>&1)
+
+    HTTP_CODE=$(echo "$RESULT" | grep "HTTP_CODE:" | cut -d: -f2)
+    RESPONSE=$(echo "$RESULT" | grep -v "HTTP_CODE:")
+
+    if [[ "$HTTP_CODE" == "200" ]] && echo "$RESPONSE" | grep -q '"id"'; then
+      echo "Large dashboard created successfully!"
+      DASHBOARD_CREATED=true
+      break
+    else
+      echo "Dashboard creation failed. HTTP: $HTTP_CODE, Response: $RESPONSE"
+      sleep 1
+    fi
+  done
+
+  if [ "$DASHBOARD_CREATED" = false ]; then
+    echo "Failed to create dashboard after 10 attempts"
+    exit 1
+  fi
+
+  # Verify dashboard is searchable
+  echo "Verifying dashboard is searchable..."
+  if kubectl exec -n app-184 deployment/grafana -- wget -q -O- "http://localhost:3000/api/search?query=Infrastructure%20Monitoring" 2>/dev/null | grep -q "Infrastructure Monitoring"; then
+    echo "Dashboard is searchable!"
+  else
+    echo "Dashboard verification failed"
+    exit 1
+  fi
+
+  echo "Test setup completed successfully!"
+
+after_test: |
+  kubectl delete namespace app-184 || true
+
+port_forwards:
+  - namespace: app-184
+    service: grafana
+    local_port: 10184
+    remote_port: 3000
+
+tags:
+  - hard
+  - grafana-dashboard
+  - kubernetes
+  - benchmark

@@ -1,0 +1,13 @@
+toolsets:
+  kubernetes/core:
+    enabled: true
+  grafana/dashboards:
+    enabled: true
+    config:
+      url: http://localhost:10184
+      api_key: ""
+  grafana/dashboards-write:
+    enabled: true
+    config:
+      url: http://localhost:10184
+      api_key: ""
