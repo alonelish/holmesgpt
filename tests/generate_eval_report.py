@@ -229,6 +229,12 @@ def parse_args():
         "--models",
         help="Comma-separated list of models tested (auto-detected if not provided)",
     )
+    parser.add_argument(
+        "--benchmark-type",
+        choices=["fast-benchmark", "full-benchmark"],
+        default=None,
+        help="Type of benchmark (fast-benchmark or full-benchmark)",
+    )
     return parser.parse_args()
 
 
@@ -1324,6 +1330,15 @@ def main():
     # Generate report sections
     report_lines = []
 
+    # Determine benchmark type label for title
+    benchmark_type = getattr(args, "benchmark_type", None)
+    if benchmark_type == "fast-benchmark":
+        benchmark_label = "Fast Benchmark"
+    elif benchmark_type == "full-benchmark":
+        benchmark_label = "Full Benchmark"
+    else:
+        benchmark_label = "Benchmark"
+
     # Header - check if output file is in history format
     output_filename = Path(args.output_file).name
     import re
@@ -1339,8 +1354,8 @@ def main():
         title = date_obj.strftime("%B %d, %Y")
         report_lines.append(f"# {title}")
     else:
-        # Default title for latest-results.md
-        report_lines.append("# HolmesGPT LLM Evaluation Benchmark Results")
+        # Default title with benchmark type
+        report_lines.append(f"# HolmesGPT LLM Evaluation {benchmark_label} Results")
     report_lines.append("")
     # Format duration nicely
     duration_seconds = results.get("duration", 0)
@@ -1419,9 +1434,26 @@ def main():
     report_lines.append(f"**Judge (classifier) model**: {classifier_model}")
     report_lines.append("")
 
-    # About this benchmark
-    report_lines.append("## About this Benchmark")
-    report_lines.append("")
+    # About this benchmark - add info box for benchmark type
+    if benchmark_type == "fast-benchmark":
+        report_lines.append('!!! info "Fast Benchmark"')
+        report_lines.append("    **Markers**: `regression or benchmark`<br>")
+        report_lines.append("    **Schedule**: Weekly (Sunday 2 AM UTC)<br>")
+        report_lines.append(
+            "    **Purpose**: Quick regression tests to catch breaking changes"
+        )
+        report_lines.append("")
+    elif benchmark_type == "full-benchmark":
+        report_lines.append('!!! info "Full Benchmark"')
+        report_lines.append(
+            "    **Markers**: `easy or medium or hard or regression or benchmark`<br>"
+        )
+        report_lines.append("    **Schedule**: Manual / On-demand<br>")
+        report_lines.append(
+            "    **Purpose**: Comprehensive testing across all difficulty levels"
+        )
+        report_lines.append("")
+
     report_lines.append(
         "HolmesGPT is continuously evaluated against real-world "
         "Kubernetes and cloud troubleshooting scenarios."

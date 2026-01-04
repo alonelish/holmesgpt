@@ -8,11 +8,18 @@ mirroring the behavior of the CI/CD workflow.
 
 import argparse
 import os
+import shutil
 import subprocess
 import sys
 from datetime import datetime
 from pathlib import Path
 from typing import List, Optional
+
+# Benchmark type definitions
+BENCHMARK_TYPES = {
+    "fast-benchmark": "regression or benchmark",
+    "full-benchmark": "easy or medium or hard or regression or benchmark",
+}
 
 
 class BenchmarkRunner:
@@ -27,6 +34,7 @@ class BenchmarkRunner:
         parallel_workers: Optional[str] = "auto",
         strict_setup: bool = True,
         no_braintrust: bool = False,
+        benchmark_type: Optional[str] = None,
     ):
         self.models = models
         self.markers = markers
@@ -35,6 +43,7 @@ class BenchmarkRunner:
         self.parallel_workers = parallel_workers
         self.strict_setup = strict_setup
         self.no_braintrust = no_braintrust
+        self.benchmark_type = benchmark_type
         self.experiment_id = os.environ.get(
             "EXPERIMENT_ID",
             f"local-benchmark-{datetime.now().strftime('%Y%m%d-%H%M%S')}",
@@ -45,6 +54,8 @@ class BenchmarkRunner:
         print("=" * 50)
         print("🧪 Running Local Benchmarks")
         print("=" * 50)
+        if self.benchmark_type:
+            print(f"Benchmark:    {self.benchmark_type}")
         print(f"Models:       {', '.join(self.models)}")
         print(f"Markers:      llm and ({self.markers})")
         print(f"Iterations:   {self.iterations}")
@@ -196,13 +207,25 @@ class BenchmarkRunner:
             )
             return
 
-        # Create output directories
+        # Create output directories based on benchmark type
         docs_dir = Path("docs/development/evaluations")
-        history_dir = docs_dir / "history"
+
+        # Determine output file and history directory based on benchmark type
+        if self.benchmark_type == "fast-benchmark":
+            main_output = docs_dir / "fast-benchmark-results.md"
+            history_subdir = "fast"
+        elif self.benchmark_type == "full-benchmark":
+            main_output = docs_dir / "full-benchmark-results.md"
+            history_subdir = "full"
+        else:
+            # Custom markers - use full benchmark output location
+            main_output = docs_dir / "full-benchmark-results.md"
+            history_subdir = "full"
+
+        history_dir = docs_dir / "history" / history_subdir
         history_dir.mkdir(parents=True, exist_ok=True)
 
-        # Generate latest results
-        latest_output = docs_dir / "latest-results.md"
+        # Build base command
         cmd = [
             "poetry",
             "run",
@@ -211,21 +234,34 @@ class BenchmarkRunner:
             "--json-file",
             "eval_results.json",
             "--output-file",
-            str(latest_output),
+            str(main_output),
             "--models",
             ",".join(self.models),
         ]
 
+        # Add benchmark type if specified
+        if self.benchmark_type:
+            cmd.extend(["--benchmark-type", self.benchmark_type])
+
         try:
             subprocess.run(cmd, check=True)
-            print(f"✅ Report generated: {latest_output}")
+            print(f"✅ Report generated: {main_output}")
+
+            # For fast-benchmark, also copy to latest-results.md for backwards compatibility
+            if self.benchmark_type == "fast-benchmark":
+                latest_output = docs_dir / "latest-results.md"
+                shutil.copy(main_output, latest_output)
+                print(f"📋 Copied to: {latest_output} (backwards compatibility)")
 
             # Generate historical copy
             timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
             history_output = history_dir / f"results_{timestamp}.md"
 
-            cmd[-2] = str(history_output)  # Update output file
-            subprocess.run(cmd, check=True)
+            # Update command for historical output
+            cmd_history = cmd.copy()
+            output_idx = cmd_history.index("--output-file") + 1
+            cmd_history[output_idx] = str(history_output)
+            subprocess.run(cmd_history, check=True)
             print(f"📁 Saved historical copy: {history_output}")
 
         except subprocess.CalledProcessError as e:
@@ -237,6 +273,8 @@ class BenchmarkRunner:
         print("=" * 50)
         print("Test Execution Summary")
         print("=" * 50)
+        if self.benchmark_type:
+            print(f"Benchmark: {self.benchmark_type}")
         print(f"Models: {', '.join(self.models)}")
         print(f"Markers: llm and ({self.markers})")
         print(f"Iterations: {self.iterations}")
@@ -254,11 +292,26 @@ class BenchmarkRunner:
         print()
         print("Generated files:")
 
+        # Determine which result file to check based on benchmark type
+        if self.benchmark_type == "fast-benchmark":
+            result_file = "docs/development/evaluations/fast-benchmark-results.md"
+        else:
+            result_file = "docs/development/evaluations/full-benchmark-results.md"
+
         files_to_check = [
             ("eval_results.json", "JSON results"),
             ("evals_report.md", "Evaluation report"),
-            ("docs/development/evaluations/latest-results.md", "Latest results"),
+            (result_file, "Benchmark results"),
         ]
+
+        # For fast-benchmark, also check latest-results.md
+        if self.benchmark_type == "fast-benchmark":
+            files_to_check.append(
+                (
+                    "docs/development/evaluations/latest-results.md",
+                    "Latest results (copy)",
+                )
+            )
 
         for filename, description in files_to_check:
             path = Path(filename)
@@ -271,7 +324,9 @@ class BenchmarkRunner:
         print("✅ Benchmark run complete!")
         print()
         print("To commit results (like CI/CD would on main):")
-        print("  git add docs/development/evaluations/latest-results.md")
+        print(f"  git add {result_file}")
+        if self.benchmark_type == "fast-benchmark":
+            print("  git add docs/development/evaluations/latest-results.md")
         print("  git commit -m 'Update benchmark results [skip ci]'")
         print("=" * 50)
 
@@ -291,10 +346,16 @@ def parse_args():
         description="Run HolmesGPT evaluation benchmarks locally",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
+Benchmark Types:
+  fast-benchmark  - Quick regression tests (markers: regression or benchmark)
+  full-benchmark  - Comprehensive tests (markers: easy or medium or hard or regression or benchmark)
+
 Examples:
-  %(prog)s                                    # Use all defaults
-  %(prog)s --models gpt-4o                    # Test only gpt-4o
-  %(prog)s --models gpt-4o,claude-3-5-sonnet --markers easy --iterations 3
+  %(prog)s                                    # Default: fast-benchmark with default models
+  %(prog)s --benchmark-type fast-benchmark    # Explicit fast benchmark
+  %(prog)s --benchmark-type full-benchmark    # Full comprehensive benchmark
+  %(prog)s --models gpt-4o                    # Test only gpt-4o (fast-benchmark)
+  %(prog)s --markers easy --iterations 3      # Custom markers (cannot combine with --benchmark-type)
   %(prog)s --filter 01_how_many_pods          # Run specific test
   %(prog)s --parallel 6                       # Run with 6 parallel workers
   %(prog)s --parallel 1                       # Run sequentially (no parallelism)
@@ -318,10 +379,18 @@ Environment variables:
     )
 
     parser.add_argument(
+        "--benchmark-type",
+        type=str,
+        choices=list(BENCHMARK_TYPES.keys()),
+        default=None,
+        help="Type of benchmark to run (default: fast-benchmark). Cannot be combined with --markers.",
+    )
+
+    parser.add_argument(
         "--markers",
         type=str,
-        default="regression or benchmark",
-        help="Pytest markers for test selection (combined with 'llm') (default: %(default)s)",
+        default=None,
+        help="Custom pytest markers for test selection (combined with 'llm'). Cannot be combined with --benchmark-type.",
     )
 
     parser.add_argument(
@@ -366,17 +435,38 @@ def main():
     """Main entry point."""
     args = parse_args()
 
+    # Validate that --benchmark-type and --markers are not both provided
+    if args.markers is not None and args.benchmark_type is not None:
+        print("❌ ERROR: Cannot combine --benchmark-type with --markers")
+        print("   Use either --benchmark-type OR --markers, not both.")
+        sys.exit(1)
+
+    # Determine markers and benchmark_type
+    if args.markers is not None:
+        # Custom markers provided - no benchmark type
+        markers = args.markers
+        benchmark_type = None
+    elif args.benchmark_type is not None:
+        # Explicit benchmark type
+        benchmark_type = args.benchmark_type
+        markers = BENCHMARK_TYPES[benchmark_type]
+    else:
+        # Default: fast-benchmark
+        benchmark_type = "fast-benchmark"
+        markers = BENCHMARK_TYPES[benchmark_type]
+
     # Parse models from comma-separated string
     models = [m.strip() for m in args.models.split(",") if m.strip()]
 
     runner = BenchmarkRunner(
         models=models,
-        markers=args.markers,
+        markers=markers,
         iterations=args.iterations,
         filter_tests=args.filter_tests,
         parallel_workers=args.parallel_workers,
         strict_setup=args.strict_setup,
         no_braintrust=args.no_braintrust,
+        benchmark_type=benchmark_type,
     )
 
     # Ignore the exit code from tests to match bash script behavior
