@@ -17,6 +17,9 @@ jobs:
 
     runs-on: ubuntu-latest
 
+    # NOTE: No environment needed here. GitHub automatically doesn't pass secrets to fork PRs
+    # for 'pull_request' events. The non-LLM tests (pytest -m "not llm") should work without secrets.
+
     steps:
       - uses: actions/checkout@v2
 

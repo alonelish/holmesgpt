@@ -7,6 +7,8 @@ on:
 jobs:
   publish:
     runs-on: ubuntu-latest
+    # Use 'production' environment for secrets - restricted to release events
+    environment: production
 
     steps:
     - uses: actions/checkout@v4

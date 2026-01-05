@@ -27,6 +27,8 @@ jobs:
   run-benchmarks:
     runs-on: ubuntu-latest
     timeout-minutes: 120
+    # Use 'benchmarks' environment for secrets - restricted to master branch
+    environment: benchmarks
 
     permissions:
       contents: write

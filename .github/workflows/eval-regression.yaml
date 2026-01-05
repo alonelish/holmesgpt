@@ -119,6 +119,11 @@ jobs:
 
   llm_evals:
     runs-on: ubuntu-latest
+    # Use 'testing' environment to namespace secrets separately from production.
+    # IMPORTANT: Configure this environment WITHOUT required reviewers - the existing
+    # 'trusted: true' comment mechanism handles approval for fork PRs.
+    # The environment provides: (1) secret isolation, (2) audit trail of deployments
+    environment: testing
     if: |
       github.event_name == 'pull_request' ||
       github.event_name == 'push' ||

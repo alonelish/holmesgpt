@@ -6,8 +6,9 @@ on:
 
 jobs:
   build:
-
     runs-on: ubuntu-latest
+    # Use 'production' environment for secrets - restricted to release events
+    environment: production
 
     permissions:
       contents: read
