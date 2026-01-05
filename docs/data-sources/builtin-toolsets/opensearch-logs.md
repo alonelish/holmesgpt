@@ -5,6 +5,39 @@ By enabling this toolset, HolmesGPT will fetch pod logs from [OpenSearch](https:
 
 --8<-- "snippets/toolsets_that_provide_logging.md"
 
+## Prerequisites
+
+### Authentication
+
+OpenSearch/Elasticsearch supports two authentication methods. Choose one based on your setup:
+
+=== "API Key"
+
+    **CLI:**
+    ```bash
+    export OPENSEARCH_AUTH_HEADER="ApiKey your-api-key-here"
+    ```
+
+    **Kubernetes Secret:**
+    ```bash
+    kubectl create secret generic opensearch-credentials \
+      --from-literal=auth-header="ApiKey your-api-key-here"
+    ```
+
+=== "Basic Auth"
+
+    **CLI:**
+    ```bash
+    # Base64 encode username:password
+    export OPENSEARCH_AUTH_HEADER="Basic $(echo -n 'username:password' | base64)"
+    ```
+
+    **Kubernetes Secret:**
+    ```bash
+    kubectl create secret generic opensearch-credentials \
+      --from-literal=auth-header="Basic $(echo -n 'username:password' | base64)"
+    ```
+
 ## Configuration
 
 === "Holmes CLI"
@@ -18,7 +51,7 @@ By enabling this toolset, HolmesGPT will fetch pod logs from [OpenSearch](https:
         config:
           opensearch_url: <your opensearch/elastic URL>
           index_pattern: <name of the index to use> # The pattern matching the indexes containing the logs. Supports wildcards. For example `fluentd-*`
-          opensearch_auth_header: "ApiKey <...>" # An optional header value set to the `Authorization` header for every request to opensearch
+          opensearch_auth_header: "{{ env.OPENSEARCH_AUTH_HEADER }}"
           labels: # set the labels according to how values are mapped in your opensearch cluster
             pod: "kubernetes.pod_name"
             namespace: "kubernetes.namespace_name"
@@ -31,18 +64,60 @@ By enabling this toolset, HolmesGPT will fetch pod logs from [OpenSearch](https:
 
     --8<-- "snippets/toolset_refresh_warning.md"
 
+=== "Holmes Helm Chart"
+
+    First, create a Kubernetes secret with your credentials (see [Prerequisites](#authentication) above).
+
+    Then add to your Holmes Helm values:
+    ```yaml
+    additionalEnvVars:
+      - name: OPENSEARCH_AUTH_HEADER
+        valueFrom:
+          secretKeyRef:
+            name: opensearch-credentials
+            key: auth-header
+
+    toolsets:
+      opensearch/logs:
+        enabled: true
+        config:
+          opensearch_url: https://your-cluster.es.io:443
+          index_pattern: fluentd-*
+          opensearch_auth_header: "{{ env.OPENSEARCH_AUTH_HEADER }}"
+          labels:
+            pod: "kubernetes.pod_name"
+            namespace: "kubernetes.namespace_name"
+            timestamp: "@timestamp"
+            message: "message"
+
+      kubernetes/logs:
+        enabled: false # HolmesGPT's default logging mechanism MUST be disabled
+    ```
+
+    --8<-- "snippets/helm_upgrade_command.md"
+
 === "Robusta Helm Chart"
 
+    First, create a Kubernetes secret with your credentials (see [Prerequisites](#authentication) above).
+
+    Then add to your Robusta Helm values:
     ```yaml
     holmes:
+      additionalEnvVars:
+        - name: OPENSEARCH_AUTH_HEADER
+          valueFrom:
+            secretKeyRef:
+              name: opensearch-credentials
+              key: auth-header
+
       toolsets:
         opensearch/logs:
           enabled: true
           config:
-            opensearch_url: https://skdjasid.europe-west1.gcp.cloud.es.io:443 # The URL to your opensearch cluster.
-            index_pattern: fluentd-* # The pattern matching the indexes containing the logs. Supports wildcards
-            opensearch_auth_header: "ApiKey b0ZlwQWEsdwAkv047bafirkallDFWJIWDWdwlQQ==" # An optional header value set to the `Authorization` header for every request to opensearch.
-            labels: # set the labels according to how values are mapped in your opensearch cluster
+            opensearch_url: https://your-cluster.es.io:443
+            index_pattern: fluentd-*
+            opensearch_auth_header: "{{ env.OPENSEARCH_AUTH_HEADER }}"
+            labels:
               pod: "kubernetes.pod_name"
               namespace: "kubernetes.namespace_name"
               timestamp: "@timestamp"
