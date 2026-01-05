@@ -81,7 +81,7 @@ toolsets:
     config:
       prometheus_url: http://prometheus-server.monitoring.svc.cluster.local:9090
       headers:
-        Authorization: "Bearer <token>"
+        Authorization: "Basic <base64_encoded_credentials>"
 
       # Discovery settings
       discover_metrics_from_last_hours: 1  # Only return metrics with data in last N hours (default: 1)

@@ -109,38 +109,20 @@ class PrometheusConfig(BaseModel):
         extra = self.model_extra or {}
         deprecated_with_replacement = []
 
-        # Map of old names -> (new field name, new field attr)
+        # Map of old names -> new names
         deprecated_mappings = {
-            "default_metadata_time_window_hrs": (
-                "discover_metrics_from_last_hours",
-                "discover_metrics_from_last_hours",
-            ),
-            "default_query_timeout_seconds": (
-                "query_timeout_seconds_default",
-                "query_timeout_seconds_default",
-            ),
-            "max_query_timeout_seconds": (
-                "query_timeout_seconds_hard_max",
-                "query_timeout_seconds_hard_max",
-            ),
-            "default_metadata_timeout_seconds": (
-                "metadata_timeout_seconds_default",
-                "metadata_timeout_seconds_default",
-            ),
-            "max_metadata_timeout_seconds": (
-                "metadata_timeout_seconds_hard_max",
-                "metadata_timeout_seconds_hard_max",
-            ),
-            "metrics_labels_time_window_hrs": (
-                "discover_metrics_from_last_hours",
-                "discover_metrics_from_last_hours",
-            ),
-            "prometheus_ssl_enabled": ("verify_ssl", "verify_ssl"),
+            "default_metadata_time_window_hrs": "discover_metrics_from_last_hours",
+            "default_query_timeout_seconds": "query_timeout_seconds_default",
+            "max_query_timeout_seconds": "query_timeout_seconds_hard_max",
+            "default_metadata_timeout_seconds": "metadata_timeout_seconds_default",
+            "max_metadata_timeout_seconds": "metadata_timeout_seconds_hard_max",
+            "metrics_labels_time_window_hrs": "discover_metrics_from_last_hours",
+            "prometheus_ssl_enabled": "verify_ssl",
         }
 
-        for old_name, (new_name, attr_name) in deprecated_mappings.items():
+        for old_name, new_name in deprecated_mappings.items():
             if old_name in extra:
-                setattr(self, attr_name, extra[old_name])
+                setattr(self, new_name, extra[old_name])
                 deprecated_with_replacement.append(f"{old_name} -> {new_name}")
 
         if deprecated_with_replacement:
@@ -1649,7 +1631,7 @@ class PrometheusToolset(Toolset):
     def get_example_config(self):
         example_config = PrometheusConfig(
             prometheus_url="http://prometheus-server.monitoring.svc.cluster.local:9090",
-            headers={"Authorization": "Bearer <token>"},
+            headers={"Authorization": "Basic <base64_encoded_credentials>"},
             discover_metrics_from_last_hours=1,
             query_timeout_seconds_default=20,
             query_timeout_seconds_hard_max=180,
