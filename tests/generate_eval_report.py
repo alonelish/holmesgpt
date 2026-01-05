@@ -9,7 +9,7 @@ from pathlib import Path
 from typing import Any, DefaultDict, Dict, List, Optional, Set
 from urllib.parse import quote
 
-from llm.utils.test_env_vars import (
+from tests.llm.utils.test_env_vars import (
     BRAINTRUST_API_KEY,
     BRAINTRUST_ORG,
     BRAINTRUST_PROJECT,
