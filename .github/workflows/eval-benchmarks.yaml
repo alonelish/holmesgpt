@@ -13,7 +13,7 @@ on:
           - 'full-benchmark'
         default: 'fast-benchmark'
       models:
-        description: 'Comma-separated list of models to test (leave empty for defaults from run_benchmarks_local.py)'
+        description: 'Comma-separated list of models to test (leave empty for script defaults)'
         required: false
         default: ''
       test_markers:
@@ -54,69 +54,42 @@ jobs:
           cluster-name: 'kind'
           wait-for-ready: 'true'
 
-      - name: Determine test command
-        id: test-command
+      - name: Build benchmark command
+        id: build-command
         run: |
-          # Define benchmark type markers
-          FAST_MARKERS="regression or benchmark"
-          FULL_MARKERS="easy or medium or hard or regression or benchmark"
-
-          # Default models from run_benchmarks_local.py
-          DEFAULT_MODELS="gpt-5.1,gpt-5,sonnet-4.5,haiku-4.5,deepseek-3.1"
+          # Start with base command
+          CMD="./run_benchmarks_local.py"
 
           if [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
             BENCHMARK_TYPE="${{ github.event.inputs.benchmark_type }}"
             CUSTOM_MARKERS="${{ github.event.inputs.test_markers }}"
-            MODEL="${{ github.event.inputs.models }}"
+            MODELS="${{ github.event.inputs.models }}"
             ITERATIONS="${{ github.event.inputs.iterations }}"
 
-            # Validate: cannot combine benchmark_type with custom markers
-            if [ -n "$CUSTOM_MARKERS" ] && [ -n "$BENCHMARK_TYPE" ]; then
-              echo "ERROR: Cannot combine benchmark_type with custom test_markers"
-              exit 1
-            fi
-
-            # Determine markers based on benchmark type or custom markers
+            # Add benchmark type or custom markers (script validates they're mutually exclusive)
             if [ -n "$CUSTOM_MARKERS" ]; then
-              TEST_MARKERS="llm and ($CUSTOM_MARKERS)"
-              BENCHMARK_TYPE=""
-            elif [ "$BENCHMARK_TYPE" == "full-benchmark" ]; then
-              TEST_MARKERS="llm and ($FULL_MARKERS)"
-            else
-              # Default to fast-benchmark
-              BENCHMARK_TYPE="fast-benchmark"
-              TEST_MARKERS="llm and ($FAST_MARKERS)"
+              CMD="$CMD --markers \"$CUSTOM_MARKERS\""
+            elif [ -n "$BENCHMARK_TYPE" ]; then
+              CMD="$CMD --benchmark-type $BENCHMARK_TYPE"
             fi
 
-            # Use default models if not specified
-            if [ -z "$MODEL" ]; then
-              MODEL="$DEFAULT_MODELS"
+            # Add models only if specified (otherwise use script defaults)
+            if [ -n "$MODELS" ]; then
+              CMD="$CMD --models $MODELS"
             fi
 
-            # Cap iterations at 10
-            if [ "$ITERATIONS" -gt 10 ]; then
-              echo "Capping iterations at 10 (requested: $ITERATIONS)"
-              ITERATIONS="10"
+            # Add iterations if specified
+            if [ -n "$ITERATIONS" ] && [ "$ITERATIONS" != "1" ]; then
+              CMD="$CMD --iterations $ITERATIONS"
             fi
-          elif [ "${{ github.event_name }}" == "schedule" ]; then
-            # Weekly scheduled run: fast-benchmark with defaults
+          else
+            # Scheduled run: use fast-benchmark with all defaults
             BENCHMARK_TYPE="fast-benchmark"
-            MODEL="$DEFAULT_MODELS"
-            TEST_MARKERS="llm and ($FAST_MARKERS)"
-            ITERATIONS="1"
+            CMD="$CMD --benchmark-type fast-benchmark"
           fi
 
-          # Set test path
-          TEST_PATH="tests/llm/"
-
-          # Write all outputs atomically
-          {
-            echo "models=$MODEL"
-            echo "test_path=$TEST_PATH"
-            echo "test_markers=$TEST_MARKERS"
-            echo "iterations=$ITERATIONS"
-            echo "benchmark_type=$BENCHMARK_TYPE"
-          } >> $GITHUB_OUTPUT
+          echo "command=$CMD" >> $GITHUB_OUTPUT
+          echo "benchmark_type=$BENCHMARK_TYPE" >> $GITHUB_OUTPUT
 
       - name: Run evaluation benchmarks
         env:
@@ -125,78 +98,11 @@ jobs:
           AZURE_API_BASE: ${{ secrets.AZURE_API_BASE }}
           AZURE_API_KEY: ${{ secrets.AZURE_API_KEY }}
           AZURE_API_VERSION: ${{ secrets.AZURE_API_VERSION }}
-          MODEL: ${{ steps.test-command.outputs.models }}
-          ITERATIONS: ${{ steps.test-command.outputs.iterations }}
-          RUN_LIVE: "true"
-          CLASSIFIER_MODEL: "gpt-4o"  # Always use OpenAI for classification
           BRAINTRUST_API_KEY: ${{ secrets.BRAINTRUST_API_KEY }}
           EXPERIMENT_ID: "ci-benchmark-${{ github.run_id }}"
-          UPLOAD_DATASET: "true"
         run: |
-          poetry run pytest "${{ steps.test-command.outputs.test_path }}" \
-            -m "${{ steps.test-command.outputs.test_markers }}" \
-            --no-cov \
-            --tb=short \
-            -v \
-            --strict-setup-mode \
-            --strict-setup-exceptions=22_high_latency_dbi_down \
-            --json-report \
-            --json-report-file=eval_results.json \
-            || true  # Don't fail the workflow if tests fail
-
-          # TODO: For testing, show what would be run
-          echo "==== Test execution summary ===="
-          echo "Models: ${{ steps.test-command.outputs.models }}"
-          echo "Markers: ${{ steps.test-command.outputs.test_markers }}"
-          echo "Iterations: ${{ steps.test-command.outputs.iterations }}"
-          echo "================================"
-
-      - name: Generate benchmark report
-        if: always()
-        run: |
-          BENCHMARK_TYPE="${{ steps.test-command.outputs.benchmark_type }}"
-          TIMESTAMP=$(date +%Y%m%d_%H%M%S)
-
-          # Determine output paths based on benchmark type
-          if [ "$BENCHMARK_TYPE" == "fast-benchmark" ]; then
-            MAIN_OUTPUT="docs/development/evaluations/fast-benchmark-results.md"
-            HISTORY_DIR="docs/development/evaluations/history/fast"
-          elif [ "$BENCHMARK_TYPE" == "full-benchmark" ]; then
-            MAIN_OUTPUT="docs/development/evaluations/full-benchmark-results.md"
-            HISTORY_DIR="docs/development/evaluations/history/full"
-          else
-            # Custom markers - use full benchmark location
-            MAIN_OUTPUT="docs/development/evaluations/full-benchmark-results.md"
-            HISTORY_DIR="docs/development/evaluations/history/full"
-          fi
-
-          # Create history directory if needed
-          mkdir -p "$HISTORY_DIR"
-
-          # Build benchmark-type argument if specified
-          BENCHMARK_ARG=""
-          if [ -n "$BENCHMARK_TYPE" ]; then
-            BENCHMARK_ARG="--benchmark-type $BENCHMARK_TYPE"
-          fi
-
-          # Generate main results
-          poetry run python tests/generate_eval_report.py \
-            --json-file eval_results.json \
-            --output-file "$MAIN_OUTPUT" \
-            --models "${{ steps.test-command.outputs.models }}" \
-            $BENCHMARK_ARG
-
-          # For fast-benchmark, also copy to latest-results.md for backwards compatibility
-          if [ "$BENCHMARK_TYPE" == "fast-benchmark" ]; then
-            cp "$MAIN_OUTPUT" docs/development/evaluations/latest-results.md
-          fi
-
-          # Generate timestamped version for history
-          poetry run python tests/generate_eval_report.py \
-            --json-file eval_results.json \
-            --output-file "${HISTORY_DIR}/results_${TIMESTAMP}.md" \
-            --models "${{ steps.test-command.outputs.models }}" \
-            $BENCHMARK_ARG
+          echo "Running: ${{ steps.build-command.outputs.command }}"
+          ${{ steps.build-command.outputs.command }}
 
       - name: Upload eval results
         if: always()
@@ -207,6 +113,7 @@ jobs:
             docs/development/evaluations/fast-benchmark-results.md
             docs/development/evaluations/full-benchmark-results.md
             docs/development/evaluations/latest-results.md
+            eval_results.json
 
       - name: Create PR with benchmark results
         if: always() && (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch')
@@ -231,7 +138,7 @@ jobs:
           fi
 
           # Commit and push
-          BENCHMARK_TYPE="${{ steps.test-command.outputs.benchmark_type }}"
+          BENCHMARK_TYPE="${{ steps.build-command.outputs.benchmark_type }}"
           git commit -m "Update ${BENCHMARK_TYPE:-benchmark} results [skip ci]"
           git push origin "$BRANCH_NAME" --force
 
@@ -240,9 +147,7 @@ jobs:
           PR_BODY="Automated weekly benchmark results from CI.
 
           **Benchmark Type**: ${BENCHMARK_TYPE:-custom}
-          **Models**: ${{ steps.test-command.outputs.models }}
-          **Iterations**: ${{ steps.test-command.outputs.iterations }}
-          **Markers**: ${{ steps.test-command.outputs.test_markers }}"
+          **Command**: ${{ steps.build-command.outputs.command }}"
 
           # Check if PR already exists
           EXISTING_PR=$(gh pr list --head "$BRANCH_NAME" --json number --jq '.[0].number')
