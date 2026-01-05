@@ -1,0 +1,20 @@
+[build]
+  # Only install mkdocs dependencies, not the full project
+  command = "pip install mkdocs-material mkdocs-glightbox mkdocs-awesome-nav && mkdocs build"
+  publish = "site"
+
+[build.environment]
+  PYTHON_VERSION = "3.11"
+
+# Handle SPA-style navigation for defined paths
+[[redirects]]
+  from = "/*"
+  to = "/404.html"
+  status = 404
+
+# Context-specific settings for deploy previews
+[context.deploy-preview]
+  command = "pip install mkdocs-material mkdocs-glightbox mkdocs-awesome-nav && mkdocs build"
+
+[context.branch-deploy]
+  command = "pip install mkdocs-material mkdocs-glightbox mkdocs-awesome-nav && mkdocs build"
