@@ -92,6 +92,46 @@ poetry run mypy
   - Include the full API error response (status code and message)
   - For "no data" responses, specify what was searched and where
 
+**Toolset Config Backwards Compatibility**:
+
+When renaming config fields in a toolset, maintain backwards compatibility using Pydantic's `extra="allow"`:
+
+```python
+# ✅ DO: Use extra="allow" to accept deprecated fields without polluting schema
+class MyToolsetConfig(BaseModel):
+    model_config = ConfigDict(extra="allow")
+
+    # Only define current field names in schema
+    new_field_name: int = 10
+
+    @model_validator(mode="after")
+    def handle_deprecated_fields(self):
+        extra = self.model_extra or {}
+        deprecated = []
+
+        # Map old names to new names
+        if "old_field_name" in extra:
+            self.new_field_name = extra["old_field_name"]
+            deprecated.append("old_field_name -> new_field_name")
+
+        if deprecated:
+            logging.warning(f"Deprecated config names: {', '.join(deprecated)}")
+        return self
+
+# ❌ DON'T: Define deprecated fields in schema with Optional[None]
+class BadConfig(BaseModel):
+    new_field_name: int = 10
+    old_field_name: Optional[int] = None  # Pollutes schema, shows in model_dump()
+```
+
+Benefits of `extra="allow"` approach:
+- Schema only shows current field names
+- `model_dump()` returns clean output without deprecated fields
+- Old configs still work (backwards compatible)
+- Deprecation warnings guide users to update
+
+See `prometheus/prometheus.py` PrometheusConfig for a complete example.
+
 **LLM Integration**:
 - Uses LiteLLM for multi-provider support (OpenAI, Anthropic, Azure, etc.)
 - Structured tool calling with automatic retry and error handling
