@@ -1,7 +1,8 @@
 [build]
   # Only install mkdocs dependencies, not the full project
   # Use python -m mkdocs since pip installs to ~/.local/bin which may not be in PATH
-  command = "pip install mkdocs-material mkdocs-glightbox mkdocs-awesome-nav && python -m mkdocs build"
+  # Pin mkdocs-material version to match poetry.lock for consistent icon rendering
+  command = "pip install 'mkdocs-material==9.6.18' mkdocs-glightbox mkdocs-awesome-nav && python -m mkdocs build"
   publish = "site"
 
 [build.environment]
@@ -15,7 +16,7 @@
 
 # Context-specific settings for deploy previews
 [context.deploy-preview]
-  command = "pip install mkdocs-material mkdocs-glightbox mkdocs-awesome-nav && python -m mkdocs build"
+  command = "pip install 'mkdocs-material==9.6.18' mkdocs-glightbox mkdocs-awesome-nav && python -m mkdocs build"
 
 [context.branch-deploy]
-  command = "pip install mkdocs-material mkdocs-glightbox mkdocs-awesome-nav && python -m mkdocs build"
+  command = "pip install 'mkdocs-material==9.6.18' mkdocs-glightbox mkdocs-awesome-nav && python -m mkdocs build"
