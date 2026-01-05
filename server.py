@@ -495,15 +495,32 @@ def chat(chat_request: ChatRequest):
             ]
 
         if chat_request.stream:
-            # Note: Streaming mode does not currently support tracing
-            return StreamingResponse(
-                stream_chat_formatter(
-                    ai.call_stream(
+            # Create trace span for streaming mode
+            trace_span = tracer.start_trace(
+                f'chat_stream "{chat_request.ask[:50]}"', span_type=SpanType.TASK
+            )
+            trace_span.log(
+                input={"ask": chat_request.ask},
+                metadata={"type": "chat_stream"},
+            )
+
+            def traced_stream_generator():
+                """Wrapper generator that manages trace span lifecycle."""
+                try:
+                    yield from ai.call_stream(
                         msgs=messages,
                         enable_tool_approval=chat_request.enable_tool_approval or False,
                         tool_decisions=chat_request.tool_decisions,
-                    ),
+                        trace_span=trace_span,
+                    )
+                finally:
+                    trace_span.end()
+
+            return StreamingResponse(
+                stream_chat_formatter(
+                    traced_stream_generator(),
                     [f.model_dump() for f in follow_up_actions],
+                    trace_url=tracer.get_trace_url(),
                 ),
                 media_type="text/event-stream",
             )
