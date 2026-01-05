@@ -8,7 +8,6 @@ mirroring the behavior of the CI/CD workflow.
 
 import argparse
 import os
-import shutil
 import subprocess
 import sys
 from datetime import datetime
@@ -244,12 +243,7 @@ class BenchmarkRunner:
             subprocess.run(cmd, check=True)
             print(f"✅ Report generated: {main_output}")
 
-            # Always copy to latest-results.md so it shows whichever benchmark ran most recently
-            latest_output = docs_dir / "latest-results.md"
-            shutil.copy(main_output, latest_output)
-            print(f"📋 Updated: {latest_output}")
-
-            # Generate historical copy (⚡ in title distinguishes fast benchmarks)
+            # Generate historical copy first (⚡ in title distinguishes fast benchmarks)
             timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
             history_output = history_dir / f"results_{timestamp}.md"
 
@@ -259,6 +253,25 @@ class BenchmarkRunner:
             cmd_history[output_idx] = str(history_output)
             subprocess.run(cmd_history, check=True)
             print(f"📁 Saved historical copy: {history_output}")
+
+            # Create redirect page for latest-results.md pointing to the history file
+            latest_output = docs_dir / "latest-results.md"
+            history_relative = (
+                f"../history/{history_output.name.replace('.md', '/')}".rstrip("/")
+                + "/"
+            )
+            redirect_content = f"""# Latest Results
+
+Redirecting to the latest benchmark results...
+
+<script>
+window.location.href = "{history_relative}";
+</script>
+
+If you are not redirected automatically, [click here]({history_relative}).
+"""
+            latest_output.write_text(redirect_content)
+            print(f"📋 Updated redirect: {latest_output} -> {history_relative}")
 
         except subprocess.CalledProcessError as e:
             print(f"❌ Report generation failed: {e}")
