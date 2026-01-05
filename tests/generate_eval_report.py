@@ -1334,28 +1334,34 @@ def main():
     benchmark_type = getattr(args, "benchmark_type", None)
     if benchmark_type == "fast-benchmark":
         benchmark_label = "Fast Benchmark"
+        benchmark_icon = "⚡ "
     elif benchmark_type == "full-benchmark":
         benchmark_label = "Full Benchmark"
+        benchmark_icon = ""
     else:
         benchmark_label = "Benchmark"
+        benchmark_icon = ""
 
     # Header - check if output file is in history format
     output_filename = Path(args.output_file).name
     import re
 
-    match = re.match(
+    # Match results_TIMESTAMP.md pattern for history files
+    history_match = re.match(
         r"results_(\d{4})(\d{2})(\d{2})_(\d{2})(\d{2})(\d{2})\.md", output_filename
     )
-    if match:
-        # Extract date components and format as title
-        year, month, day, hour, minute, second = match.groups()
+
+    if history_match:
+        # History file - use date as title, add ⚡ for fast benchmarks
+        year, month, day, hour, minute, second = history_match.groups()
         date_obj = datetime(int(year), int(month), int(day))
-        # Format as "Month Day, Year" (no time)
         title = date_obj.strftime("%B %d, %Y")
-        report_lines.append(f"# {title}")
+        report_lines.append(f"# {benchmark_icon}{title}")
     else:
-        # Default title with benchmark type
-        report_lines.append(f"# HolmesGPT LLM Evaluation {benchmark_label} Results")
+        # Default title with benchmark type (for main result files)
+        report_lines.append(
+            f"# {benchmark_icon}HolmesGPT LLM Evaluation {benchmark_label} Results"
+        )
     report_lines.append("")
     # Format duration nicely
     duration_seconds = results.get("duration", 0)

@@ -12,12 +12,15 @@ We run two types of benchmarks to balance speed and coverage:
 
 | Benchmark | Markers | Purpose | Schedule |
 |-----------|---------|---------|----------|
-| **[Fast Benchmark](./history/fast/index.md)** | `regression or benchmark` | Quick regression tests to catch breaking changes | Weekly (Sunday 2 AM UTC) |
-| **[Full Benchmark](./history/full/index.md)** | `easy or medium or hard or regression or benchmark` | Comprehensive testing across all difficulty levels | Manual / On-demand |
+| ⚡ **Fast** | `regression or benchmark` | Quick regression tests to catch breaking changes | Weekly (Sunday 2 AM UTC) |
+| **Full** | `easy or medium or hard or regression or benchmark` | Comprehensive testing across all difficulty levels | Manual / On-demand |
+
+All results are stored in [History](./history/index.md). Fast benchmark results are marked with ⚡.
 
 ## Test Categories
 
-- **Regression tests (`regression`, `benchmark`)**: Critical scenarios that must always pass
+- **Regression tests (`regression`)**: Critical scenarios that must always pass
+- **Benchmark tests (`benchmark`)**: Tests included in the fast benchmark for quick validation
 - **Easy tests (`easy`)**: Straightforward scenarios for baseline validation
 - **Medium tests (`medium`)**: Moderately complex troubleshooting scenarios
 - **Hard tests (`hard`)**: Challenging multi-step investigations

@@ -1,8 +1,7 @@
 nav:
   - index.md
   - Latest Results: latest-results.md
-  - Fast Benchmark: history/fast
-  - Full Benchmark: history/full
+  - History: history
   - Running Evaluations: running-evals.md
   - Adding New Evaluations: adding-evals.md
   - Benchmarking New Models: benchmarking-new-models.md

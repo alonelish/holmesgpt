@@ -209,21 +209,18 @@ class BenchmarkRunner:
 
         # Create output directories based on benchmark type
         docs_dir = Path("docs/development/evaluations")
+        history_dir = docs_dir / "history"
+        history_dir.mkdir(parents=True, exist_ok=True)
 
-        # Determine output file and history directory based on benchmark type
+        # Determine output file based on benchmark type
+        # History files always use results_TIMESTAMP.md format (⚡ in title distinguishes fast)
         if self.benchmark_type == "fast-benchmark":
             main_output = docs_dir / "fast-benchmark-results.md"
-            history_subdir = "fast"
         elif self.benchmark_type == "full-benchmark":
             main_output = docs_dir / "full-benchmark-results.md"
-            history_subdir = "full"
         else:
             # Custom markers - use full benchmark output location
             main_output = docs_dir / "full-benchmark-results.md"
-            history_subdir = "full"
-
-        history_dir = docs_dir / "history" / history_subdir
-        history_dir.mkdir(parents=True, exist_ok=True)
 
         # Build base command
         cmd = [
@@ -247,13 +244,12 @@ class BenchmarkRunner:
             subprocess.run(cmd, check=True)
             print(f"✅ Report generated: {main_output}")
 
-            # For fast-benchmark, also copy to latest-results.md for backwards compatibility
-            if self.benchmark_type == "fast-benchmark":
-                latest_output = docs_dir / "latest-results.md"
-                shutil.copy(main_output, latest_output)
-                print(f"📋 Copied to: {latest_output} (backwards compatibility)")
+            # Always copy to latest-results.md so it shows whichever benchmark ran most recently
+            latest_output = docs_dir / "latest-results.md"
+            shutil.copy(main_output, latest_output)
+            print(f"📋 Updated: {latest_output}")
 
-            # Generate historical copy
+            # Generate historical copy (⚡ in title distinguishes fast benchmarks)
             timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
             history_output = history_dir / f"results_{timestamp}.md"
 
@@ -302,16 +298,8 @@ class BenchmarkRunner:
             ("eval_results.json", "JSON results"),
             ("evals_report.md", "Evaluation report"),
             (result_file, "Benchmark results"),
+            ("docs/development/evaluations/latest-results.md", "Latest results"),
         ]
-
-        # For fast-benchmark, also check latest-results.md
-        if self.benchmark_type == "fast-benchmark":
-            files_to_check.append(
-                (
-                    "docs/development/evaluations/latest-results.md",
-                    "Latest results (copy)",
-                )
-            )
 
         for filename, description in files_to_check:
             path = Path(filename)
@@ -325,8 +313,7 @@ class BenchmarkRunner:
         print()
         print("To commit results (like CI/CD would on main):")
         print(f"  git add {result_file}")
-        if self.benchmark_type == "fast-benchmark":
-            print("  git add docs/development/evaluations/latest-results.md")
+        print("  git add docs/development/evaluations/latest-results.md")
         print("  git commit -m 'Update benchmark results [skip ci]'")
         print("=" * 50)
 
