@@ -244,16 +244,6 @@ def stream_investigate_issues(req: InvestigateRequest):
 @app.post("/api/workload_health_check")
 def workload_health_check(request: WorkloadHealthRequest):
     try:
-        # Validate trace config early - fail fast if misconfigured
-        try:
-            validate_trace_config(request.trace)
-        except TracingConfigError as e:
-            raise HTTPException(status_code=400, detail=str(e))
-
-        # Create tracer if trace option is provided
-        tracer = TracingFactory.create_tracer(request.trace, project="HolmesGPT-Server")
-        tracer.start_experiment()
-
         runbooks = config.get_runbook_catalog()
         resource = request.resource
         workload_alerts: list[str] = []
@@ -294,21 +284,11 @@ def workload_health_check(request: WorkloadHealthRequest):
             },
         )
 
-        with tracer.start_trace(
-            f'workload_health_check "{resource.get("name", "unknown")}"',
-            span_type=SpanType.TASK,
-        ) as trace_span:
-            trace_span.log(
-                input={"ask": request.ask, "resource": resource},
-                metadata={"type": "workload_health_check"},
-            )
-            ai_call = ai.prompt_call(
-                system_prompt,
-                request.ask,
-                workload_health_structured_output,
-                trace_span=trace_span,
-            )
-            trace_span.log(output=ai_call.result)
+        ai_call = ai.prompt_call(
+            system_prompt,
+            request.ask,
+            workload_health_structured_output,
+        )
 
         ai_call.result = clear_json_markdown(ai_call.result)
 
@@ -318,7 +298,6 @@ def workload_health_check(request: WorkloadHealthRequest):
             num_llm_calls=ai_call.num_llm_calls,
             instructions=issue_instructions,
             metadata=ai_call.metadata,
-            trace_url=tracer.get_trace_url(),
         )
     except AuthenticationError as e:
         raise HTTPException(status_code=401, detail=e.message)
@@ -334,16 +313,6 @@ def workload_health_conversation(
     request: WorkloadHealthChatRequest,
 ):
     try:
-        # Validate trace config early - fail fast if misconfigured
-        try:
-            validate_trace_config(request.trace)
-        except TracingConfigError as e:
-            raise HTTPException(status_code=400, detail=str(e))
-
-        # Create tracer if trace option is provided
-        tracer = TracingFactory.create_tracer(request.trace, project="HolmesGPT-Server")
-        tracer.start_experiment()
-
         ai = config.create_toolcalling_llm(dal=dal, model=request.model)
         global_instructions = dal.get_global_instructions_for_account()
 
@@ -353,23 +322,13 @@ def workload_health_conversation(
             config=config,
             global_instructions=global_instructions,
         )
-
-        with tracer.start_trace(
-            f'workload_health_chat "{request.ask[:50]}"', span_type=SpanType.TASK
-        ) as trace_span:
-            trace_span.log(
-                input={"ask": request.ask, "resource": request.resource},
-                metadata={"type": "workload_health_chat"},
-            )
-            llm_call = ai.messages_call(messages=messages, trace_span=trace_span)
-            trace_span.log(output=llm_call.result)
+        llm_call = ai.messages_call(messages=messages)
 
         return ChatResponse(
             analysis=llm_call.result,
             tool_calls=llm_call.tool_calls,
             conversation_history=llm_call.messages,
             metadata=llm_call.metadata,
-            trace_url=tracer.get_trace_url(),
         )
     except AuthenticationError as e:
         raise HTTPException(status_code=401, detail=e.message)
@@ -383,18 +342,6 @@ def workload_health_conversation(
 @app.post("/api/issue_chat")
 def issue_conversation(issue_chat_request: IssueChatRequest):
     try:
-        # Validate trace config early - fail fast if misconfigured
-        try:
-            validate_trace_config(issue_chat_request.trace)
-        except TracingConfigError as e:
-            raise HTTPException(status_code=400, detail=str(e))
-
-        # Create tracer if trace option is provided
-        tracer = TracingFactory.create_tracer(
-            issue_chat_request.trace, project="HolmesGPT-Server"
-        )
-        tracer.start_experiment()
-
         runbooks = config.get_runbook_catalog()
         ai = config.create_toolcalling_llm(dal=dal, model=issue_chat_request.model)
         global_instructions = dal.get_global_instructions_for_account()
@@ -406,23 +353,13 @@ def issue_conversation(issue_chat_request: IssueChatRequest):
             global_instructions=global_instructions,
             runbooks=runbooks,
         )
-
-        with tracer.start_trace(
-            f'issue_chat "{issue_chat_request.ask[:50]}"', span_type=SpanType.TASK
-        ) as trace_span:
-            trace_span.log(
-                input={"ask": issue_chat_request.ask, "issue_type": issue_chat_request.issue_type},
-                metadata={"type": "issue_chat"},
-            )
-            llm_call = ai.messages_call(messages=messages, trace_span=trace_span)
-            trace_span.log(output=llm_call.result)
+        llm_call = ai.messages_call(messages=messages)
 
         return ChatResponse(
             analysis=llm_call.result,
             tool_calls=llm_call.tool_calls,
             conversation_history=llm_call.messages,
             metadata=llm_call.metadata,
-            trace_url=tracer.get_trace_url(),
         )
     except AuthenticationError as e:
         raise HTTPException(status_code=401, detail=e.message)

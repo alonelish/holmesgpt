@@ -238,10 +238,6 @@ class WorkloadHealthRequest(BaseModel):
     include_tool_call_results: bool = False
     prompt_template: str = "builtin://kubernetes_workload_ask.jinja2"
     model: Optional[str] = None
-    trace: Optional[str] = Field(
-        default=None,
-        description="Enable tracing to the specified provider (e.g., 'braintrust')",
-    )
 
 
 class ChatRequest(ChatRequestBaseModel):
