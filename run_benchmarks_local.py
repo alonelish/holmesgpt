@@ -239,8 +239,13 @@ class BenchmarkRunner:
         if self.benchmark_type:
             cmd.extend(["--benchmark-type", self.benchmark_type])
 
+        # Set up environment with PYTHONPATH to ensure tests module is importable
+        env = os.environ.copy()
+        project_root = str(Path.cwd())
+        env["PYTHONPATH"] = f"{project_root}:{env.get('PYTHONPATH', '')}"
+
         try:
-            subprocess.run(cmd, check=True)
+            subprocess.run(cmd, check=True, env=env)
             print(f"✅ Report generated: {main_output}")
 
             # Generate historical copy first (⚡ in title distinguishes fast benchmarks)
@@ -251,7 +256,7 @@ class BenchmarkRunner:
             cmd_history = cmd.copy()
             output_idx = cmd_history.index("--output-file") + 1
             cmd_history[output_idx] = str(history_output)
-            subprocess.run(cmd_history, check=True)
+            subprocess.run(cmd_history, check=True, env=env)
             print(f"📁 Saved historical copy: {history_output}")
 
             # Create redirect page for latest-results.md pointing to the history file
