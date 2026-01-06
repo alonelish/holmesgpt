@@ -69,8 +69,14 @@ class AlertManagerSource(SourcePlugin):
             params["filter"] = self.label_filter
             logging.info(f"Filtering alerts by {self.label_filter}")
 
-        if self.username is not None or self.password is not None:
-            auth = HTTPBasicAuth(self.username, self.password)  # type: ignore
+        if self.username is not None and self.password is not None:
+            auth = HTTPBasicAuth(self.username, self.password)
+        elif self.username is not None or self.password is not None:
+            logging.warning(
+                "Both username and password must be provided for HTTP Basic Auth. "
+                "Only one was provided, skipping authentication."
+            )
+            auth = None
         else:
             auth = None
 
