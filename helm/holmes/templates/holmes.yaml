@@ -18,7 +18,7 @@ spec:
       labels:
         app: holmes
       annotations:
-        # checksum annotation triggering pod reload when .Values.toolsets changes by helm upgrade
+        # checksum annotation triggering pod reload when config changes by helm upgrade
         checksum/toolset-config: {{ list .Values.toolsets .Values.modelList .Values.mcp_servers | toYaml | sha256sum }}
         {{- with .Values.podAnnotations }}
         {{- toYaml . | nindent 8 }}

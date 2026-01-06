@@ -59,6 +59,7 @@ from holmes.core.models import (
 from holmes.core.investigation_structured_output import clear_json_markdown
 from holmes.plugins.prompts import load_and_render_prompt
 from holmes.utils.holmes_sync_toolsets import holmes_sync_toolsets_status
+from holmes.utils.config_watcher import ConfigWatcher
 from holmes.utils.log import EndpointFilter
 # removed: add_runbooks_to_user_prompt
 
@@ -108,6 +109,41 @@ def sync_before_server_start():
         holmes_sync_toolsets_status(dal, config)
     except Exception:
         logging.error("Failed to synchronise holmes toolsets", exc_info=True)
+
+
+def on_cluster_name_change(old_name: str, new_name: str) -> None:
+    """
+    Callback triggered when the cluster name changes in the config file.
+
+    This happens when Kubernetes updates the mounted secret after a helm upgrade.
+    We need to update the config and re-sync toolsets to Supabase under the new cluster name.
+    """
+    logging.info(f"Handling cluster name change: '{old_name}' -> '{new_name}'")
+
+    # Update config and reset cached DAL/executors
+    config.update_cluster_name(new_name)
+
+    # Re-sync with Supabase using the new cluster name
+    new_dal = config.dal
+    if not new_dal.enabled:
+        logging.info("Skipping re-sync - not connected to Robusta platform")
+        return
+
+    try:
+        update_holmes_status_in_db(new_dal, config)
+        logging.info("Successfully updated Holmes status after cluster name change")
+    except Exception:
+        logging.error("Failed to update Holmes status after cluster name change", exc_info=True)
+
+    try:
+        holmes_sync_toolsets_status(new_dal, config)
+        logging.info("Successfully re-synced toolsets after cluster name change")
+    except Exception:
+        logging.error("Failed to re-sync toolsets after cluster name change", exc_info=True)
+
+
+# Config watcher for detecting cluster name changes after helm upgrades
+config_watcher = ConfigWatcher(on_cluster_name_change=on_cluster_name_change)
 
 
 if ENABLE_TELEMETRY and SENTRY_DSN:
@@ -448,4 +484,8 @@ if __name__ == "__main__":
         "%(asctime)s %(levelname)-8s %(message)s"
     )
     sync_before_server_start()
+
+    # Start watching for config changes (e.g., clusterName changes after helm upgrade)
+    config_watcher.start(initial_cluster_name=config.cluster_name)
+
     uvicorn.run(app, host=HOLMES_HOST, port=HOLMES_PORT, log_config=log_config)

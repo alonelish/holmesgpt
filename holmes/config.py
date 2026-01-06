@@ -125,6 +125,26 @@ class Config(RobustaBaseConfig):
             self._dal = SupabaseDal(self.cluster_name)  # type: ignore
         return self._dal
 
+    def update_cluster_name(self, new_cluster_name: str) -> None:
+        """
+        Update the cluster name and reset cached objects that depend on it.
+
+        This is used when the config file changes at runtime (e.g., after helm upgrade)
+        and Kubernetes updates the mounted secret.
+        """
+        if self.cluster_name == new_cluster_name:
+            return
+
+        logging.info(f"Updating cluster name from '{self.cluster_name}' to '{new_cluster_name}'")
+        self.cluster_name = new_cluster_name
+
+        # Reset DAL so it gets recreated with the new cluster name
+        self._dal = None
+
+        # Reset tool executor so toolsets get re-synced with new cluster name
+        self._server_tool_executor = None
+        self._agui_tool_executor = None
+
     @property
     def llm_model_registry(self) -> LLMModelRegistry:
         if not self._llm_model_registry:
