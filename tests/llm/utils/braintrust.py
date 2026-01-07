@@ -3,10 +3,10 @@ import logging
 import os
 from typing import Any, List, Optional, Union
 
-import braintrust
-from braintrust import Dataset, Experiment, ReadonlyExperiment, Span
 from pydantic import BaseModel
 
+import braintrust
+from braintrust import Dataset, Experiment, ReadonlyExperiment, Span
 from holmes.core.llm import TokenCountMetadata
 from holmes.core.tracing import (
     BRAINTRUST_API_KEY,

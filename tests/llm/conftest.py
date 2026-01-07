@@ -969,3 +969,21 @@ def _display_braintrust_experiment_link(terminalreporter):
     clickable_url = f"\033]8;;{experiment_url}\033\\{experiment_url}\033]8;;\033\\"
     print(f"View full experiment results: \033[94m{clickable_url}\033[0m")
     print("=" * 70 + "\n")
+
+
+def pytest_sessionfinish(session, exitstatus):
+    """Hook to output Anthropic cache control test results table at end of session."""
+    # Import here to avoid circular imports
+    try:
+        from tests.llm.test_anthropic_cache_control import _output_results_table
+
+        # Pass session to collect results from all workers in parallel execution
+        _output_results_table(session=session)
+    except ImportError:
+        # Test file might not be imported, skip
+        pass
+    except Exception as e:
+        # Don't fail the test session if table output fails
+        import logging
+
+        logging.warning(f"Failed to output Anthropic cache control results table: {e}")

@@ -4,9 +4,9 @@ from typing import List, Optional, Union
 
 import openai
 from autoevals import LLMClassifier, init
-from braintrust import Span, SpanTypeAttribute
 from braintrust.oai import wrap_openai
 
+from braintrust import Span, SpanTypeAttribute
 from tests.llm.utils.test_case_utils import _model_list_exists, create_eval_llm
 from tests.llm.utils.test_env_vars import (
     AZURE_API_BASE,
