@@ -455,6 +455,97 @@ jobs:
               pr_number: prNumber ? prNumber.toString() : ''
             }));
 
+      - name: Detect relevant evals from file changes
+        id: file-based-evals
+        if: github.event_name != 'issue_comment' || steps.eval-comment.outcome == 'success'
+        shell: bash
+        working-directory: code
+        run: |
+          # For PR events, detect which files changed and map them to evaluation tests
+          # This uses the .evals file to determine which tests should run based on modified files
+
+          if [[ "${{ github.event_name }}" == "pull_request" ]] || [[ "${{ github.event_name }}" == "issue_comment" && -n "${{ steps.eval-comment.outputs.pr_branch }}" ]]; then
+            # Determine the base branch for comparison
+            if [[ "${{ github.event_name }}" == "pull_request" ]]; then
+              BASE_REF="${{ github.event.pull_request.base.sha }}"
+            else
+              # For issue_comment, use the base branch from the PR
+              BASE_REF="origin/${{ github.event.pull_request.base.ref || 'master' }}"
+            fi
+
+            echo "🔍 Detecting modified files compared to ${BASE_REF}..."
+
+            # Fetch the base branch for comparison
+            git fetch origin ${{ github.event.pull_request.base.ref || 'master' }} --depth=100 || true
+
+            # Get list of modified files (added, modified, or renamed)
+            MODIFIED_FILES=$(git diff --name-only --diff-filter=AMR ${BASE_REF}...HEAD 2>/dev/null || echo "")
+
+            if [[ -z "$MODIFIED_FILES" ]]; then
+              echo "ℹ️  No modified files detected, skipping file-based eval detection"
+              echo "additional_markers=" >> $GITHUB_OUTPUT
+              exit 0
+            fi
+
+            echo "📝 Modified files:"
+            echo "$MODIFIED_FILES"
+            echo ""
+
+            # Check if .evals file exists
+            if [[ ! -f ".evals" ]]; then
+              echo "⚠️  .evals file not found, skipping file-based eval detection"
+              echo "additional_markers=" >> $GITHUB_OUTPUT
+              exit 0
+            fi
+
+            # Parse .evals file and match modified files to markers
+            MATCHED_MARKERS=""
+
+            while IFS=: read -r pattern markers; do
+              # Skip comments and empty lines
+              [[ "$pattern" =~ ^[[:space:]]*# ]] && continue
+              [[ -z "$pattern" ]] && continue
+
+              # Remove leading/trailing whitespace
+              pattern=$(echo "$pattern" | xargs)
+              markers=$(echo "$markers" | xargs)
+
+              # Convert glob pattern to regex for matching
+              # Replace ** with .* and * with [^/]*
+              regex_pattern="${pattern//\*\*/.*}"
+              regex_pattern="${regex_pattern//\*/[^/]*}"
+              regex_pattern="^${regex_pattern}$"
+
+              # Check each modified file against the pattern
+              while IFS= read -r file; do
+                if [[ "$file" =~ $regex_pattern ]]; then
+                  echo "✅ Match: $file -> $markers"
+                  if [[ -z "$MATCHED_MARKERS" ]]; then
+                    MATCHED_MARKERS="$markers"
+                  else
+                    MATCHED_MARKERS="$MATCHED_MARKERS,$markers"
+                  fi
+                fi
+              done <<< "$MODIFIED_FILES"
+            done < .evals
+
+            # Remove duplicates and format as comma-separated list
+            if [[ -n "$MATCHED_MARKERS" ]]; then
+              # Split by comma, sort, unique, join back
+              UNIQUE_MARKERS=$(echo "$MATCHED_MARKERS" | tr ',' '\n' | sort -u | tr '\n' ',' | sed 's/,$//')
+              echo ""
+              echo "🎯 Additional markers to run: $UNIQUE_MARKERS"
+              echo "additional_markers=$UNIQUE_MARKERS" >> $GITHUB_OUTPUT
+            else
+              echo ""
+              echo "ℹ️  No matching patterns found in .evals"
+              echo "additional_markers=" >> $GITHUB_OUTPUT
+            fi
+          else
+            echo "ℹ️  Not a PR event, skipping file-based eval detection"
+            echo "additional_markers=" >> $GITHUB_OUTPUT
+          fi
+
       - name: Check if tests should run
         id: check-tests
         if: github.event_name != 'issue_comment' || steps.eval-comment.outcome == 'success'
@@ -466,6 +557,48 @@ jobs:
           else
             echo "should-run=false" >> $GITHUB_OUTPUT
           fi
+
+      - name: Merge markers with file-based evals
+        id: merged-markers
+        if: github.event_name != 'issue_comment' || steps.eval-comment.outcome == 'success'
+        shell: bash
+        run: |
+          # Combine the original markers with additional markers from file changes
+          ORIGINAL_MARKERS="${{ steps.eval-params.outputs.markers }}"
+          ADDITIONAL_MARKERS="${{ steps.file-based-evals.outputs.additional_markers }}"
+
+          echo "📋 Original markers: '$ORIGINAL_MARKERS'"
+          echo "➕ Additional markers from file changes: '$ADDITIONAL_MARKERS'"
+
+          # Merge markers: combine both, remove duplicates, preserve order
+          if [[ -n "$ORIGINAL_MARKERS" ]] && [[ -n "$ADDITIONAL_MARKERS" ]]; then
+            # Both exist: combine and deduplicate
+            COMBINED="$ORIGINAL_MARKERS,$ADDITIONAL_MARKERS"
+            MERGED_MARKERS=$(echo "$COMBINED" | tr ',' '\n' | awk '!seen[$0]++' | tr '\n' ',' | sed 's/,$//')
+          elif [[ -n "$ORIGINAL_MARKERS" ]]; then
+            # Only original markers
+            MERGED_MARKERS="$ORIGINAL_MARKERS"
+          elif [[ -n "$ADDITIONAL_MARKERS" ]]; then
+            # Only additional markers
+            MERGED_MARKERS="$ADDITIONAL_MARKERS"
+          else
+            # No markers at all
+            MERGED_MARKERS=""
+          fi
+
+          echo "🎯 Merged markers: '$MERGED_MARKERS'"
+
+          # Build the marker expression for pytest
+          if [[ -n "$MERGED_MARKERS" ]]; then
+            # Replace commas with ' or ' for pytest marker expression
+            MARKER_EXPR="llm and ($(echo "$MERGED_MARKERS" | sed 's/,/ or /g'))"
+          else
+            MARKER_EXPR="llm"
+          fi
+
+          echo "🔍 Final marker expression: '$MARKER_EXPR'"
+          echo "merged_markers=$MERGED_MARKERS" >> $GITHUB_OUTPUT
+          echo "marker_expr=$MARKER_EXPR" >> $GITHUB_OUTPUT
 
       - name: Post initial comment
         id: initial-comment
@@ -618,7 +751,7 @@ jobs:
         shell: bash
         env:
           MODEL: ${{ steps.eval-params.outputs.model }}
-          EVAL_MARKER_EXPR: ${{ steps.eval-params.outputs.marker_expr }}
+          EVAL_MARKER_EXPR: ${{ steps.merged-markers.outputs.marker_expr }}
           EVAL_FILTER: ${{ steps.eval-params.outputs.filter }}
         run: |
           # Unset MODEL if empty so get_models() uses DEFAULT_MODEL
@@ -783,7 +916,7 @@ jobs:
           UPLOAD_DATASET: "true"
           EXPERIMENT_ID: github-${{ github.run_id }}.${{ github.run_number }}.${{ github.run_attempt }}
           GENERATE_REGRESSIONS_FILE: "true"
-          EVAL_MARKER_EXPR: ${{ steps.eval-params.outputs.marker_expr }}
+          EVAL_MARKER_EXPR: ${{ steps.merged-markers.outputs.marker_expr }}
           EVAL_FILTER: ${{ steps.eval-params.outputs.filter }}
           EVAL_BRANCH: ${{ steps.eval-params.outputs.branch }}
         run: |

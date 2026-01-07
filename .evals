@@ -1,0 +1,156 @@
+# .evals - Maps source files to evaluation tests
+#
+# This file maps source code files to the evaluation tests that should run when those files are modified.
+# It's used by the regression GitHub action to automatically run relevant evals based on changed files.
+#
+# Format:
+#   file_pattern:pytest_markers
+#
+# - file_pattern: A file path or glob pattern (supports ** for recursive matching)
+# - pytest_markers: Comma-separated list of pytest markers (from pyproject.toml)
+#
+# Examples:
+#   holmes/plugins/toolsets/prometheus.yaml:prometheus
+#   holmes/plugins/toolsets/prometheus/**:prometheus
+#   holmes/core/tool_calling_llm.py:easy,regression
+#
+# Lines starting with # are comments. Empty lines are ignored.
+
+# ==========================================
+# Core System Components
+# ==========================================
+# Core investigation engine - run all regression tests
+holmes/core/tool_calling_llm.py:regression
+holmes/core/investigation.py:regression
+holmes/core/toolset_manager.py:regression
+holmes/core/tools.py:regression
+
+# Main CLI entry point - run all regression tests
+holmes/main.py:regression
+holmes/interactive.py:regression
+
+# Configuration system - run all regression tests
+holmes/config.py:regression
+
+# ==========================================
+# Toolsets - Infrastructure & Platforms
+# ==========================================
+# Kubernetes toolset
+holmes/plugins/toolsets/kubernetes.yaml:kubernetes
+holmes/plugins/toolsets/kubernetes_logs.yaml:kubernetes,logs
+holmes/plugins/toolsets/kubernetes_logs.py:kubernetes,logs
+
+# OpenShift (Kubernetes variant)
+holmes/plugins/toolsets/openshift.yaml:kubernetes
+
+# Cloud provider specific
+holmes/plugins/toolsets/aks.yaml:kubernetes
+holmes/plugins/toolsets/aks-node-health.yaml:kubernetes
+
+# Container & orchestration tools
+holmes/plugins/toolsets/docker.yaml:kubernetes
+holmes/plugins/toolsets/helm.yaml:kubernetes
+holmes/plugins/toolsets/argocd.yaml:kubernetes
+
+# Networking
+holmes/plugins/toolsets/cilium.yaml:kubernetes,network
+holmes/plugins/toolsets/connectivity_check.py:network
+
+# ==========================================
+# Toolsets - Observability & Monitoring
+# ==========================================
+# Prometheus
+holmes/plugins/toolsets/prometheus.yaml:prometheus,metrics
+holmes/plugins/toolsets/prometheus/**:prometheus,metrics
+
+# Grafana
+holmes/plugins/toolsets/grafana/**:grafana-dashboard
+
+# Loki (logging)
+# Note: Loki toolset is inside grafana directory
+holmes/plugins/toolsets/grafana/loki.yaml:loki,logs
+
+# Elasticsearch / OpenSearch
+holmes/plugins/toolsets/elasticsearch/**:elasticsearch,logs
+
+# DataDog
+holmes/plugins/toolsets/datadog/**:datadog
+
+# New Relic
+holmes/plugins/toolsets/newrelic/**:newrelic
+
+# Coralogix
+holmes/plugins/toolsets/coralogix/**:coralogix
+
+# ==========================================
+# Toolsets - Messaging & Queues
+# ==========================================
+# Kafka
+holmes/plugins/toolsets/kafka.py:kafka
+
+# RabbitMQ
+holmes/plugins/toolsets/rabbitmq/**:kubernetes
+
+# ==========================================
+# Toolsets - Databases
+# ==========================================
+# Azure SQL
+holmes/plugins/toolsets/azure_sql/**:database
+
+# MongoDB Atlas
+holmes/plugins/toolsets/atlas_mongodb/**:database
+
+# ==========================================
+# Toolsets - Third Party Integrations
+# ==========================================
+# Git integration
+holmes/plugins/toolsets/git.py:regression
+
+# ServiceNow
+holmes/plugins/toolsets/servicenow_tables/**:regression
+
+# Confluence
+holmes/plugins/toolsets/confluence.yaml:regression
+
+# Slab
+holmes/plugins/toolsets/slab.yaml:regression
+
+# ==========================================
+# Toolsets - Utilities & Helpers
+# ==========================================
+# Bash toolset (shell command execution)
+holmes/plugins/toolsets/bash/**:regression
+
+# Service discovery
+holmes/plugins/toolsets/service_discovery.py:regression
+
+# JSON filtering utilities
+holmes/plugins/toolsets/json_filter_mixin.py:regression
+
+# Toolset utilities
+holmes/plugins/toolsets/utils.py:regression
+
+# ==========================================
+# Plugin System
+# ==========================================
+# Source plugins (alert ingestion)
+holmes/plugins/sources/**:regression
+
+# Destination plugins (result delivery)
+holmes/plugins/destinations/**:regression
+
+# Runbooks
+holmes/plugins/runbooks/**:runbooks
+
+# Prompts
+holmes/plugins/prompts/**:regression
+
+# ==========================================
+# Test Infrastructure
+# ==========================================
+# LLM test fixtures - run related tests
+tests/llm/fixtures/test_ask_holmes/09_crashpod/**:09_crashpod
+tests/llm/fixtures/test_ask_holmes/101_loki_historical_logs_pod_deleted/**:101_loki_historical_logs_pod_deleted
+
+# Shared test infrastructure - run all easy tests
+tests/llm/fixtures/shared/**:easy
