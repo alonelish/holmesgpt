@@ -6,6 +6,7 @@ Extend HolmesGPT with custom integrations and contribute to the project.
 
 - **[Contributing Guidelines](https://github.com/HolmesGPT/holmesgpt/blob/master/CONTRIBUTING.md){:target="_blank"}** - How to contribute to the HolmesGPT project
 - **[Contributing Documentation](https://github.com/HolmesGPT/holmesgpt/blob/master/docs/README.md){:target="_blank"}** - How to contribute to documentation
+- **[Toolset Development](toolset-development.md)** - Patterns and best practices for building toolsets
 
 ## Evaluations
 

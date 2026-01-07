@@ -268,3 +268,101 @@ Some examples
 - `synthetic` - Tests that use manually generated mock data (cannot be run live)
 - `datetime` - Tests date/time handling and interpretation
 - etc.
+
+## Best Practices
+
+### Anti-Cheat Testing
+
+Design tests that verify discovery ability, not pattern recognition:
+
+**Prompt Design:**
+
+- BAD: `"Find node_exporter metrics"` (gives away the answer)
+- GOOD: `"Find CPU pressure monitoring queries"` (tests discovery)
+
+**Resource Naming:**
+
+- Use neutral, business-context names: `checkout-api`, `user-service`, `inventory-db`
+- Avoid hint-giving names: `broken-pod`, `crashloop-app`, `test-project-that-does-not-exist`
+- When renaming dashboards/resources, add source comments: `# Uses Node Exporter dashboard but renamed to prevent cheats`
+
+**Ruling Out Hallucinations:**
+
+- **Best**: Check specific values that can only be discovered by querying (unique IDs, injected error codes, exact counts)
+- **Acceptable**: Use `include_tool_calls: true` to verify the tool was called when output values are too generic
+- **Bad**: Check generic output patterns an LLM could guess (e.g., "cluster status is green/yellow/red")
+
+### Realism
+
+- No fake/obvious logs like "Memory usage stabilized at 800MB"
+- No hints in filenames like `disk_consumer.py` - use realistic names like `training_pipeline.py`
+- No error messages that give away it's simulated like "Simulated processing error"
+- Use real-world scenarios: ML pipelines with checkpoint issues, database connection pools
+
+### Infrastructure Setup
+
+**Verify actual service functionality**, not just pod readiness:
+
+```bash
+# BAD: Only checks pod is running
+kubectl wait --for=condition=ready pod -l app=grafana
+
+# GOOD: Verifies service is actually working
+for i in {1..30}; do
+  if kubectl exec -n $NS deployment/grafana -- \
+    wget -q -O- http://localhost:3000/api/health | grep -q "ok"; then
+    echo "✅ Grafana is ready!"
+    break
+  fi
+  sleep 1
+done
+```
+
+**Use `exit 1` when setup verification fails** to fail the test early.
+
+**Never use `:latest` container tags** - use specific versions like `grafana/grafana:12.3.1`.
+
+### Race Condition Handling
+
+Never use bare `kubectl wait` immediately after resource creation. Use retry loops:
+
+```bash
+# WRONG - fails if pod not scheduled yet
+kubectl apply -f deployment.yaml
+kubectl wait --for=condition=ready pod -l app=myapp --timeout=300s
+
+# CORRECT - retry loop handles race condition
+kubectl apply -f deployment.yaml
+POD_READY=false
+for i in {1..60}; do
+  if kubectl wait --for=condition=ready pod -l app=myapp --timeout=5s 2>/dev/null; then
+    echo "✅ Pod is ready!"
+    POD_READY=true
+    break
+  fi
+  sleep 1
+done
+if [ "$POD_READY" = false ]; then
+  echo "❌ Pod failed to become ready"
+  kubectl logs -l app=myapp --tail=20
+  exit 1
+fi
+```
+
+### Shared Infrastructure
+
+When multiple tests use the same service (Grafana, Loki, Prometheus):
+
+```bash
+# Create shared manifest in tests/llm/fixtures/shared/servicename.yaml
+# Use in tests:
+kubectl apply -f ../../shared/servicename.yaml -n app-<testid>
+```
+
+### Cloud Service Evals
+
+For testing cloud services (Elasticsearch, external APIs) without Kubernetes:
+
+- Use `toolsets.yaml` with env var references: `url: "{{ env.ELASTICSEARCH_URL }}"`
+- Add required env vars to `.github/workflows/eval-regression.yaml`
+- Add URL patterns to `conftest.py` passthrough list: `rsps.add_passthru(re.compile(r"https://.*\.cloud\.es\.io"))`
