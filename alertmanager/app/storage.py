@@ -8,7 +8,7 @@ this should be replaced with a persistent storage backend (e.g., PostgreSQL).
 import hashlib
 import json
 import logging
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Dict, List, Optional
 from collections import defaultdict
 
@@ -115,7 +115,7 @@ class AlertStorage:
 
         # Filter by active status
         if active is not None:
-            now = datetime.utcnow()
+            now = datetime.now(timezone.utc)
             alerts = [
                 alert
                 for alert in alerts

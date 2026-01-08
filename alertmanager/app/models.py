@@ -8,7 +8,7 @@ These models match the Alertmanager v2 API specification to ensure
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class Alert(BaseModel):
@@ -28,8 +28,8 @@ class Alert(BaseModel):
     status: Optional[Dict[str, Any]] = Field(None, description="Status information")
     receivers: Optional[List[Dict[str, str]]] = Field(None, description="Receivers that handled the alert")
 
-    class Config:
-        json_schema_extra = {
+    model_config = ConfigDict(
+        json_schema_extra={
             "example": {
                 "labels": {
                     "alertname": "HighMemoryUsage",
@@ -44,6 +44,7 @@ class Alert(BaseModel):
                 "generatorURL": "http://prometheus:9090/graph?g0.expr=..."
             }
         }
+    )
 
 
 class AlertGroup(BaseModel):

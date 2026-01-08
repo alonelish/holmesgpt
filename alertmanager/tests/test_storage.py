@@ -3,7 +3,7 @@ Tests for alert storage functionality.
 """
 
 import pytest
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 from app.models import Alert, HolmesInvestigation
 from app.storage import AlertStorage
@@ -158,7 +158,7 @@ def test_get_all_alerts_with_label_filter(storage):
 
 def test_get_all_alerts_active_filter(storage):
     """Test filtering alerts by active status."""
-    now = datetime.utcnow()
+    now = datetime.now(timezone.utc)
 
     # Active alert (no endsAt)
     alert1 = Alert(

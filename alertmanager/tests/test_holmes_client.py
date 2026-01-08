@@ -4,7 +4,7 @@ Tests for HolmesGPT client integration.
 
 import pytest
 from datetime import datetime
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 from app.holmes_client import HolmesClient
 
@@ -20,14 +20,18 @@ async def test_investigate_alert(holmes_client):
     """Test alert investigation."""
     # Mock the HTTP client
     with patch.object(holmes_client.client, "post") as mock_post:
-        mock_response = AsyncMock()
+        # Use MagicMock for response since json() is synchronous in httpx
+        mock_response = MagicMock()
         mock_response.json.return_value = {
             "analysis": "Root cause: Memory leak in application",
             "tool_calls": [],
             "num_llm_calls": 3,
         }
-        mock_response.raise_for_status = AsyncMock()
-        mock_post.return_value = mock_response
+        mock_response.raise_for_status = MagicMock()
+        # post() is async, so mock_post needs to return a coroutine
+        async def async_post(*args, **kwargs):
+            return mock_response
+        mock_post.side_effect = async_post
 
         result = await holmes_client.investigate_alert(
             alert_name="HighMemoryUsage",

@@ -4,8 +4,8 @@ Configuration management for AI-Alertmanager.
 
 import os
 from typing import Optional
-from pydantic import BaseModel, Field
-from pydantic_settings import BaseSettings
+from pydantic import BaseModel, ConfigDict, Field
+from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class AIAlertmanagerConfig(BaseSettings):
@@ -63,9 +63,10 @@ class AIAlertmanagerConfig(BaseSettings):
         description="Log level (DEBUG, INFO, WARNING, ERROR)"
     )
 
-    class Config:
-        env_prefix = "AI_ALERTMANAGER_"
-        case_sensitive = False
+    model_config = SettingsConfigDict(
+        env_prefix="AI_ALERTMANAGER_",
+        case_sensitive=False,
+    )
 
 
 def load_config() -> AIAlertmanagerConfig:
