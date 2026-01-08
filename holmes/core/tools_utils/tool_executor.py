@@ -1,5 +1,5 @@
 import logging
-from typing import List, Optional
+from typing import List, Optional, Set
 
 import sentry_sdk
 
@@ -51,8 +51,15 @@ class ToolExecutor:
         return None
 
     @sentry_sdk.trace
-    def get_all_tools_openai_format(self, target_model: str):
+    def get_all_tools_openai_format(
+        self, target_model: str, exclude_tools: Optional[Set[str]] = None
+    ):
+        tools_to_include: List[Tool] = list(self.tools_by_name.values())
+        if exclude_tools:
+            tools_to_include = [
+                tool for tool in tools_to_include if tool.name not in exclude_tools
+            ]
         return [
             tool.get_openai_format(target_model=target_model)
-            for tool in self.tools_by_name.values()
+            for tool in tools_to_include
         ]

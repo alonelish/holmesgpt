@@ -2,7 +2,7 @@ import concurrent.futures
 import json
 import logging
 import textwrap
-from typing import Any, Callable, Dict, List, Optional, Type, Union
+from typing import Any, Callable, Dict, List, Optional, Set, Type, Union
 
 import sentry_sdk
 from openai import BadRequestError
@@ -289,9 +289,13 @@ class ToolCallingLLM:
         messages: List[Dict[str, str]],
         response_format: Optional[Union[dict, Type[BaseModel]]] = None,
         trace_span=DummySpan(),
+        exclude_tools: Optional[Set[str]] = None,
     ) -> LLMResult:
         return self.call(
-            messages, response_format=response_format, trace_span=trace_span
+            messages,
+            response_format=response_format,
+            trace_span=trace_span,
+            exclude_tools=exclude_tools,
         )
 
     @sentry_sdk.trace
@@ -303,6 +307,7 @@ class ToolCallingLLM:
         sections: Optional[InputSectionsDataType] = None,
         trace_span=DummySpan(),
         tool_number_offset: int = 0,
+        exclude_tools: Optional[Set[str]] = None,
     ) -> LLMResult:
         tool_calls: list[
             dict
@@ -310,7 +315,7 @@ class ToolCallingLLM:
         all_tool_calls = []  # type: ignore
         costs = LLMCosts()
         tools = self.tool_executor.get_all_tools_openai_format(
-            target_model=self.llm.model
+            target_model=self.llm.model, exclude_tools=exclude_tools
         )
         max_steps = self.max_steps
         i = 0
@@ -728,6 +733,7 @@ class ToolCallingLLM:
         msgs: Optional[list[dict]] = None,
         enable_tool_approval: bool = False,
         tool_decisions: List[ToolApprovalDecision] | None = None,
+        exclude_tools: Optional[Set[str]] = None,
     ):
         """
         This function DOES NOT call llm.completion(stream=true).
@@ -749,7 +755,7 @@ class ToolCallingLLM:
             messages.extend(msgs)
         tool_calls: list[dict] = []
         tools = self.tool_executor.get_all_tools_openai_format(
-            target_model=self.llm.model
+            target_model=self.llm.model, exclude_tools=exclude_tools
         )
         max_steps = self.max_steps
         metadata: Dict[Any, Any] = {}

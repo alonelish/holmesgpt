@@ -192,6 +192,9 @@ class ChatRequestBaseModel(BaseModel):
     )
     tool_decisions: Optional[List[ToolApprovalDecision]] = None
     additional_system_prompt: Optional[str] = None
+    disable_todo_tools: Optional[bool] = (
+        False  # Disable todo tools for faster responses without long-running investigations
+    )
 
     # In our setup with litellm, the first message in conversation_history
     # should follow the structure [{"role": "system", "content": ...}],

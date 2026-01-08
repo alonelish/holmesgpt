@@ -58,6 +58,7 @@ from holmes.core.models import (
 )
 from holmes.core.investigation_structured_output import clear_json_markdown
 from holmes.plugins.prompts import load_and_render_prompt
+from holmes.plugins.toolsets.investigator.core_investigation import TODO_WRITE_TOOL_NAME
 from holmes.utils.holmes_sync_toolsets import holmes_sync_toolsets_status
 from holmes.utils.log import EndpointFilter
 # removed: add_runbooks_to_user_prompt
@@ -362,6 +363,11 @@ def chat(chat_request: ChatRequest):
             runbooks=runbooks,
         )
 
+        # Build exclude_tools set based on disable_todo_tools flag
+        exclude_tools = None
+        if chat_request.disable_todo_tools:
+            exclude_tools = {TODO_WRITE_TOOL_NAME}
+
         follow_up_actions = []
         if not already_answered(chat_request.conversation_history):
             follow_up_actions = [
@@ -392,13 +398,14 @@ def chat(chat_request: ChatRequest):
                         msgs=messages,
                         enable_tool_approval=chat_request.enable_tool_approval or False,
                         tool_decisions=chat_request.tool_decisions,
+                        exclude_tools=exclude_tools,
                     ),
                     [f.model_dump() for f in follow_up_actions],
                 ),
                 media_type="text/event-stream",
             )
         else:
-            llm_call = ai.messages_call(messages=messages)
+            llm_call = ai.messages_call(messages=messages, exclude_tools=exclude_tools)
 
             # For non-streaming, we need to handle approvals differently
             # This is a simplified version - in practice, non-streaming with approvals
