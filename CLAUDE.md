@@ -55,6 +55,15 @@ poetry run ruff format && poetry run ruff check --fix
 - Use dedicated namespace per test: `app-<testid>`
 - Only use valid tags from `pyproject.toml`
 
+## Agent Skills
+
+Detailed instructions are available as [Agent Skills](https://docs.github.com/en/copilot/concepts/agents/agent-skills) in `.github/skills/`:
+
+- **eval-development** - Creating and debugging LLM evaluation tests
+- **toolset-development** - Building toolsets and API integrations
+
+Skills are loaded automatically when relevant to your task.
+
 ## Detailed Documentation
 
 - **Evaluations:** `docs/development/evaluations/` - Running, adding, and debugging evals
