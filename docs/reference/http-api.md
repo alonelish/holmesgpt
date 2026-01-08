@@ -53,6 +53,8 @@ For complete setup instructions with `modelList` configuration, see the [Kuberne
 | ask                     | Yes      |         | string    | User's question                                  |
 | conversation_history    | No       |         | list      | Conversation history (first message must be system)|
 | model                   | No       |         | string    | Model name from your `modelList` configuration  |
+| stream                  | No       | false   | boolean   | Enable streaming response (Server-Sent Events)  |
+| disable_todo_tools      | No       | false   | boolean   | Disable todo/task planning tools for faster responses |
 
 **Example**
 ```bash
@@ -63,6 +65,16 @@ curl -X POST http://<HOLMES-URL>/api/chat \
     "conversation_history": [
       {"role": "system", "content": "You are a helpful assistant."}
     ]
+  }'
+```
+
+**Example with disabled todo tools (faster responses)**
+```bash
+curl -X POST http://<HOLMES-URL>/api/chat \
+  -H "Content-Type: application/json" \
+  -d '{
+    "ask": "What is the status of my cluster?",
+    "disable_todo_tools": true
   }'
 ```
 
