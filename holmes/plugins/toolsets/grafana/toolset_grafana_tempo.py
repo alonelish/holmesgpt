@@ -219,37 +219,48 @@ class FetchTracesSimpleComparison(Tool):
     def __init__(self, toolset: BaseGrafanaTempoToolset):
         super().__init__(
             name="tempo_fetch_traces_comparative_sample",
-            description="""Fetches statistics and representative samples of fast, slow, and typical traces for performance analysis. Requires either a `base_query` OR at least one of `service_name`, `pod_name`, `namespace_name`, `deployment_name`, `node_name`.
+            description="""Fetches statistics and representative samples of fast, slow, and typical traces for performance analysis. Requires either a `base_query`, `labels`, or at least one of the K8s convenience parameters.
 
 Important: call this tool first when investigating performance issues via traces. This tool provides comprehensive analysis for identifying patterns.
 
 Examples:
+- Generic labels: labels={"resource.service.name": "payment", "span.http.method": "POST"}
 - For service latency: service_name="payment" (matches "payment-service" too)
 - For namespace issues: namespace_name="production"
 - Combined: service_name="auth", namespace_name="staging\"""",
             parameters={
+                "labels": ToolParameter(
+                    description=(
+                        "Generic label filters as key-value pairs. Keys are label names "
+                        "(e.g., 'resource.service.name', 'span.http.method'). Values are matched "
+                        "using partial/regex match by default. Prefix value with '=' for exact match. "
+                        'Example: {"resource.service.name": "api", "span.http.status_code": "=500"}'
+                    ),
+                    type="object",
+                    required=False,
+                ),
                 "service_name": ToolParameter(
-                    description="Service to analyze (partial match supported)",
+                    description="Service to analyze (partial match supported). K8s convenience parameter.",
                     type="string",
                     required=False,
                 ),
                 "pod_name": ToolParameter(
-                    description="Filter traces by pod name (partial match supported)",
+                    description="Filter traces by pod name (partial match supported). K8s convenience parameter.",
                     type="string",
                     required=False,
                 ),
                 "namespace_name": ToolParameter(
-                    description="Kubernetes namespace to filter traces",
+                    description="Kubernetes namespace to filter traces. K8s convenience parameter.",
                     type="string",
                     required=False,
                 ),
                 "deployment_name": ToolParameter(
-                    description="Filter traces by deployment name (partial match supported)",
+                    description="Filter traces by deployment name (partial match supported). K8s convenience parameter.",
                     type="string",
                     required=False,
                 ),
                 "node_name": ToolParameter(
-                    description="Filter traces by node name",
+                    description="Filter traces by node name. K8s convenience parameter.",
                     type="string",
                     required=False,
                 ),
@@ -291,32 +302,76 @@ Examples:
 
         return f"At least one of the following argument is expected but none were set: {expected_params}"
 
+    @staticmethod
+    def build_generic_label_filters(labels: Dict[str, Any]) -> List[str]:
+        """Build TraceQL filters from generic label key-value pairs.
+
+        Args:
+            labels: Dictionary of label names to values. Values prefixed with '='
+                   use exact match, otherwise partial/regex match is used.
+
+        Returns:
+            List of TraceQL filter strings
+        """
+        filters = []
+        for label, value in labels.items():
+            if value is None or value == "":
+                continue
+
+            str_value = str(value)
+
+            # Check if exact match is requested (value prefixed with '=')
+            if str_value.startswith("="):
+                # Exact match - remove the '=' prefix and escape quotes
+                actual_value = str_value[1:]
+                escaped_value = actual_value.replace('"', '\\"')
+                filters.append(f'{label}="{escaped_value}"')
+            else:
+                # Partial/regex match
+                filters.append(f'{label}=~".*{str_value}.*"')
+
+        return filters
+
     def _invoke(self, params: dict, context: ToolInvokeContext) -> StructuredToolResult:
         try:
             # Build query
             if params.get("base_query"):
                 base_query = params["base_query"]
             else:
-                # Use the shared utility with partial matching (regex)
-                filters = self._toolset.build_k8s_filters(params, use_exact_match=False)
+                filters = []
+
+                # Build filters from generic labels if provided
+                labels = params.get("labels")
+                if labels and isinstance(labels, dict):
+                    filters.extend(
+                        FetchTracesSimpleComparison.build_generic_label_filters(labels)
+                    )
+
+                # Also include K8s convenience parameters (partial matching)
+                k8s_filters = self._toolset.build_k8s_filters(
+                    params, use_exact_match=False
+                )
+                filters.extend(k8s_filters)
 
                 # Validate that at least one parameter was provided
-                invalid_params_error = FetchTracesSimpleComparison.validate_params(
-                    params,
-                    [
-                        "service_name",
-                        "pod_name",
-                        "namespace_name",
-                        "deployment_name",
-                        "node_name",
-                    ],
-                )
-                if invalid_params_error:
-                    return StructuredToolResult(
-                        status=StructuredToolResultStatus.ERROR,
-                        error=invalid_params_error,
-                        params=params,
+                if not filters:
+                    invalid_params_error = FetchTracesSimpleComparison.validate_params(
+                        params,
+                        [
+                            "labels",
+                            "service_name",
+                            "pod_name",
+                            "namespace_name",
+                            "deployment_name",
+                            "node_name",
+                        ],
                     )
+                    if invalid_params_error:
+                        return StructuredToolResult(
+                            status=StructuredToolResultStatus.ERROR,
+                            error=invalid_params_error,
+                            params=params,
+                        )
 
                 base_query = " && ".join(filters)
 
