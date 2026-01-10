@@ -1,6 +1,6 @@
-# Kind (Kubernetes in Docker) Setup for HolmesGPT
+# Local Kubernetes Setup for HolmesGPT
 
-This document describes the setup process for running Kind clusters for HolmesGPT development and testing.
+This document describes the setup process for running local Kubernetes clusters (Kind, k3s, k3d) for HolmesGPT development and testing, including findings from testing in restricted environments.
 
 ## Quick Start
 
@@ -99,11 +99,35 @@ Cannot read IPv4 local routing setup: open /proc/sys/net/ipv4/conf/br-*/route_lo
 - ✗ Kind cluster creation (requires Docker networks)
 - ✗ Container-to-container networking
 
+### Alternative Tools: k3s and k3d
+
+**k3d** (k3s in Docker) was tested in this environment and encountered the **same networking limitations** as Kind:
+```
+Error: failed to create cluster network: docker failed to create new network
+Cannot read IPv4 local routing setup: open /proc/sys/net/ipv4/conf/br-*/route_localnet
+```
+**Result:** k3d does not work in restricted containerized environments.
+
+**k3s** (native Kubernetes) was also tested but failed due to missing kernel interfaces:
+```
+Error: failed to run Kubelet: failed to create kubelet: open /dev/kmsg: no such file or directory
+```
+**Result:** k3s does not work in restricted containerized environments without access to `/dev/kmsg`.
+
+### Summary of Tested Tools
+
+| Tool | Works in Restricted Environment | Reason |
+|------|--------------------------------|--------|
+| kubectl | ✅ Yes | CLI tool, no kernel dependencies |
+| Kind | ❌ No | Requires Docker networking |
+| k3d | ❌ No | Requires Docker networking (same as Kind) |
+| k3s | ❌ No | Requires `/dev/kmsg` access |
+
 ### Solutions for Development
 
 If you encounter these limitations, use one of these alternatives:
 
-1. **Full Linux System**: Run Kind on a bare metal Linux system or full VM (not containerized)
+1. **Full Linux System**: Run Kind, k3d, or k3s on a bare metal Linux system or full VM (not containerized)
 
 2. **Cloud Kubernetes**: Use a managed Kubernetes cluster:
    - Google Kubernetes Engine (GKE)
@@ -111,10 +135,9 @@ If you encounter these limitations, use one of these alternatives:
    - Azure Kubernetes Service (AKS)
    - DigitalOcean Kubernetes
 
-3. **Local Alternatives**:
-   - Minikube (may work better in restricted environments)
-   - k3s/k3d (lightweight alternative)
-   - MicroK8s
+3. **Local Alternatives** (require full system access):
+   - Minikube (with VM driver)
+   - MicroK8s (requires snapd and systemd)
 
 4. **Docker Desktop**: On macOS/Windows, Docker Desktop includes Kubernetes support
 
@@ -166,8 +189,47 @@ kubectl config get-contexts
 kubectl config use-context kind-holmesgpt-test
 ```
 
+## Technical Background
+
+### Why These Tools Don't Work in Containerized Environments
+
+Running Kubernetes distributions inside containers (Docker-in-Docker scenarios) requires specific kernel features and permissions:
+
+**Docker Networking (Kind, k3d):**
+- Requires access to `/proc/sys/net/ipv4/conf/*/route_localnet`
+- Needs ability to create bridge networks with iptables rules
+- Requires kernel networking capabilities typically disabled in containers for security
+
+**Native Kubernetes (k3s):**
+- Requires access to `/dev/kmsg` for kernel message logging
+- kubelet needs to write kernel messages for proper functioning
+- This device is typically not mounted or accessible in containers
+
+**Container Runtime Requirements:**
+- Overlay filesystem support (overlayfs or fuse-overlayfs)
+- Cgroups v1/v2 with proper hierarchies
+- Access to system devices and kernel interfaces
+
+### Running Kubernetes-in-Docker Successfully
+
+To run local Kubernetes clusters that use Docker, you need:
+
+1. **Privileged Access**: `docker run --privileged`
+2. **System Mounts**: Mount `/sys`, `/proc`, and `/dev`
+3. **Cgroup Management**: Proper cgroup configuration
+4. **DinD Image**: Use a Docker-in-Docker base image (e.g., `docker:dind`)
+
+Example of a working setup:
+```bash
+docker run --privileged -v /sys/fs/cgroup:/sys/fs/cgroup:rw docker:dind
+```
+
+However, even with these settings, security policies in many environments prevent this configuration.
+
 ## Resources
 
 - [Kind Documentation](https://kind.sigs.k8s.io/)
+- [k3s Documentation](https://docs.k3s.io/)
+- [k3d Documentation](https://k3d.io/)
 - [Kubernetes Documentation](https://kubernetes.io/docs/)
 - [HolmesGPT Testing Guide](./CLAUDE.md#testing-framework)
