@@ -54,6 +54,7 @@ from holmes.plugins.toolsets.runbook.runbook_fetcher import RunbookToolset
 from holmes.plugins.toolsets.servicenow_tables.servicenow_tables import (
     ServiceNowTablesToolset,
 )
+from holmes.plugins.toolsets.confluence.confluence import ConfluenceToolset
 
 THIS_DIR = os.path.abspath(os.path.dirname(__file__))
 
@@ -106,6 +107,7 @@ def load_python_toolsets(
         ServiceNowTablesToolset(),
         ElasticsearchDataToolset(),
         ElasticsearchClusterToolset(),
+        ConfluenceToolset(),
     ]
 
     if not DISABLE_PROMETHEUS_TOOLSET:

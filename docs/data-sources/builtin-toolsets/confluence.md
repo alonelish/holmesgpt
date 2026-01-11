@@ -24,6 +24,21 @@ This toolset requires an [Atlassian API Key](https://support.atlassian.com/atlas
 
     --8<-- "snippets/toolset_refresh_warning.md"
 
+    **Advanced Configuration:**
+
+    You can also configure the toolset using a config file (`~/.holmes/config.yaml`):
+
+    ```yaml
+    toolsets:
+        confluence:
+            enabled: true
+            config:
+                base_url: "https://your-domain.atlassian.net"
+                user: "<Confluence username>"
+                api_key: "<Confluence API key>"
+                verify_ssl: true  # Set to false to disable SSL certificate verification
+    ```
+
 === "Robusta Helm Chart"
 
     **Helm Values:**
@@ -40,6 +55,20 @@ This toolset requires an [Atlassian API Key](https://support.atlassian.com/atlas
         toolsets:
             confluence:
                 enabled: true
+    ```
+
+    **Advanced Configuration with SSL verification disabled:**
+
+    ```yaml
+    holmes:
+        toolsets:
+            confluence:
+                enabled: true
+                config:
+                    base_url: "https://your-domain.atlassian.net"
+                    user: "<Confluence username>"
+                    api_key: "<Confluence API key>"
+                    verify_ssl: false
     ```
 
 ## Capabilities
