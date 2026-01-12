@@ -132,10 +132,11 @@ class ToolsetManager:
                 self.toolsets, builtin_toolsets_names, dal
             )
 
-            self.add_or_merge_onto_toolsets(
-                toolsets_from_config,
-                toolsets_by_name,
-            )
+            if toolsets_from_config:
+                self.add_or_merge_onto_toolsets(
+                    toolsets_from_config,
+                    toolsets_by_name,
+                )
 
         # custom toolset should not override built-in toolsets
         # to test the new change of built-in toolset, we should make code change and re-compile the program
@@ -392,8 +393,7 @@ class ToolsetManager:
             logging.debug("No toolsets configured, skipping loading toolsets")
             return []
 
-        # Use dict to ensure later paths override earlier paths for same toolset name
-        loaded_custom_toolsets_by_name: dict[str, Toolset] = {}
+        loaded_custom_toolsets: List[Toolset] = []
         for toolset_path in toolset_paths:
             if not os.path.isfile(toolset_path):
                 raise FileNotFoundError(f"toolset file {toolset_path} does not exist")
@@ -431,15 +431,9 @@ class ToolsetManager:
                             "Please rename the custom toolset or remove it from the custom toolsets configuration."
                         )
 
-            # Later paths override earlier paths for toolsets with the same name
-            for toolset in toolsets_from_config:
-                if toolset.name in loaded_custom_toolsets_by_name:
-                    logging.info(
-                        f"Toolset '{toolset.name}' from {toolset_path} overriding earlier definition"
-                    )
-                loaded_custom_toolsets_by_name[toolset.name] = toolset
+            loaded_custom_toolsets.extend(toolsets_from_config)
 
-        return list(loaded_custom_toolsets_by_name.values())
+        return loaded_custom_toolsets
 
     def load_custom_toolsets(self, builtin_toolsets_names: list[str]) -> list[Toolset]:
         """
@@ -471,9 +465,11 @@ class ToolsetManager:
 
         # define MCP servers
         mcp_servers:
-            example_mcp:
-                command: "npx"
-                args: ["-y", "@modelcontextprotocol/server-example"]
+            mcp_server_1:
+                description: "Dynatrace observability platform. Bring real-time observability data directly into your development workflow."
+                config:
+                url: "http://localhost:8003/sse"
+                mode: sse
         """
         if not self.custom_toolsets and not self.custom_toolsets_from_cli:
             logging.debug(
