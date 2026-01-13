@@ -60,6 +60,7 @@ from holmes.core.investigation_structured_output import clear_json_markdown
 from holmes.plugins.prompts import load_and_render_prompt
 from holmes.utils.holmes_sync_toolsets import holmes_sync_toolsets_status
 from holmes.utils.log import EndpointFilter
+from holmes.core.scheduled_prompts_executor import ScheduledPromptsExecutor
 # removed: add_runbooks_to_user_prompt
 
 
@@ -108,6 +109,10 @@ def sync_before_server_start():
         holmes_sync_toolsets_status(dal, config)
     except Exception:
         logging.error("Failed to synchronise holmes toolsets", exc_info=True)
+    try:
+        scheduled_prompts_executor.start()
+    except Exception:
+        logging.error("Failed to start scheduled prompts executor", exc_info=True)
 
 
 if ENABLE_TELEMETRY and SENTRY_DSN:
@@ -417,6 +422,12 @@ def chat(chat_request: ChatRequest):
     except Exception as e:
         logging.error(f"Error in /api/chat: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
+
+
+# Initialize scheduled prompts executor after chat function is defined
+scheduled_prompts_executor = ScheduledPromptsExecutor(
+    dal=dal, config=config, chat_function=chat
+)
 
 
 @app.get("/api/model")

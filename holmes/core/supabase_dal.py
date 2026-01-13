@@ -54,6 +54,8 @@ HOLMES_STATUS_TABLE = "HolmesStatus"
 HOLMES_TOOLSET = "HolmesToolsStatus"
 SCANS_META_TABLE = "ScansMeta"
 SCANS_RESULTS_TABLE = "ScansResults"
+SCHEDULED_PROMPTS_RUNS_TABLE = "ScheduledPromptsRuns"
+HOLMES_RESULTS_TABLE = "HolmesResults"
 
 ENRICHMENT_BLACKLIST = ["text_file", "graph", "ai_analysis", "holmes"]
 ENRICHMENT_BLACKLIST_SET = set(ENRICHMENT_BLACKLIST)
@@ -776,3 +778,134 @@ class SupabaseDal:
             logging.exception(
                 f"An error occurred during toolset synchronization: {e}", exc_info=True
             )
+
+    def get_one_pending_run(self) -> Optional[Dict]:
+        """
+        Get one pending run from ScheduledPromptsRuns table for the current cluster.
+
+        Returns:
+            Dictionary containing the run data, or None if no pending runs found
+        """
+        if not self.enabled:
+            return None
+
+        try:
+            res = (
+                self.client.table(SCHEDULED_PROMPTS_RUNS_TABLE)
+                .select("*")
+                .eq("account_id", self.account_id)
+                .eq("cluster_name", self.cluster)
+                .eq("status", "pending")
+                .order("created_at", desc=False)
+                .limit(1)
+                .execute()
+            )
+
+            if not res.data or len(res.data) == 0:
+                return None
+
+            return res.data[0]
+        except Exception:
+            logging.exception(
+                "Supabase error while retrieving pending scheduled prompt run",
+                exc_info=True,
+            )
+            return None
+
+    def update_run_status(
+        self, run_id: str, status: str, msg: Optional[str] = None
+    ) -> bool:
+        """
+        Update the status of a scheduled prompt run and update heartbeat to now.
+
+        Args:
+            run_id: The UUID of the run to update
+            status: The new status (pending, running, failed, completed)
+            msg: Optional message to update
+
+        Returns:
+            True if update was successful, False otherwise
+        """
+        if not self.enabled:
+            logging.info(
+                "Robusta store not initialized. Skipping updating scheduled prompt run status."
+            )
+            return False
+
+        valid_statuses = {"pending", "running", "failed", "completed"}
+        if status not in valid_statuses:
+            logging.error(f"Invalid status '{status}'. Must be one of {valid_statuses}")
+            return False
+
+        try:
+            update_data = {
+                "status": status,
+                "last_heartbeat_at": datetime.now().isoformat(),
+            }
+            if msg is not None:
+                update_data["msg"] = msg
+
+            (
+                self.client.table(SCHEDULED_PROMPTS_RUNS_TABLE)
+                .update(update_data)
+                .eq("id", run_id)
+                .eq("account_id", self.account_id)
+                .execute()
+            )
+
+            logging.debug(f"Updated run {run_id} status to {status}")
+            return True
+        except Exception as e:
+            logging.exception(
+                f"Error updating scheduled prompt run status: {e}", exc_info=True
+            )
+            return False
+
+    def insert_holmes_result(
+        self,
+        job_id: Optional[str],
+        job_definition_id: Optional[str],
+        data: dict,
+        version: str,
+    ) -> bool:
+        """
+        Insert a successful Holmes result into the HolmesResults table.
+
+        Args:
+            job_id: The job run ID (from ScheduledPromptsRuns.id)
+            job_definition_id: The parent job definition ID (from ScheduledPromptsRuns.parent_id)
+            data: The full response data as a dictionary (will be converted to JSONB)
+            version: The Holmes version string
+
+        Returns:
+            True if insert was successful, False otherwise
+        """
+        if not self.enabled:
+            logging.info(
+                "Robusta store not initialized. Skipping inserting holmes result."
+            )
+            return False
+
+        try:
+            (
+                self.client.table(HOLMES_RESULTS_TABLE)
+                .insert(
+                    {
+                        "job_id": job_id,
+                        "job_definition_id": job_definition_id,
+                        "account_id": self.account_id,
+                        "cluster_name": self.cluster,
+                        "data": data,
+                        "version": version,
+                    }
+                )
+                .execute()
+            )
+
+            logging.debug(
+                f"Inserted holmes result for job_id={job_id}, job_definition_id={job_definition_id}"
+            )
+            return True
+        except Exception as e:
+            logging.exception(f"Error inserting holmes result: {e}", exc_info=True)
+            return False
