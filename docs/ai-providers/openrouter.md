@@ -11,7 +11,7 @@ Set the base URL and key, then call with an OpenAI-style model name. Only `OPENA
 ```bash
 export OPENAI_API_BASE="https://openrouter.ai/api/v1"
 export OPENAI_API_KEY="sk-or-..."  # your OpenRouter key
-holmes ask "hello" --model="openai/gpt-4o-mini" --no-interactive
+holmes ask "hello" --model="openrouter/anthropic/claude-opus-4.5" --no-interactive
 ```
 
 ### Method 2: LiteLLM OpenRouter provider
@@ -19,7 +19,7 @@ holmes ask "hello" --model="openai/gpt-4o-mini" --no-interactive
 ```bash
 export OPENAI_API_BASE="https://openrouter.ai/api/v1"
 export OPENAI_API_KEY="sk-or-..."  # your OpenRouter key
-holmes ask "hello" --model="openrouter/openai/gpt-4o-mini" --no-interactive
+holmes ask "hello" --model="openrouter/anthropic/claude-opus-4.5" --no-interactive
 ```
 
-You can swap the model ID for any OpenRouter model (for example `openrouter/anthropic/claude-sonnet-4.5`).
+You can swap the model ID for any OpenRouter model.
