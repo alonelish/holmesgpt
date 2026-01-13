@@ -121,6 +121,13 @@ holmes ask "what pods are failing?" --model="openai/<your-model>"
 
 ## Setup Examples
 
+### OpenRouter
+
+```bash
+export OPENROUTER_API_KEY="your-api-key"
+holmes ask "what pods are failing?" --model="openrouter/anthropic/claude-opus-4.5"
+```
+
 ### LocalAI
 
 ```bash

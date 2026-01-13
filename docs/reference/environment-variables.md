@@ -10,6 +10,9 @@ This page documents all environment variables that can be used to configure Holm
 ### Anthropic
 - `ANTHROPIC_API_KEY` - API key for Anthropic Claude models
 
+### OpenRouter
+- `OPENROUTER_API_KEY` - API key for OpenRouter models
+
 ### Google
 - `GEMINI_API_KEY` - API key for Google Gemini models
 - `GOOGLE_API_KEY` - Alternative API key for Google services
