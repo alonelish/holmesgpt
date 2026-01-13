@@ -106,7 +106,7 @@ class TcpCheckTool(Tool):
 class ConnectivityCheckToolset(Toolset):
     def __init__(self):
         super().__init__(
-            name="connectivity_check",
+            name="Connectivity Check",
             description="Check TCP connectivity to endpoints",
             icon_url="https://platform.robusta.dev/demos/internet-access.svg",
             tools=[

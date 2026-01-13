@@ -18,5 +18,5 @@ toolsets:
     enabled: true
   robusta:
     enabled: true
-  connectivity_check:
+  "Connectivity Check":
     enabled: true

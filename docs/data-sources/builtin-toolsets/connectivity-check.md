@@ -12,7 +12,7 @@ This toolset is useful for troubleshooting network connectivity issues, verifyin
 ```yaml
 holmes:
     toolsets:
-        connectivity_check:
+        "Connectivity Check":
             enabled: true
 ```
 

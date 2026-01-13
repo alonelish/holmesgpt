@@ -60,6 +60,8 @@ toolsets:
     enabled: true
   internet:
     enabled: true
+  "Connectivity Check":
+    enabled: true
   prometheus/metrics:
     enabled: true
   runbook:
