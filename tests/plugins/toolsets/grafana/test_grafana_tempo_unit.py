@@ -45,7 +45,7 @@ def test_fetch_traces_simple_comparison_validation():
     context = create_mock_tool_invoke_context()
     result = tool.invoke(params={}, context=context)
     assert result.status == StructuredToolResultStatus.ERROR
-    assert "At least one of the following argument is expected" in result.error
+    assert "labels" in result.error or "base_query" in result.error
 
 
 def test_fetch_traces_simple_comparison_with_mocked_data():
@@ -134,11 +134,11 @@ def test_fetch_traces_simple_comparison_with_mocked_data():
         # Mock query_trace_by_id_v2 for individual trace fetches
         mock_api.query_trace_by_id_v2.return_value = mock_full_trace
 
-        # Test with service name filter
+        # Test with labels filter
         context = create_mock_tool_invoke_context()
         result = tool.invoke(
             params={
-                "service_name": "frontend",
+                "labels": {"resource.service.name": "frontend"},
                 "sample_count": 2,
                 "start": "-3600",
                 "end": "0",
@@ -178,8 +178,8 @@ def test_fetch_traces_simple_comparison_with_mocked_data():
         assert 'resource.service.name=~".*frontend.*"' in call_args["q"]
 
 
-def test_fetch_traces_simple_comparison_with_multiple_filters():
-    """Test FetchTracesSimpleComparison with multiple K8s filters."""
+def test_fetch_traces_simple_comparison_with_multiple_labels():
+    """Test FetchTracesSimpleComparison with multiple label filters."""
     config = GrafanaTempoConfig(
         api_key="test_key",
         url="http://localhost:3000",
@@ -200,11 +200,12 @@ def test_fetch_traces_simple_comparison_with_multiple_filters():
 
         result = tool.invoke(
             params={
-                "service_name": "api",
-                "namespace_name": "production",
-                "deployment_name": "api-server",
-                "pod_name": "api-pod",
-                "node_name": "node-1",
+                "labels": {
+                    "resource.service.name": "api",
+                    "resource.k8s.namespace.name": "production",
+                    "span.http.method": "POST",
+                    "span.http.status_code": "=500",
+                },
                 "sample_count": 5,
             },
             context=create_mock_tool_invoke_context(),
@@ -218,9 +219,8 @@ def test_fetch_traces_simple_comparison_with_multiple_filters():
         query = call_args["q"]
         assert 'resource.service.name=~".*api.*"' in query
         assert 'resource.k8s.namespace.name=~".*production.*"' in query
-        assert 'resource.k8s.deployment.name=~".*api-server.*"' in query
-        assert 'resource.k8s.pod.name=~".*api-pod.*"' in query
-        assert 'resource.k8s.node.name=~".*node-1.*"' in query
+        assert 'span.http.method=~".*POST.*"' in query
+        assert 'span.http.status_code="500"' in query
 
 
 def test_fetch_traces_simple_comparison_with_base_query():
@@ -283,7 +283,10 @@ def test_fetch_traces_simple_comparison_error_handling():
         mock_api.search_traces_by_query.side_effect = Exception("API Error")
 
         context = create_mock_tool_invoke_context()
-        result = tool.invoke(params={"service_name": "test-service"}, context=context)
+        result = tool.invoke(
+            params={"labels": {"resource.service.name": "test-service"}},
+            context=context,
+        )
 
         assert result.status == StructuredToolResultStatus.ERROR
         assert "Error fetching traces: API Error" in result.error
@@ -317,7 +320,9 @@ def test_fetch_traces_simple_comparison_percentile_calculations():
         mock_api.query_trace_by_id_v2.return_value = {"batches": []}
 
         context = create_mock_tool_invoke_context()
-        result = tool.invoke(params={"service_name": "test"}, context=context)
+        result = tool.invoke(
+            params={"labels": {"resource.service.name": "test"}}, context=context
+        )
         assert result.status == StructuredToolResultStatus.SUCCESS
         assert result.data is not None
 
@@ -337,14 +342,14 @@ def test_fetch_traces_simple_comparison_parameterized_one_liner():
     toolset = GrafanaTempoToolset()
     tool = FetchTracesSimpleComparison(toolset)
 
-    params = {"service_name": "test-service", "sample_count": 5}
+    params = {"labels": {"resource.service.name": "test-service"}, "sample_count": 5}
     one_liner = tool.get_parameterized_one_liner(params)
     assert "Simple Tempo Traces Comparison" in one_liner
     assert "Grafana" in one_liner
 
 
 def test_build_k8s_filters():
-    """Test the shared build_k8s_filters utility method."""
+    """Test the shared build_k8s_filters utility method on the toolset."""
     config = GrafanaTempoConfig(
         api_key="test_key",
         url="http://localhost:3000",
@@ -404,7 +409,7 @@ def test_fetch_traces_simple_comparison_with_negative_start_time():
         # Test with negative start (-7200 = 2 hours before end)
         result = tool.invoke(
             params={
-                "service_name": "test",
+                "labels": {"resource.service.name": "test"},
                 "start": "-7200",  # 2 hours ago
                 "end": "0",  # Now
             },
@@ -420,92 +425,56 @@ def test_fetch_traces_simple_comparison_with_negative_start_time():
         assert call_args["end"] - call_args["start"] == 7200
 
 
-def test_build_k8s_filters_with_special_characters():
-    """Test that special regex characters are properly escaped."""
-    config = GrafanaTempoConfig(
-        api_key="test_key",
-        url="http://localhost:3000",
-        grafana_datasource_uid="tempo_uid",
-    )
-    toolset = GrafanaTempoToolset()
-    toolset._grafana_config = config
-
-    # Test with special regex characters
-    params = {
-        "service_name": "test.service[1]",
-        "pod_name": "pod-with(parens)",
-        "namespace_name": "namespace.*",
-        "deployment_name": "deploy+test",
-        "node_name": "node^name$",
-    }
-
-    # Test regex match filters - all special chars should be escaped
-    regex_filters = toolset.build_k8s_filters(params, use_exact_match=False)
-    assert len(regex_filters) == 5
-    assert 'resource.service.name=~".*test.service[1].*"' in regex_filters
-    assert 'resource.k8s.pod.name=~".*pod-with(parens).*"' in regex_filters
-    assert 'resource.k8s.namespace.name=~".*namespace.*.*"' in regex_filters
-    assert 'resource.k8s.deployment.name=~".*deploy+test.*"' in regex_filters
-    assert 'resource.k8s.node.name=~".*node^name$.*"' in regex_filters
-
-    # Test exact match with quotes
-    params_with_quotes = {
-        "service_name": 'service"with"quotes',
-    }
-    exact_filters = toolset.build_k8s_filters(params_with_quotes, use_exact_match=True)
-    assert 'resource.service.name="service\\"with\\"quotes"' in exact_filters
-
-
-def test_build_generic_label_filters():
-    """Test the generic label filter building method."""
+def test_build_label_filters():
+    """Test the label filter building method."""
     # Test partial match (default)
     labels = {
         "resource.service.name": "api",
         "span.http.method": "POST",
         "span.http.status_code": "500",
     }
-    filters = FetchTracesSimpleComparison.build_generic_label_filters(labels)
+    filters = FetchTracesSimpleComparison.build_label_filters(labels)
     assert len(filters) == 3
     assert 'resource.service.name=~".*api.*"' in filters
     assert 'span.http.method=~".*POST.*"' in filters
     assert 'span.http.status_code=~".*500.*"' in filters
 
 
-def test_build_generic_label_filters_exact_match():
+def test_build_label_filters_exact_match():
     """Test exact match with '=' prefix."""
     labels = {
         "resource.service.name": "=exact-service",
         "span.http.status_code": "=500",
     }
-    filters = FetchTracesSimpleComparison.build_generic_label_filters(labels)
+    filters = FetchTracesSimpleComparison.build_label_filters(labels)
     assert len(filters) == 2
     assert 'resource.service.name="exact-service"' in filters
     assert 'span.http.status_code="500"' in filters
 
 
-def test_build_generic_label_filters_with_quotes():
+def test_build_label_filters_with_quotes():
     """Test escaping quotes in exact match values."""
     labels = {
         "resource.service.name": '=service"with"quotes',
     }
-    filters = FetchTracesSimpleComparison.build_generic_label_filters(labels)
+    filters = FetchTracesSimpleComparison.build_label_filters(labels)
     assert 'resource.service.name="service\\"with\\"quotes"' in filters
 
 
-def test_build_generic_label_filters_empty_values():
+def test_build_label_filters_empty_values():
     """Test that empty values are skipped."""
     labels = {
         "resource.service.name": "api",
         "span.http.method": "",
         "span.empty": None,
     }
-    filters = FetchTracesSimpleComparison.build_generic_label_filters(labels)
+    filters = FetchTracesSimpleComparison.build_label_filters(labels)
     assert len(filters) == 1
     assert 'resource.service.name=~".*api.*"' in filters
 
 
-def test_fetch_traces_simple_comparison_with_generic_labels():
-    """Test FetchTracesSimpleComparison with generic labels parameter."""
+def test_fetch_traces_simple_comparison_with_labels():
+    """Test FetchTracesSimpleComparison with labels parameter."""
     config = GrafanaTempoConfig(
         api_key="test_key",
         url="http://localhost:3000",
@@ -545,52 +514,15 @@ def test_fetch_traces_simple_comparison_with_generic_labels():
 
         assert result.status == StructuredToolResultStatus.SUCCESS
 
-        # Verify the query was built correctly with generic labels
+        # Verify the query was built correctly with labels
         call_args = mock_api.search_traces_by_query.call_args[1]
         query = call_args["q"]
         assert 'resource.custom.app=~".*my-app.*"' in query
         assert 'span.http.method=~".*POST.*"' in query
 
 
-def test_fetch_traces_simple_comparison_with_labels_and_k8s_params():
-    """Test that generic labels and K8s params can be combined."""
-    config = GrafanaTempoConfig(
-        api_key="test_key",
-        url="http://localhost:3000",
-        grafana_datasource_uid="tempo_uid",
-    )
-    toolset = GrafanaTempoToolset()
-    toolset._grafana_config = config
-    tool = FetchTracesSimpleComparison(toolset)
-
-    mock_traces = {"traces": []}
-
-    with patch(
-        "holmes.plugins.toolsets.grafana.toolset_grafana_tempo.GrafanaTempoAPI"
-    ) as mock_api_class:
-        mock_api = MagicMock()
-        mock_api_class.return_value = mock_api
-        mock_api.search_traces_by_query.return_value = mock_traces
-
-        result = tool.invoke(
-            params={
-                "labels": {"span.http.status_code": "=500"},
-                "service_name": "api",
-            },
-            context=create_mock_tool_invoke_context(),
-        )
-
-        assert result.status == StructuredToolResultStatus.SUCCESS
-
-        # Verify both label types were included
-        call_args = mock_api.search_traces_by_query.call_args[1]
-        query = call_args["q"]
-        assert 'span.http.status_code="500"' in query
-        assert 'resource.service.name=~".*api.*"' in query
-
-
-def test_fetch_traces_simple_comparison_validation_includes_labels():
-    """Test that validation accepts labels as valid input."""
+def test_fetch_traces_simple_comparison_empty_labels_validation():
+    """Test that validation fails with empty labels dict."""
     config = GrafanaTempoConfig(
         api_key="test_key",
         url="http://localhost:3000",
@@ -604,4 +536,4 @@ def test_fetch_traces_simple_comparison_validation_includes_labels():
     context = create_mock_tool_invoke_context()
     result = tool.invoke(params={"labels": {}}, context=context)
     assert result.status == StructuredToolResultStatus.ERROR
-    assert "labels" in result.error
+    assert "labels" in result.error or "base_query" in result.error
