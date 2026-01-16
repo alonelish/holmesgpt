@@ -15,7 +15,21 @@ try:
     else:
         config.load_kube_config()
 except config.config_exception.ConfigException as e:
-    logging.warning(f"Running without kube-config! e={e}")
+    kubeconfig_path = os.getenv("KUBECONFIG", os.path.expanduser("~/.kube/config"))
+    if not os.path.exists(kubeconfig_path):
+        logging.warning(
+            f"Running without kubernetes access! Kubeconfig file not found at: {kubeconfig_path}\n"
+            f"Set KUBECONFIG environment variable or create {kubeconfig_path} to enable Kubernetes tools."
+        )
+    else:
+        logging.warning(
+            f"Running without kubernetes access! Failed to load kubeconfig from: {kubeconfig_path}\n"
+            f"Error: {e}\n"
+            f"Check your kubeconfig file for:\n"
+            f"  - Valid current-context field\n"
+            f"  - Properly configured contexts list\n"
+            f"  - Correct cluster and user configurations"
+        )
 
 
 def find_service_url(label_selector):
