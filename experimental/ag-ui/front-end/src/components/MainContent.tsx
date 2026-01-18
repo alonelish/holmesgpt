@@ -719,6 +719,19 @@ const MainContent: React.FC<MainContentProps> = ({
     }));
 
     try {
+      // Inject error at store level if URL parameter is present
+      if (injectedError) {
+        const error = new Error(injectedError);
+        (error as any).responseData = {
+          error: {
+            type: 'InjectedError',
+            reason: injectedError,
+            injectedViaUrlParameter: true
+          }
+        };
+        throw error;
+      }
+
       let responseData: any;
 
       if (selectedPage === 'metrics') {
@@ -790,6 +803,25 @@ const MainContent: React.FC<MainContentProps> = ({
   // Track processed trigger queries to prevent infinite loops
   const processedTriggerQuery = React.useRef<string | null>(null);
 
+  // Error injection state for testing
+  const [injectedError, setInjectedError] = React.useState<string | null>(null);
+  const hasProcessedErrorParam = React.useRef(false);
+
+  // Parse URL parameter for error injection on mount
+  React.useEffect(() => {
+    if (hasProcessedErrorParam.current) return;
+
+    const urlParams = new URLSearchParams(window.location.search);
+    const errorParam = urlParams.get('injectError');
+
+    if (errorParam) {
+      hasProcessedErrorParam.current = true;
+      const decodedError = decodeURIComponent(errorParam);
+      setInjectedError(decodedError);
+      console.log('Error injection activated from URL:', decodedError);
+    }
+  }, []);
+
   // Handle trigger query execution from ChatAssistant
   React.useEffect(() => {
     if (triggerQuery && triggerQuery.trim() && triggerQuery !== processedTriggerQuery.current) {
@@ -800,6 +832,19 @@ const MainContent: React.FC<MainContentProps> = ({
       const executeTriggeredQuery = async () => {
         setIsExecuting(true);
         try {
+          // Inject error at store level if URL parameter is present
+          if (injectedError) {
+            const error = new Error(injectedError);
+            (error as any).responseData = {
+              error: {
+                type: 'InjectedError',
+                reason: injectedError,
+                injectedViaUrlParameter: true
+              }
+            };
+            throw error;
+          }
+
           let result;
           if (selectedPage === 'metrics') {
             result = await queryPrometheus(triggerQuery);
@@ -845,7 +890,7 @@ const MainContent: React.FC<MainContentProps> = ({
       // Small delay to ensure state is updated
       setTimeout(executeTriggeredQuery, 100);
     }
-  }, [triggerQuery, selectedPage, onQueryTriggered]);
+  }, [triggerQuery, selectedPage, onQueryTriggered, injectedError]);
 
   // Handle keyboard shortcuts for modal
   React.useEffect(() => {
