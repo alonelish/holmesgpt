@@ -39,31 +39,3 @@ toolsets:
             description: "Maximum number of pages to return (default: 25, max: 100)"
             required: false
         command: "curl --insecure -H 'Authorization: Bearer ${CONFLUENCE_API_KEY}' -X GET -H 'Content-Type: application/json' '${CONFLUENCE_BASE_URL}/wiki/rest/api/space/{{ space_key }}/content/page?start={{ start | default(0) }}&limit={{ limit | default(25) }}&expand=metadata.labels'"
-
-      - name: "search_confluence_pages"
-        description: "Search for Confluence pages by title or content. Use this to find pages when you have a title from a link but not the page ID. Returns page IDs, titles, and space information."
-        user_description: "search confluence for {{ query }}"
-        parameters:
-          - name: query
-            type: string
-            description: "Search query - can be a page title or keywords. Use CQL syntax for advanced queries (e.g., 'title~\"Page Name\"' or 'space=DEV AND title~\"Guide\"')."
-            required: true
-          - name: limit
-            type: int
-            description: "Maximum number of results to return (default: 25, max: 100)"
-            required: false
-        command: "curl --insecure -H 'Authorization: Bearer ${CONFLUENCE_API_KEY}' -X GET -H 'Content-Type: application/json' '${CONFLUENCE_BASE_URL}/wiki/rest/api/content/search?cql={{ query | urlencode }}&limit={{ limit | default(25) }}'"
-
-      - name: "get_confluence_page_by_title"
-        description: "Get a Confluence page by its exact title within a specific space. Use this when you extract a space key and page title from a link."
-        user_description: "get confluence page '{{ title }}' in space {{ space_key }}"
-        parameters:
-          - name: space_key
-            type: string
-            description: "The space key (e.g., 'DEV', 'DOCS')"
-            required: true
-          - name: title
-            type: string
-            description: "The exact page title"
-            required: true
-        command: "curl --insecure -H 'Authorization: Bearer ${CONFLUENCE_API_KEY}' -X GET -H 'Content-Type: application/json' '${CONFLUENCE_BASE_URL}/wiki/rest/api/content?spaceKey={{ space_key }}&title={{ title | urlencode }}&expand=body.storage'"
