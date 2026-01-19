@@ -20,20 +20,26 @@ from holmes.plugins.toolsets.utils import toolset_name_for_one_liner
 class ConfluenceConfig(BaseModel):
     """Configuration for Confluence API access.
 
-    Personal API Token:
+    Atlassian Cloud with Personal API Token:
     ```yaml
     url: "https://your-company.atlassian.net"
     username: "your-email@example.com"
     api_key: "your_personal_api_token"
     ```
 
-    Service Account (omit username):
+    Atlassian Cloud with Service Account (omit username):
     ```yaml
     url: "https://your-company.atlassian.net"
     api_key: "your_service_account_token"
     ```
     Service account tokens require Confluence scopes:
     read:confluence-content.all, read:confluence-space.summary
+
+    Self-hosted Confluence (Server/Data Center) with PAT:
+    ```yaml
+    url: "https://confluence.yourcompany.com"
+    api_key: "your_personal_access_token"
+    ```
     """
 
     model_config = ConfigDict(extra="allow")
@@ -119,8 +125,9 @@ class ConfluenceToolset(Toolset):
     def _perform_health_check(self) -> Tuple[bool, str]:
         """Perform a health check by querying the space list."""
         try:
+            api_prefix = self._get_api_path_prefix()
             response = self._make_request(
-                "GET", "wiki/rest/api/space", params={"limit": 1}
+                "GET", f"{api_prefix}/space", params={"limit": 1}
             )
             if "results" in response:
                 mode = "API Gateway" if self._use_api_gateway() else "Direct"
@@ -165,6 +172,16 @@ class ConfluenceToolset(Toolset):
         if self._use_api_gateway():
             return f"https://api.atlassian.com/ex/confluence/{self.confluence_config.cloud_id}"
         return self.confluence_config.url.rstrip("/")
+
+    def _get_api_path_prefix(self) -> str:
+        """Get the API path prefix based on instance type.
+
+        Atlassian Cloud uses /wiki/rest/api/...
+        Self-hosted (Server/Data Center) uses /rest/api/...
+        """
+        if self.confluence_config.is_atlassian_cloud:
+            return "wiki/rest/api"
+        return "rest/api"
 
     def get_example_config(self) -> Dict[str, Any]:
         """Return an example configuration for this toolset."""
@@ -382,7 +399,8 @@ class ListConfluenceSpaces(BaseConfluenceTool):
         if params.get("type"):
             query_params["type"] = params["type"]
 
-        endpoint = "wiki/rest/api/space"
+        api_prefix = self._toolset._get_api_path_prefix()
+        endpoint = f"{api_prefix}/space"
         result = self._make_request("GET", endpoint, params, query_params=query_params)
 
         # Check for empty results and return NO_DATA with search context
@@ -449,7 +467,8 @@ class GetConfluenceSpacePages(BaseConfluenceTool):
         if params.get("title"):
             query_params["title"] = params["title"]
 
-        endpoint = f"wiki/rest/api/space/{space_key}/content/page"
+        api_prefix = self._toolset._get_api_path_prefix()
+        endpoint = f"{api_prefix}/space/{space_key}/content/page"
         result = self._make_request("GET", endpoint, params, query_params=query_params)
 
         # Check for empty results and return NO_DATA with search context
@@ -504,7 +523,8 @@ class FetchConfluencePage(BaseConfluenceTool):
 
         query_params = {"expand": expand}
 
-        endpoint = f"wiki/rest/api/content/{page_id}"
+        api_prefix = self._toolset._get_api_path_prefix()
+        endpoint = f"{api_prefix}/content/{page_id}"
         return self._make_request("GET", endpoint, params, query_params=query_params)
 
     def get_parameterized_one_liner(self, params: Dict) -> str:
