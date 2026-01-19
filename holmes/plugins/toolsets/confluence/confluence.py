@@ -186,7 +186,19 @@ class BaseConfluenceTool(Tool):
         body: Optional[Dict[str, Any]] = None,
         timeout: Optional[int] = None,
     ) -> StructuredToolResult:
-        """Make a request to Confluence and return structured result."""
+        """Make a request to Confluence and return structured result.
+
+        Includes full request context in error responses for debugging.
+        """
+        # Build request context for error reporting
+        request_context = {
+            "endpoint": endpoint,
+            "method": method,
+            "query_params": query_params or {},
+            "body": body,
+            "params": params,
+        }
+
         try:
             data = self._toolset._make_request(
                 method=method,
@@ -201,35 +213,53 @@ class BaseConfluenceTool(Tool):
                 params=params,
             )
         except requests.exceptions.HTTPError as e:
-            error_detail = f"HTTP {e.response.status_code}"
+            # Include full error context: status code, response text, and parsed JSON if available
+            status_code = e.response.status_code
+            response_text = e.response.text
+            error_json = None
             try:
-                error_body = e.response.json()
-                if "message" in error_body:
-                    error_detail = f"{error_detail}: {error_body['message']}"
+                error_json = e.response.json()
             except Exception:
-                error_detail = f"{error_detail}: {e.response.text[:500]}"
+                pass
+
+            error_detail = {
+                "http_status": status_code,
+                "response_text": response_text,
+                "response_json": error_json,
+                "request_context": request_context,
+            }
+
+            error_msg = f"Confluence API error for endpoint '{endpoint}': HTTP {status_code}"
+            if error_json and "message" in error_json:
+                error_msg = f"{error_msg} - {error_json['message']}"
+            elif response_text:
+                error_msg = f"{error_msg} - {response_text}"
 
             return StructuredToolResult(
                 status=StructuredToolResultStatus.ERROR,
-                error=f"Confluence request failed for endpoint '{endpoint}': {error_detail}",
+                error=error_msg,
+                data=error_detail,
                 params=params,
             )
         except requests.exceptions.Timeout:
             return StructuredToolResult(
                 status=StructuredToolResultStatus.ERROR,
-                error=f"Confluence request timed out for endpoint '{endpoint}'",
+                error=f"Confluence request timed out for endpoint '{endpoint}' (timeout: {timeout or self._toolset.confluence_config.timeout}s)",
+                data={"request_context": request_context},
                 params=params,
             )
         except requests.exceptions.ConnectionError as e:
             return StructuredToolResult(
                 status=StructuredToolResultStatus.ERROR,
-                error=f"Failed to connect to Confluence: {str(e)}",
+                error=f"Failed to connect to Confluence at {self._toolset.confluence_config.url}: {str(e)}",
+                data={"request_context": request_context, "connection_error": str(e)},
                 params=params,
             )
         except Exception as e:
             return StructuredToolResult(
                 status=StructuredToolResultStatus.ERROR,
-                error=f"Unexpected error querying Confluence: {str(e)}",
+                error=f"Unexpected error querying Confluence endpoint '{endpoint}': {type(e).__name__}: {str(e)}",
+                data={"request_context": request_context, "exception_type": type(e).__name__},
                 params=params,
             )
 
@@ -264,7 +294,7 @@ class ListConfluenceSpaces(BaseConfluenceTool):
             },
         )
 
-    def _invoke(self, params: dict, context: ToolInvokeContext) -> StructuredToolResult:
+    def _invoke(self, params: dict, _context: ToolInvokeContext) -> StructuredToolResult:
         query_params: Dict[str, Any] = {
             "limit": params.get("limit", 100),
             "start": params.get("start", 0),
@@ -273,9 +303,23 @@ class ListConfluenceSpaces(BaseConfluenceTool):
         if params.get("type"):
             query_params["type"] = params["type"]
 
-        return self._make_request("GET", "wiki/rest/api/space", params, query_params=query_params)
+        endpoint = "wiki/rest/api/space"
+        result = self._make_request("GET", endpoint, params, query_params=query_params)
 
-    def get_parameterized_one_liner(self, params: Dict) -> str:
+        # Check for empty results and return NO_DATA with search context
+        if result.status == StructuredToolResultStatus.SUCCESS:
+            results = result.data.get("results", []) if result.data else []
+            if not results:
+                return StructuredToolResult(
+                    status=StructuredToolResultStatus.NO_DATA,
+                    data=None,
+                    params=params,
+                    error=f"No spaces found. Endpoint: '{endpoint}', query_params: {query_params}",
+                )
+
+        return result
+
+    def get_parameterized_one_liner(self, _params: Dict) -> str:
         return f"{toolset_name_for_one_liner(self._toolset.name)}: List spaces"
 
 
@@ -314,7 +358,7 @@ class GetConfluenceSpacePages(BaseConfluenceTool):
             },
         )
 
-    def _invoke(self, params: dict, context: ToolInvokeContext) -> StructuredToolResult:
+    def _invoke(self, params: dict, _context: ToolInvokeContext) -> StructuredToolResult:
         space_key = params["space_key"]
 
         query_params: Dict[str, Any] = {
@@ -327,7 +371,20 @@ class GetConfluenceSpacePages(BaseConfluenceTool):
             query_params["title"] = params["title"]
 
         endpoint = f"wiki/rest/api/space/{space_key}/content/page"
-        return self._make_request("GET", endpoint, params, query_params=query_params)
+        result = self._make_request("GET", endpoint, params, query_params=query_params)
+
+        # Check for empty results and return NO_DATA with search context
+        if result.status == StructuredToolResultStatus.SUCCESS:
+            results = result.data.get("results", []) if result.data else []
+            if not results:
+                return StructuredToolResult(
+                    status=StructuredToolResultStatus.NO_DATA,
+                    data=None,
+                    params=params,
+                    error=f"No pages found in space '{space_key}'. Endpoint: '{endpoint}', query_params: {query_params}",
+                )
+
+        return result
 
     def get_parameterized_one_liner(self, params: Dict) -> str:
         space_key = params.get("space_key", "")
@@ -362,7 +419,7 @@ class FetchConfluencePage(BaseConfluenceTool):
             },
         )
 
-    def _invoke(self, params: dict, context: ToolInvokeContext) -> StructuredToolResult:
+    def _invoke(self, params: dict, _context: ToolInvokeContext) -> StructuredToolResult:
         page_id = params["page_id"]
         expand = params.get("expand", "body.storage")
 
