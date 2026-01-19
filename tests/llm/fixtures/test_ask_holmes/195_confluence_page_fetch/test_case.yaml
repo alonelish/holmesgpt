@@ -43,16 +43,26 @@ before_test: |
   echo "   Base URL: $CONFLUENCE_BASE_URL"
   echo "   Space: $CONFLUENCE_SPACE_KEY"
 
+  # Auto-discover cloud_id for Atlassian Cloud API gateway
+  CLOUD_ID=$(curl -sf "${CONFLUENCE_BASE_URL}/_edge/tenant_info" | grep -o '"cloudId":"[^"]*"' | cut -d'"' -f4)
+  if [ -z "$CLOUD_ID" ]; then
+    echo "❌ Failed to discover cloud_id from ${CONFLUENCE_BASE_URL}/_edge/tenant_info"
+    exit 1
+  fi
+  API_GATEWAY_URL="https://api.atlassian.com/ex/confluence/${CLOUD_ID}"
+  echo "   Cloud ID: $CLOUD_ID"
+  echo "   API Gateway: $API_GATEWAY_URL"
+
   # Use a fixed verification code that is included in expected_output
   # The LLM cannot see expected_output, so this is safe from cheating
   VERIFICATION_CODE="HOLMES-EVAL-7x9k2m4p"
   PAGE_TITLE="HolmesGPT Eval Test Page"
 
-  # Create the page using Confluence REST API (Basic Auth for Atlassian Cloud)
+  # Create the page using Confluence REST API via API Gateway (Basic Auth)
   RESPONSE=$(curl -sf -X POST \
     -u "${CONFLUENCE_USERNAME}:${CONFLUENCE_API_KEY}" \
     -H "Content-Type: application/json" \
-    "${CONFLUENCE_BASE_URL}/wiki/rest/api/content" \
+    "${API_GATEWAY_URL}/wiki/rest/api/content" \
     -d "{
       \"type\": \"page\",
       \"title\": \"${PAGE_TITLE}\",
@@ -80,8 +90,9 @@ before_test: |
     exit 1
   fi
 
-  # Save the page ID for cleanup
+  # Save the page ID and cloud_id for cleanup
   echo "$PAGE_ID" > /tmp/confluence_test_page_id
+  echo "$CLOUD_ID" > /tmp/confluence_test_cloud_id
 
   echo "✅ Created Confluence page with ID: $PAGE_ID"
   echo "✅ Page title: $PAGE_TITLE"
@@ -91,18 +102,20 @@ after_test: |
 
   echo "⏳ Cleaning up test page..."
 
-  if [ -f /tmp/confluence_test_page_id ]; then
+  if [ -f /tmp/confluence_test_page_id ] && [ -f /tmp/confluence_test_cloud_id ]; then
     PAGE_ID=$(cat /tmp/confluence_test_page_id)
+    CLOUD_ID=$(cat /tmp/confluence_test_cloud_id)
+    API_GATEWAY_URL="https://api.atlassian.com/ex/confluence/${CLOUD_ID}"
 
-    if [ -n "$PAGE_ID" ]; then
+    if [ -n "$PAGE_ID" ] && [ -n "$CLOUD_ID" ]; then
       curl -sf -X DELETE \
         -u "${CONFLUENCE_USERNAME}:${CONFLUENCE_API_KEY}" \
-        "${CONFLUENCE_BASE_URL}/wiki/rest/api/content/${PAGE_ID}" 2>&1 || true
+        "${API_GATEWAY_URL}/wiki/rest/api/content/${PAGE_ID}" 2>&1 || true
 
       echo "✅ Deleted Confluence page with ID: $PAGE_ID"
     fi
 
-    rm -f /tmp/confluence_test_page_id
+    rm -f /tmp/confluence_test_page_id /tmp/confluence_test_cloud_id
   else
-    echo "⚠️ No page ID file found, skipping cleanup"
+    echo "⚠️ No page ID or cloud_id file found, skipping cleanup"
   fi

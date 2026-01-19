@@ -1,6 +1,7 @@
+import logging
 from typing import Any, Dict, Optional, Tuple
 
-import requests
+import requests  # type: ignore
 from pydantic import BaseModel, ConfigDict
 
 from holmes.core.tools import (
@@ -19,30 +20,39 @@ from holmes.plugins.toolsets.utils import toolset_name_for_one_liner
 class ConfluenceConfig(BaseModel):
     """Configuration for Confluence API access.
 
-    Supports two authentication methods:
+    Supports both Atlassian Cloud and on-premise Confluence:
 
-    1. Basic Auth (for Atlassian Cloud - most common):
+    1. Atlassian Cloud (recommended - auto-discovers cloud_id):
     ```yaml
     url: "https://your-company.atlassian.net"
-    username: "your-email@example.com"
+    username: "your-email@example.com"  # or service account email
     api_key: "your_api_token"
     ```
 
-    2. Bearer Token (for self-hosted or PAT):
+    2. On-premise / Data Center:
     ```yaml
     url: "https://confluence.your-company.com"
-    api_key: "your_bearer_token"
-    # Note: no username = Bearer auth
+    username: "your-username"
+    api_key: "your_token_or_password"
     ```
+
+    Note: For Atlassian Cloud with scoped API tokens (service accounts),
+    the cloud_id is auto-discovered and the API gateway is used automatically.
     """
 
     model_config = ConfigDict(extra="allow")
 
     url: str
     api_key: str
-    username: Optional[str] = None  # If set, uses Basic Auth; otherwise Bearer
+    username: Optional[str] = None  # Required for Basic Auth
+    cloud_id: Optional[str] = None  # Auto-discovered for Atlassian Cloud
     verify_ssl: bool = True
     timeout: int = 30
+
+    @property
+    def is_atlassian_cloud(self) -> bool:
+        """Check if this is an Atlassian Cloud instance."""
+        return "atlassian.net" in self.url
 
 
 class ConfluenceToolset(Toolset):
@@ -69,26 +79,75 @@ class ConfluenceToolset(Toolset):
         """Check if the Confluence configuration is valid and accessible."""
         try:
             self.config = ConfluenceConfig(**config)
+
+            # For Atlassian Cloud, auto-discover cloud_id if not provided
+            if (
+                self.confluence_config.is_atlassian_cloud
+                and not self.confluence_config.cloud_id
+            ):
+                cloud_id = self._discover_cloud_id()
+                if cloud_id:
+                    self.config = ConfluenceConfig(**{**config, "cloud_id": cloud_id})
+                    logging.info(f"Auto-discovered Confluence cloud_id: {cloud_id}")
+
             return self._perform_health_check()
         except Exception as e:
             return False, f"Failed to validate Confluence configuration: {str(e)}"
 
+    def _discover_cloud_id(self) -> Optional[str]:
+        """Discover cloud_id from Atlassian Cloud using the tenant_info endpoint.
+
+        The /_edge/tenant_info endpoint is a public endpoint that returns the cloud_id
+        without requiring authentication, which works for both personal tokens and
+        service account scoped tokens.
+        """
+        try:
+            # Use the public tenant_info endpoint - no auth required
+            url = f"{self.confluence_config.url.rstrip('/')}/_edge/tenant_info"
+            response = requests.get(
+                url,
+                headers={"Accept": "application/json"},
+                timeout=self.confluence_config.timeout,
+                verify=self.confluence_config.verify_ssl,
+            )
+            response.raise_for_status()
+            data = response.json()
+
+            cloud_id = data.get("cloudId")
+            if cloud_id:
+                return cloud_id
+        except Exception as e:
+            logging.debug(f"Could not auto-discover cloud_id: {e}")
+        return None
+
     def _perform_health_check(self) -> Tuple[bool, str]:
         """Perform a health check by querying the space list."""
         try:
-            response = self._make_request("GET", "wiki/rest/api/space", params={"limit": 1})
+            response = self._make_request(
+                "GET", "wiki/rest/api/space", params={"limit": 1}
+            )
             if "results" in response:
-                return True, "Connected to Confluence successfully"
+                mode = "API Gateway" if self._use_api_gateway() else "Direct"
+                return True, f"Connected to Confluence successfully ({mode} mode)"
             return False, "Unexpected response from Confluence API"
         except requests.exceptions.HTTPError as e:
             if e.response.status_code == 401:
-                return False, "Confluence authentication failed. Check your API key."
+                return (
+                    False,
+                    "Confluence authentication failed. Check your API key and username.",
+                )
             elif e.response.status_code == 403:
-                return False, "Confluence access denied. Ensure your API key has read permissions."
+                hint = ""
+                if self.confluence_config.is_atlassian_cloud:
+                    hint = " For service accounts, ensure the API token has Confluence scopes (read:confluence-content.all, etc.)."
+                return False, f"Confluence access denied.{hint}"
             else:
-                return False, f"Confluence API error: {e.response.status_code} - {e.response.text}"
+                return (
+                    False,
+                    f"Confluence API error: {e.response.status_code} - {e.response.text}",
+                )
         except requests.exceptions.ConnectionError:
-            return False, f"Failed to connect to Confluence at {self.confluence_config.url}"
+            return False, f"Failed to connect to Confluence at {self._get_base_url()}"
         except requests.exceptions.Timeout:
             return False, "Confluence health check timed out"
         except Exception as e:
@@ -98,25 +157,33 @@ class ConfluenceToolset(Toolset):
     def confluence_config(self) -> ConfluenceConfig:
         return self.config  # type: ignore
 
+    def _use_api_gateway(self) -> bool:
+        """Determine if we should use the Atlassian API gateway."""
+        # Use API gateway for Atlassian Cloud when we have a cloud_id
+        return self.confluence_config.is_atlassian_cloud and bool(
+            self.confluence_config.cloud_id
+        )
+
+    def _get_base_url(self) -> str:
+        """Get the base URL for API requests."""
+        if self._use_api_gateway():
+            return f"https://api.atlassian.com/ex/confluence/{self.confluence_config.cloud_id}"
+        return self.confluence_config.url.rstrip("/")
+
     def get_example_config(self) -> Dict[str, Any]:
         """Return an example configuration for this toolset."""
         return {
             "url": "https://your-company.atlassian.net",
             "username": "{{ env.CONFLUENCE_USERNAME }}",
             "api_key": "{{ env.CONFLUENCE_API_KEY }}",
-            "verify_ssl": True,
         }
 
     def _get_headers(self) -> Dict[str, str]:
         """Build request headers."""
-        headers = {
+        return {
             "Accept": "application/json",
             "Content-Type": "application/json",
         }
-        # If no username, use Bearer auth
-        if not self.confluence_config.username:
-            headers["Authorization"] = f"Bearer {self.confluence_config.api_key}"
-        return headers
 
     def _get_auth(self) -> Optional[Tuple[str, str]]:
         """Return Basic Auth tuple if username is configured."""
@@ -134,6 +201,9 @@ class ConfluenceToolset(Toolset):
     ) -> Dict[str, Any]:
         """Make HTTP request to Confluence API.
 
+        Uses the API gateway (api.atlassian.com) for Atlassian Cloud when cloud_id
+        is available, otherwise uses the direct URL for on-premise instances.
+
         Args:
             method: HTTP method (GET, POST, etc.)
             endpoint: API endpoint (e.g., "wiki/rest/api/space")
@@ -147,7 +217,7 @@ class ConfluenceToolset(Toolset):
         Raises:
             requests.exceptions.HTTPError: For HTTP error responses
         """
-        url = f"{self.confluence_config.url.rstrip('/')}/{endpoint.lstrip('/')}"
+        url = f"{self._get_base_url()}/{endpoint.lstrip('/')}"
         timeout = timeout or self.confluence_config.timeout
 
         response = requests.request(
@@ -229,7 +299,9 @@ class BaseConfluenceTool(Tool):
                 "request_context": request_context,
             }
 
-            error_msg = f"Confluence API error for endpoint '{endpoint}': HTTP {status_code}"
+            error_msg = (
+                f"Confluence API error for endpoint '{endpoint}': HTTP {status_code}"
+            )
             if error_json and "message" in error_json:
                 error_msg = f"{error_msg} - {error_json['message']}"
             elif response_text:
@@ -259,7 +331,10 @@ class BaseConfluenceTool(Tool):
             return StructuredToolResult(
                 status=StructuredToolResultStatus.ERROR,
                 error=f"Unexpected error querying Confluence endpoint '{endpoint}': {type(e).__name__}: {str(e)}",
-                data={"request_context": request_context, "exception_type": type(e).__name__},
+                data={
+                    "request_context": request_context,
+                    "exception_type": type(e).__name__,
+                },
                 params=params,
             )
 
