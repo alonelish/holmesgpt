@@ -80,7 +80,6 @@ def mock_dal():
     dal.get_global_instructions_for_account = Mock(return_value=None)
     dal.get_resource_instructions = Mock(return_value=None)
     dal.get_issue_data = Mock(return_value=None)
-    dal.get_workload_issues = Mock(return_value=[])
     return dal
 
 
