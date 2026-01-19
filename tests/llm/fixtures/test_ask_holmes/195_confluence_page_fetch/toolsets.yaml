@@ -2,3 +2,6 @@
 toolsets:
   confluence:
     enabled: true
+    config:
+      url: "{{ env.CONFLUENCE_BASE_URL }}"
+      api_key: "{{ env.CONFLUENCE_API_KEY }}"
