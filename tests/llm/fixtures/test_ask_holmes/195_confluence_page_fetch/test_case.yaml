@@ -13,19 +13,19 @@ tags:
 setup_timeout: 120
 
 # Required env vars:
-#   CONFLUENCE_USERNAME - Email for Atlassian Cloud (for Basic Auth)
-#   CONFLUENCE_API_KEY - Atlassian API token
-#   CONFLUENCE_BASE_URL - e.g., https://robusta-llm-test.atlassian.net
-#   CONFLUENCE_SPACE_KEY - e.g., MFS
+#   CONFLUENCE_API_KEY - Atlassian API token (required)
+#   CONFLUENCE_BASE_URL - e.g., https://robusta-llm-test.atlassian.net (required)
+#   CONFLUENCE_SPACE_KEY - e.g., MFS (required)
+#   CONFLUENCE_USERNAME - Email for Atlassian Cloud (optional - omit for service accounts)
+#
+# Auth modes:
+#   - With CONFLUENCE_USERNAME: Uses Basic Auth (personal API tokens)
+#   - Without CONFLUENCE_USERNAME: Uses Bearer Auth (service account tokens)
 
 before_test: |
   set -e
 
   # Validate required environment variables
-  if [ -z "$CONFLUENCE_USERNAME" ]; then
-    echo "❌ CONFLUENCE_USERNAME environment variable is not set"
-    exit 1
-  fi
   if [ -z "$CONFLUENCE_API_KEY" ]; then
     echo "❌ CONFLUENCE_API_KEY environment variable is not set"
     exit 1
@@ -58,22 +58,35 @@ before_test: |
   VERIFICATION_CODE="HOLMES-EVAL-7x9k2m4p"
   PAGE_TITLE="HolmesGPT Eval Test Page"
 
-  # Create the page using Confluence REST API via API Gateway (Basic Auth)
-  RESPONSE=$(curl -sf -X POST \
-    -u "${CONFLUENCE_USERNAME}:${CONFLUENCE_API_KEY}" \
-    -H "Content-Type: application/json" \
-    "${API_GATEWAY_URL}/wiki/rest/api/content" \
-    -d "{
-      \"type\": \"page\",
-      \"title\": \"${PAGE_TITLE}\",
-      \"space\": {\"key\": \"${CONFLUENCE_SPACE_KEY}\"},
-      \"body\": {
-        \"storage\": {
-          \"value\": \"<p>This is an automated test page for HolmesGPT evaluation.</p><p>Verification Code: <strong>${VERIFICATION_CODE}</strong></p><p>This page will be automatically cleaned up after the test.</p>\",
-          \"representation\": \"storage\"
-        }
+  PAGE_JSON="{
+    \"type\": \"page\",
+    \"title\": \"${PAGE_TITLE}\",
+    \"space\": {\"key\": \"${CONFLUENCE_SPACE_KEY}\"},
+    \"body\": {
+      \"storage\": {
+        \"value\": \"<p>This is an automated test page for HolmesGPT evaluation.</p><p>Verification Code: <strong>${VERIFICATION_CODE}</strong></p><p>This page will be automatically cleaned up after the test.</p>\",
+        \"representation\": \"storage\"
       }
-    }")
+    }
+  }"
+
+  # Create the page using Confluence REST API via API Gateway
+  # Use appropriate auth method based on whether username is provided
+  if [ -n "$CONFLUENCE_USERNAME" ]; then
+    echo "   Auth: Basic Auth (personal token)"
+    RESPONSE=$(curl -sf -X POST \
+      -u "${CONFLUENCE_USERNAME}:${CONFLUENCE_API_KEY}" \
+      -H "Content-Type: application/json" \
+      "${API_GATEWAY_URL}/wiki/rest/api/content" \
+      -d "$PAGE_JSON")
+  else
+    echo "   Auth: Bearer Auth (service account)"
+    RESPONSE=$(curl -sf -X POST \
+      -H "Authorization: Bearer ${CONFLUENCE_API_KEY}" \
+      -H "Content-Type: application/json" \
+      "${API_GATEWAY_URL}/wiki/rest/api/content" \
+      -d "$PAGE_JSON")
+  fi
 
   if [ $? -ne 0 ]; then
     echo "❌ Failed to create Confluence page"
@@ -108,9 +121,16 @@ after_test: |
     API_GATEWAY_URL="https://api.atlassian.com/ex/confluence/${CLOUD_ID}"
 
     if [ -n "$PAGE_ID" ] && [ -n "$CLOUD_ID" ]; then
-      curl -sf -X DELETE \
-        -u "${CONFLUENCE_USERNAME}:${CONFLUENCE_API_KEY}" \
-        "${API_GATEWAY_URL}/wiki/rest/api/content/${PAGE_ID}" 2>&1 || true
+      # Use appropriate auth method based on whether username is provided
+      if [ -n "$CONFLUENCE_USERNAME" ]; then
+        curl -sf -X DELETE \
+          -u "${CONFLUENCE_USERNAME}:${CONFLUENCE_API_KEY}" \
+          "${API_GATEWAY_URL}/wiki/rest/api/content/${PAGE_ID}" 2>&1 || true
+      else
+        curl -sf -X DELETE \
+          -H "Authorization: Bearer ${CONFLUENCE_API_KEY}" \
+          "${API_GATEWAY_URL}/wiki/rest/api/content/${PAGE_ID}" 2>&1 || true
+      fi
 
       echo "✅ Deleted Confluence page with ID: $PAGE_ID"
     fi
