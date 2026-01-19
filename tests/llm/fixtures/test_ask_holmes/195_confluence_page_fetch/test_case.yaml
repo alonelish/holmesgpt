@@ -13,21 +13,24 @@ tags:
 setup_timeout: 120
 
 # Required env vars:
-#   CONFLUENCE_API_KEY - required (no default)
-#   CONFLUENCE_BASE_URL - optional (defaults to https://robusta-llm-test.atlassian.net)
-#   CONFLUENCE_SPACE_KEY - optional (defaults to MFS)
+#   CONFLUENCE_API_KEY - Confluence API token (Bearer auth)
+#   CONFLUENCE_BASE_URL - e.g., https://robusta-llm-test.atlassian.net
+#   CONFLUENCE_SPACE_KEY - e.g., MFS
 
 before_test: |
   set -e
 
-  # Set defaults (can be overridden via environment variables)
-  : "${CONFLUENCE_BASE_URL:=https://robusta-llm-test.atlassian.net}"
-  : "${CONFLUENCE_SPACE_KEY:=MFS}"
-  export CONFLUENCE_BASE_URL CONFLUENCE_SPACE_KEY
-
-  # API key is required (no default)
+  # Validate required environment variables
   if [ -z "$CONFLUENCE_API_KEY" ]; then
     echo "❌ CONFLUENCE_API_KEY environment variable is not set"
+    exit 1
+  fi
+  if [ -z "$CONFLUENCE_BASE_URL" ]; then
+    echo "❌ CONFLUENCE_BASE_URL environment variable is not set"
+    exit 1
+  fi
+  if [ -z "$CONFLUENCE_SPACE_KEY" ]; then
+    echo "❌ CONFLUENCE_SPACE_KEY environment variable is not set"
     exit 1
   fi
 
@@ -40,7 +43,7 @@ before_test: |
   VERIFICATION_CODE="HOLMES-EVAL-7x9k2m4p"
   PAGE_TITLE="HolmesGPT Eval Test Page"
 
-  # Create the page using Confluence REST API
+  # Create the page using Confluence REST API (Bearer token auth)
   RESPONSE=$(curl -sf -X POST \
     -H "Authorization: Bearer ${CONFLUENCE_API_KEY}" \
     -H "Content-Type: application/json" \
@@ -80,9 +83,6 @@ before_test: |
 
 after_test: |
   set -e
-
-  # Set defaults (same as before_test)
-  : "${CONFLUENCE_BASE_URL:=https://robusta-llm-test.atlassian.net}"
 
   echo "⏳ Cleaning up test page..."
 
