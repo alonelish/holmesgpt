@@ -20,31 +20,32 @@ from holmes.plugins.toolsets.utils import toolset_name_for_one_liner
 class ConfluenceConfig(BaseModel):
     """Configuration for Confluence API access.
 
-    Supports both Atlassian Cloud and on-premise Confluence:
+    Supports two authentication methods:
 
-    1. Atlassian Cloud (recommended - auto-discovers cloud_id):
+    1. Personal API Token (Basic Auth) - requires username:
     ```yaml
     url: "https://your-company.atlassian.net"
-    username: "your-email@example.com"  # or service account email
-    api_key: "your_api_token"
+    username: "your-email@example.com"
+    api_key: "your_personal_api_token"
     ```
 
-    2. On-premise / Data Center:
+    2. Service Account (Bearer Auth) - no username:
     ```yaml
-    url: "https://confluence.your-company.com"
-    username: "your-username"
-    api_key: "your_token_or_password"
+    url: "https://your-company.atlassian.net"
+    api_key: "your_service_account_token"
+    # Note: Service account tokens require Confluence scopes:
+    # read:confluence-content.all, read:confluence-space.summary
     ```
 
-    Note: For Atlassian Cloud with scoped API tokens (service accounts),
-    the cloud_id is auto-discovered and the API gateway is used automatically.
+    For Atlassian Cloud, the cloud_id is auto-discovered and the API gateway
+    (api.atlassian.com) is used automatically for both authentication methods.
     """
 
     model_config = ConfigDict(extra="allow")
 
     url: str
     api_key: str
-    username: Optional[str] = None  # Required for Basic Auth
+    username: Optional[str] = None  # If set, uses Basic Auth; otherwise Bearer
     cloud_id: Optional[str] = None  # Auto-discovered for Atlassian Cloud
     verify_ssl: bool = True
     timeout: int = 30
@@ -179,14 +180,22 @@ class ConfluenceToolset(Toolset):
         }
 
     def _get_headers(self) -> Dict[str, str]:
-        """Build request headers."""
-        return {
+        """Build request headers.
+
+        For service accounts (no username), uses Bearer auth in headers.
+        For personal tokens (with username), auth is handled by _get_auth().
+        """
+        headers = {
             "Accept": "application/json",
             "Content-Type": "application/json",
         }
+        # Service accounts use Bearer auth (no username configured)
+        if not self.confluence_config.username:
+            headers["Authorization"] = f"Bearer {self.confluence_config.api_key}"
+        return headers
 
     def _get_auth(self) -> Optional[Tuple[str, str]]:
-        """Return Basic Auth tuple if username is configured."""
+        """Return Basic Auth tuple if username is configured (personal tokens)."""
         if self.confluence_config.username:
             return (self.confluence_config.username, self.confluence_config.api_key)
         return None
