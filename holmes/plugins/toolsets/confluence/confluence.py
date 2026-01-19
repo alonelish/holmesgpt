@@ -294,7 +294,7 @@ class ListConfluenceSpaces(BaseConfluenceTool):
             },
         )
 
-    def _invoke(self, params: dict, _context: ToolInvokeContext) -> StructuredToolResult:
+    def _invoke(self, params: dict, context: ToolInvokeContext) -> StructuredToolResult:  # noqa: ARG002
         query_params: Dict[str, Any] = {
             "limit": params.get("limit", 100),
             "start": params.get("start", 0),
@@ -319,7 +319,7 @@ class ListConfluenceSpaces(BaseConfluenceTool):
 
         return result
 
-    def get_parameterized_one_liner(self, _params: Dict) -> str:
+    def get_parameterized_one_liner(self, params: Dict) -> str:  # noqa: ARG002
         return f"{toolset_name_for_one_liner(self._toolset.name)}: List spaces"
 
 
@@ -358,7 +358,7 @@ class GetConfluenceSpacePages(BaseConfluenceTool):
             },
         )
 
-    def _invoke(self, params: dict, _context: ToolInvokeContext) -> StructuredToolResult:
+    def _invoke(self, params: dict, context: ToolInvokeContext) -> StructuredToolResult:  # noqa: ARG002
         space_key = params["space_key"]
 
         query_params: Dict[str, Any] = {
@@ -419,7 +419,7 @@ class FetchConfluencePage(BaseConfluenceTool):
             },
         )
 
-    def _invoke(self, params: dict, _context: ToolInvokeContext) -> StructuredToolResult:
+    def _invoke(self, params: dict, context: ToolInvokeContext) -> StructuredToolResult:  # noqa: ARG002
         page_id = params["page_id"]
         expand = params.get("expand", "body.storage")
 
