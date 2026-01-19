@@ -243,6 +243,9 @@ def responses():
             re.compile(r"https://.*\.es\.amazonaws\.com")
         )  # AWS OpenSearch
 
+        # Allow Confluence/Atlassian Cloud API calls
+        rsps.add_passthru(re.compile(r"https://.*\.atlassian\.net"))
+
         # Allow
         rsps.add_passthru("https://google.com")
         rsps.add_passthru("https://burgergooglenetworkspam.co.uk")
