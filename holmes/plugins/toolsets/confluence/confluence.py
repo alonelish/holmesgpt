@@ -20,25 +20,20 @@ from holmes.plugins.toolsets.utils import toolset_name_for_one_liner
 class ConfluenceConfig(BaseModel):
     """Configuration for Confluence API access.
 
-    Supports two authentication methods:
-
-    1. Personal API Token (Basic Auth) - requires username:
+    Personal API Token:
     ```yaml
     url: "https://your-company.atlassian.net"
     username: "your-email@example.com"
     api_key: "your_personal_api_token"
     ```
 
-    2. Service Account (Bearer Auth) - no username:
+    Service Account (omit username):
     ```yaml
     url: "https://your-company.atlassian.net"
     api_key: "your_service_account_token"
-    # Note: Service account tokens require Confluence scopes:
-    # read:confluence-content.all, read:confluence-space.summary
     ```
-
-    For Atlassian Cloud, the cloud_id is auto-discovered and the API gateway
-    (api.atlassian.com) is used automatically for both authentication methods.
+    Service account tokens require Confluence scopes:
+    read:confluence-content.all, read:confluence-space.summary
     """
 
     model_config = ConfigDict(extra="allow")
