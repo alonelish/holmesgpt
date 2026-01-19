@@ -365,6 +365,16 @@ Check in pyproject.toml and NEVER use a marker/tag that doesn't exist there. Ask
   - **Best**: Check specific values that can only be discovered by querying (e.g., unique IDs, injected error codes, exact counts)
   - **Acceptable**: Use `include_tool_calls: true` to verify the tool was called when output values are too generic to rule out hallucinations
   - **Bad**: Check generic output patterns that an LLM could plausibly guess (e.g., "cluster status is green/yellow/red", "has N nodes")
+- **expected_output is invisible to LLM**: The `expected_output` field is only used by the evaluator - the LLM never sees it. This means:
+  - You can safely put secrets/verification codes in `expected_output` that the LLM must discover
+  - `before_test` can inject a unique verification code into test data, and `expected_output` can check for it
+  - This is a powerful pattern for cloud service tests: create data with a unique code in `before_test`, ask LLM to find it, verify with `expected_output`
+  ```yaml
+  # Example: before_test creates a page with verification code "HOLMES-EVAL-7x9k2m4p"
+  # The LLM must discover this code by querying the service
+  expected_output:
+    - "Must report the verification code: HOLMES-EVAL-7x9k2m4p"
+  ```
 - **`include_tool_calls: true`**: Use when expected output is too generic to be hallucination-proof. Prefer specific answer checking when possible, but verifying tool calls is better than a test that can't rule out hallucinations.
   ```yaml
   # Use when values are generic (cluster health could be guessed)

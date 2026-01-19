@@ -1,7 +1,4 @@
 # Toolset configuration for Confluence page fetch test
-# Enables both the Confluence toolset and the bash toolset (for reading the page ID file)
 toolsets:
   confluence:
-    enabled: true
-  bash:
     enabled: true

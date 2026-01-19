@@ -1,15 +1,9 @@
 user_prompt: |
-  A test page was created in Confluence. The page ID is stored in the file /tmp/confluence_test_page_id.
-  First, read the file /tmp/confluence_test_page_id using the head command to get the page ID.
-  Then, use the Confluence tool to fetch that page's contents.
-  Tell me the unique verification code found in the page content.
+  Find and fetch the contents of the test page titled "HolmesGPT Eval Test Page" in Confluence.
+  Tell me the verification code found in the page content.
 
 expected_output:
-  - "Must call the head or run_bash_command tool to read the page ID from /tmp/confluence_test_page_id"
-  - "Must call the fetch_confluence_url tool with the page ID"
-  - "Must report the unique verification code from the page content"
-
-include_tool_calls: true
+  - "Must report the verification code: HOLMES-EVAL-7x9k2m4p"
 
 tags:
   - confluence
@@ -26,10 +20,6 @@ before_test: |
     echo "❌ CONFLUENCE_BASE_URL environment variable is not set"
     exit 1
   fi
-  if [ -z "$CONFLUENCE_USER" ]; then
-    echo "❌ CONFLUENCE_USER environment variable is not set"
-    exit 1
-  fi
   if [ -z "$CONFLUENCE_API_KEY" ]; then
     echo "❌ CONFLUENCE_API_KEY environment variable is not set"
     exit 1
@@ -41,15 +31,14 @@ before_test: |
 
   echo "⏳ Creating test page in Confluence..."
 
-  # Generate a unique verification code that LLM cannot guess
-  VERIFICATION_CODE="HOLMES-TEST-$(date +%s)-$(head -c 8 /dev/urandom | xxd -p)"
-
-  # Create page title with timestamp for uniqueness
-  PAGE_TITLE="HolmesGPT Test Page $(date +%Y%m%d%H%M%S)"
+  # Use a fixed verification code that is included in expected_output
+  # The LLM cannot see expected_output, so this is safe from cheating
+  VERIFICATION_CODE="HOLMES-EVAL-7x9k2m4p"
+  PAGE_TITLE="HolmesGPT Eval Test Page"
 
   # Create the page using Confluence REST API
   RESPONSE=$(curl -sf -X POST \
-    -u "${CONFLUENCE_USER}:${CONFLUENCE_API_KEY}" \
+    -H "Authorization: Bearer ${CONFLUENCE_API_KEY}" \
     -H "Content-Type: application/json" \
     "${CONFLUENCE_BASE_URL}/wiki/rest/api/content" \
     -d "{
@@ -58,7 +47,7 @@ before_test: |
       \"space\": {\"key\": \"${CONFLUENCE_SPACE_KEY}\"},
       \"body\": {
         \"storage\": {
-          \"value\": \"<p>This is a test page created by HolmesGPT evaluation.</p><p>Verification Code: <strong>${VERIFICATION_CODE}</strong></p><p>Do not delete this page manually - it will be cleaned up automatically.</p>\",
+          \"value\": \"<p>This is an automated test page for HolmesGPT evaluation.</p><p>Verification Code: <strong>${VERIFICATION_CODE}</strong></p><p>This page will be automatically cleaned up after the test.</p>\",
           \"representation\": \"storage\"
         }
       }
@@ -79,15 +68,12 @@ before_test: |
     exit 1
   fi
 
-  # Save the page ID to a file for the test to use
+  # Save the page ID for cleanup
   echo "$PAGE_ID" > /tmp/confluence_test_page_id
 
-  # Save the verification code to a file for after_test validation
-  echo "$VERIFICATION_CODE" > /tmp/confluence_test_verification_code
-
   echo "✅ Created Confluence page with ID: $PAGE_ID"
-  echo "✅ Verification code: $VERIFICATION_CODE"
-  echo "✅ Page ID saved to /tmp/confluence_test_page_id"
+  echo "✅ Page title: $PAGE_TITLE"
+  echo "✅ Space key: $CONFLUENCE_SPACE_KEY"
 
 after_test: |
   set -e
@@ -100,16 +86,14 @@ after_test: |
 
     if [ -n "$PAGE_ID" ]; then
       # Delete the page using Confluence REST API
-      DELETE_RESPONSE=$(curl -sf -X DELETE \
-        -u "${CONFLUENCE_USER}:${CONFLUENCE_API_KEY}" \
-        "${CONFLUENCE_BASE_URL}/wiki/rest/api/content/${PAGE_ID}" 2>&1 || true)
+      curl -sf -X DELETE \
+        -H "Authorization: Bearer ${CONFLUENCE_API_KEY}" \
+        "${CONFLUENCE_BASE_URL}/wiki/rest/api/content/${PAGE_ID}" 2>&1 || true
 
       echo "✅ Deleted Confluence page with ID: $PAGE_ID"
     fi
 
-    # Clean up temp files
     rm -f /tmp/confluence_test_page_id
-    rm -f /tmp/confluence_test_verification_code
   else
     echo "⚠️ No page ID file found, skipping cleanup"
   fi
