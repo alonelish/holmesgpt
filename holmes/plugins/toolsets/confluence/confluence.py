@@ -33,7 +33,7 @@ class ConfluenceConfig(BaseModel):
     api_key: "your_service_account_token"
     ```
     Service account tokens require Confluence scopes:
-    read:confluence-content.all, read:confluence-space.summary, readonly:content.attachment:confluence
+    read:confluence-content.all, read:confluence-space.summary
     """
 
     model_config = ConfigDict(extra="allow")
@@ -135,7 +135,7 @@ class ConfluenceToolset(Toolset):
             elif e.response.status_code == 403:
                 hint = ""
                 if self.confluence_config.is_atlassian_cloud:
-                    hint = " For service accounts, ensure the API token has Confluence scopes: read:confluence-content.all, read:confluence-space.summary, readonly:content.attachment:confluence"
+                    hint = " For service accounts, ensure the API token has Confluence scopes: read:confluence-content.all, read:confluence-space.summary"
                 return False, f"Confluence access denied.{hint}"
             else:
                 return (
