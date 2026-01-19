@@ -12,24 +12,25 @@ tags:
 
 setup_timeout: 120
 
+# Default Confluence configuration for this eval
+# Uses robusta-llm-test org and MFS space by default
+# Override by setting these env vars before running the test
+test_env_vars:
+  CONFLUENCE_BASE_URL: "https://robusta-llm-test.atlassian.net"
+  CONFLUENCE_SPACE_KEY: "MFS"
+
 before_test: |
   set -e
 
-  # Validate required environment variables
-  if [ -z "$CONFLUENCE_BASE_URL" ]; then
-    echo "❌ CONFLUENCE_BASE_URL environment variable is not set"
-    exit 1
-  fi
+  # API key is required (no default - it's a secret)
   if [ -z "$CONFLUENCE_API_KEY" ]; then
     echo "❌ CONFLUENCE_API_KEY environment variable is not set"
     exit 1
   fi
-  if [ -z "$CONFLUENCE_SPACE_KEY" ]; then
-    echo "❌ CONFLUENCE_SPACE_KEY environment variable is not set"
-    exit 1
-  fi
 
   echo "⏳ Creating test page in Confluence..."
+  echo "   Base URL: $CONFLUENCE_BASE_URL"
+  echo "   Space: $CONFLUENCE_SPACE_KEY"
 
   # Use a fixed verification code that is included in expected_output
   # The LLM cannot see expected_output, so this is safe from cheating
@@ -73,7 +74,6 @@ before_test: |
 
   echo "✅ Created Confluence page with ID: $PAGE_ID"
   echo "✅ Page title: $PAGE_TITLE"
-  echo "✅ Space key: $CONFLUENCE_SPACE_KEY"
 
 after_test: |
   set -e
