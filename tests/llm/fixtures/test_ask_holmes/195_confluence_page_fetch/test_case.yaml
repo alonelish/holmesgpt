@@ -15,7 +15,6 @@ setup_timeout: 120
 # Required env vars:
 #   CONFLUENCE_API_KEY - Atlassian API token (required)
 #   CONFLUENCE_BASE_URL - e.g., https://robusta-llm-test.atlassian.net (required)
-#   CONFLUENCE_SPACE_KEY - e.g., MFS (required)
 #   CONFLUENCE_USERNAME - Email for Atlassian Cloud (optional - omit for service accounts)
 #
 # Auth modes:
@@ -25,6 +24,9 @@ setup_timeout: 120
 before_test: |
   set -e
 
+  # Hardcoded space key for the test instance
+  CONFLUENCE_SPACE_KEY="MFS"
+
   # Validate required environment variables
   if [ -z "$CONFLUENCE_API_KEY" ]; then
     echo "❌ CONFLUENCE_API_KEY environment variable is not set"
@@ -32,10 +34,6 @@ before_test: |
   fi
   if [ -z "$CONFLUENCE_BASE_URL" ]; then
     echo "❌ CONFLUENCE_BASE_URL environment variable is not set"
-    exit 1
-  fi
-  if [ -z "$CONFLUENCE_SPACE_KEY" ]; then
-    echo "❌ CONFLUENCE_SPACE_KEY environment variable is not set"
     exit 1
   fi
 
