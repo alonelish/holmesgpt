@@ -139,7 +139,7 @@ class ConfluenceToolset(Toolset):
             elif e.response.status_code == 403:
                 hint = ""
                 if self.confluence_config.is_atlassian_cloud:
-                    hint = " For service accounts, ensure the API token has Confluence scopes (read:confluence-content.all, etc.)."
+                    hint = " For service accounts, ensure the API token has Confluence scopes: read:confluence-content.all, read:confluence-space.summary"
                 return False, f"Confluence access denied.{hint}"
             else:
                 return (
