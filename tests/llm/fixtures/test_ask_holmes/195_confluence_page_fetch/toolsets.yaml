@@ -1,4 +1,5 @@
 # Toolset configuration for Confluence page fetch test
+# This is a cloud-only test, no Kubernetes required
 toolsets:
   confluence:
     enabled: true
@@ -6,3 +7,15 @@ toolsets:
       url: "{{ env.CONFLUENCE_BASE_URL }}"
       username: "{{ env.CONFLUENCE_USERNAME }}"
       api_key: "{{ env.CONFLUENCE_API_KEY }}"
+
+  # Disable K8s-dependent toolsets (not needed for this test)
+  kubernetes/core:
+    enabled: false
+  kubernetes/logs:
+    enabled: false
+  helm/core:
+    enabled: false
+  robusta:
+    enabled: false
+  connectivity_check:
+    enabled: false
