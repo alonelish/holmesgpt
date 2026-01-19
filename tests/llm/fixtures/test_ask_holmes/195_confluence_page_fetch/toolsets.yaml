@@ -4,4 +4,5 @@ toolsets:
     enabled: true
     config:
       url: "{{ env.CONFLUENCE_BASE_URL }}"
+      username: "{{ env.CONFLUENCE_USERNAME }}"
       api_key: "{{ env.CONFLUENCE_API_KEY }}"

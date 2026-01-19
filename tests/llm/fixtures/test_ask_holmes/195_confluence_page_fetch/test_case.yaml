@@ -13,7 +13,8 @@ tags:
 setup_timeout: 120
 
 # Required env vars:
-#   CONFLUENCE_API_KEY - Confluence API token (Bearer auth)
+#   CONFLUENCE_USERNAME - Email for Atlassian Cloud (for Basic Auth)
+#   CONFLUENCE_API_KEY - Atlassian API token
 #   CONFLUENCE_BASE_URL - e.g., https://robusta-llm-test.atlassian.net
 #   CONFLUENCE_SPACE_KEY - e.g., MFS
 
@@ -21,6 +22,10 @@ before_test: |
   set -e
 
   # Validate required environment variables
+  if [ -z "$CONFLUENCE_USERNAME" ]; then
+    echo "❌ CONFLUENCE_USERNAME environment variable is not set"
+    exit 1
+  fi
   if [ -z "$CONFLUENCE_API_KEY" ]; then
     echo "❌ CONFLUENCE_API_KEY environment variable is not set"
     exit 1
@@ -43,9 +48,9 @@ before_test: |
   VERIFICATION_CODE="HOLMES-EVAL-7x9k2m4p"
   PAGE_TITLE="HolmesGPT Eval Test Page"
 
-  # Create the page using Confluence REST API (Bearer token auth)
+  # Create the page using Confluence REST API (Basic Auth for Atlassian Cloud)
   RESPONSE=$(curl -sf -X POST \
-    -H "Authorization: Bearer ${CONFLUENCE_API_KEY}" \
+    -u "${CONFLUENCE_USERNAME}:${CONFLUENCE_API_KEY}" \
     -H "Content-Type: application/json" \
     "${CONFLUENCE_BASE_URL}/wiki/rest/api/content" \
     -d "{
@@ -91,7 +96,7 @@ after_test: |
 
     if [ -n "$PAGE_ID" ]; then
       curl -sf -X DELETE \
-        -H "Authorization: Bearer ${CONFLUENCE_API_KEY}" \
+        -u "${CONFLUENCE_USERNAME}:${CONFLUENCE_API_KEY}" \
         "${CONFLUENCE_BASE_URL}/wiki/rest/api/content/${PAGE_ID}" 2>&1 || true
 
       echo "✅ Deleted Confluence page with ID: $PAGE_ID"

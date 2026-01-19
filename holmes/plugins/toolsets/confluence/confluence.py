@@ -19,10 +19,20 @@ from holmes.plugins.toolsets.utils import toolset_name_for_one_liner
 class ConfluenceConfig(BaseModel):
     """Configuration for Confluence API access.
 
-    Example configuration:
+    Supports two authentication methods:
+
+    1. Basic Auth (for Atlassian Cloud - most common):
     ```yaml
     url: "https://your-company.atlassian.net"
+    username: "your-email@example.com"
     api_key: "your_api_token"
+    ```
+
+    2. Bearer Token (for self-hosted or PAT):
+    ```yaml
+    url: "https://confluence.your-company.com"
+    api_key: "your_bearer_token"
+    # Note: no username = Bearer auth
     ```
     """
 
@@ -30,6 +40,7 @@ class ConfluenceConfig(BaseModel):
 
     url: str
     api_key: str
+    username: Optional[str] = None  # If set, uses Basic Auth; otherwise Bearer
     verify_ssl: bool = True
     timeout: int = 30
 
@@ -91,17 +102,27 @@ class ConfluenceToolset(Toolset):
         """Return an example configuration for this toolset."""
         return {
             "url": "https://your-company.atlassian.net",
+            "username": "{{ env.CONFLUENCE_USERNAME }}",
             "api_key": "{{ env.CONFLUENCE_API_KEY }}",
             "verify_ssl": True,
         }
 
     def _get_headers(self) -> Dict[str, str]:
-        """Build request headers with Bearer token authentication."""
-        return {
-            "Authorization": f"Bearer {self.confluence_config.api_key}",
+        """Build request headers."""
+        headers = {
             "Accept": "application/json",
             "Content-Type": "application/json",
         }
+        # If no username, use Bearer auth
+        if not self.confluence_config.username:
+            headers["Authorization"] = f"Bearer {self.confluence_config.api_key}"
+        return headers
+
+    def _get_auth(self) -> Optional[Tuple[str, str]]:
+        """Return Basic Auth tuple if username is configured."""
+        if self.confluence_config.username:
+            return (self.confluence_config.username, self.confluence_config.api_key)
+        return None
 
     def _make_request(
         self,
@@ -133,6 +154,7 @@ class ConfluenceToolset(Toolset):
             method=method,
             url=url,
             headers=self._get_headers(),
+            auth=self._get_auth(),
             params=params,
             json=body,
             timeout=timeout,
