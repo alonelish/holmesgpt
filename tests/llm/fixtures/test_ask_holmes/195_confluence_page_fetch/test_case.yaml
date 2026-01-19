@@ -12,17 +12,20 @@ tags:
 
 setup_timeout: 120
 
-# Default Confluence configuration for this eval
-# Uses robusta-llm-test org and MFS space by default
-# Override by setting these env vars before running the test
-test_env_vars:
-  CONFLUENCE_BASE_URL: "https://robusta-llm-test.atlassian.net"
-  CONFLUENCE_SPACE_KEY: "MFS"
+# Required env vars:
+#   CONFLUENCE_API_KEY - required (no default)
+#   CONFLUENCE_BASE_URL - optional (defaults to https://robusta-llm-test.atlassian.net)
+#   CONFLUENCE_SPACE_KEY - optional (defaults to MFS)
 
 before_test: |
   set -e
 
-  # API key is required (no default - it's a secret)
+  # Set defaults (can be overridden via environment variables)
+  : "${CONFLUENCE_BASE_URL:=https://robusta-llm-test.atlassian.net}"
+  : "${CONFLUENCE_SPACE_KEY:=MFS}"
+  export CONFLUENCE_BASE_URL CONFLUENCE_SPACE_KEY
+
+  # API key is required (no default)
   if [ -z "$CONFLUENCE_API_KEY" ]; then
     echo "❌ CONFLUENCE_API_KEY environment variable is not set"
     exit 1
@@ -78,14 +81,15 @@ before_test: |
 after_test: |
   set -e
 
+  # Set defaults (same as before_test)
+  : "${CONFLUENCE_BASE_URL:=https://robusta-llm-test.atlassian.net}"
+
   echo "⏳ Cleaning up test page..."
 
-  # Read the page ID from the file
   if [ -f /tmp/confluence_test_page_id ]; then
     PAGE_ID=$(cat /tmp/confluence_test_page_id)
 
     if [ -n "$PAGE_ID" ]; then
-      # Delete the page using Confluence REST API
       curl -sf -X DELETE \
         -H "Authorization: Bearer ${CONFLUENCE_API_KEY}" \
         "${CONFLUENCE_BASE_URL}/wiki/rest/api/content/${PAGE_ID}" 2>&1 || true
