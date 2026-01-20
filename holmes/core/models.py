@@ -1,9 +1,10 @@
 import json
-from holmes.core.investigation_structured_output import InputSectionsDataType
-from typing import Optional, List, Dict, Any, Union
-from pydantic import BaseModel, model_validator, Field
 from enum import Enum
+from typing import Any, Dict, List, Optional, Union
 
+from pydantic import BaseModel, Field, model_validator
+
+from holmes.core.investigation_structured_output import InputSectionsDataType
 from holmes.core.tools import StructuredToolResult, StructuredToolResultStatus
 
 
@@ -232,6 +233,10 @@ class WorkloadHealthRequest(BaseModel):
 
 class ChatRequest(ChatRequestBaseModel):
     ask: str
+    response_format: Optional[Dict[str, Any]] = Field(
+        default=None,
+        description="Optional JSON schema for structured output. Format: {'type': 'json_schema', 'json_schema': {'name': 'ResultName', 'strict': true, 'schema': {...}}}",
+    )
 
 
 class FollowUpAction(BaseModel):
