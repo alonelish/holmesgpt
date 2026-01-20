@@ -382,3 +382,30 @@ mcpAddons:
     nodeSelector: {}
     tolerations: []
     affinity: {}
+
+  # Sentry MCP Server Configuration
+  # Provides access to Sentry's error tracking, issue management, and observability platform
+  # This connects to Sentry's hosted MCP server at https://mcp.sentry.dev/mcp
+  #
+  # AUTHENTICATION:
+  # Create a Sentry User Auth Token:
+  # 1. Go to https://sentry.io/settings/account/api/auth-tokens/
+  # 2. Create a new token with these scopes:
+  #    - org:read, project:read, project:write, team:read, team:write, event:write
+  # 3. Create a Kubernetes secret:
+  #    kubectl create secret generic sentry-auth-token \
+  #      --from-literal=token=<YOUR_SENTRY_AUTH_TOKEN> -n <NAMESPACE>
+  sentry:
+    enabled: false
+
+    # Authentication - Sentry User Auth Token from Kubernetes secret
+    auth:
+      secretName: ""      # Required: name of K8s secret containing the Sentry auth token
+      secretKey: "token"  # Key in secret (default: "token")
+
+    # Sentry MCP server URL (default: Sentry's hosted MCP server)
+    # For self-hosted Sentry, change this to your instance URL
+    url: "https://mcp.sentry.dev/mcp"
+
+    # Custom LLM instructions (optional) - leave empty to use default
+    llmInstructions: ""
