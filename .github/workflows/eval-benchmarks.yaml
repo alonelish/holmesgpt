@@ -144,11 +144,11 @@ jobs:
 
           # Commit and push
           BENCHMARK_TYPE="${{ steps.build-command.outputs.benchmark_type }}"
-          git commit -m "Update ${BENCHMARK_TYPE:-benchmark} results [skip ci]"
+          git commit -m "Update ${BENCHMARK_TYPE:-benchmark} results"
           git push origin "$BRANCH_NAME" --force
 
           # Create PR (or update existing)
-          PR_TITLE="Weekly Benchmark Results $(date +%Y-%m-%d)"
+          PR_TITLE="Weekly Benchmark Results $(date +%Y-%m-%d_%H-%M)"
           PR_BODY="Automated weekly benchmark results from CI.
 
           **Benchmark Type**: ${BENCHMARK_TYPE:-custom}
