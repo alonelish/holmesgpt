@@ -83,6 +83,14 @@ class FindingType(str, Enum):
     CONFIGURATION_CHANGE = "configuration_change"
 
 
+class RunStatus(str, Enum):
+    PENDING = "pending"
+    PULLED = "pulled"
+    RUNNING = "running"
+    FAILED = "failed"
+    COMPLETED = "completed"
+
+
 class RobustaToken(BaseModel):
     store_url: str
     api_key: str
@@ -779,67 +787,46 @@ class SupabaseDal:
                 f"An error occurred during toolset synchronization: {e}", exc_info=True
             )
 
-    def get_one_pending_run(self) -> Optional[Dict]:
-        """
-        Get one pending run from ScheduledPromptsRuns table for the current cluster.
-
-        Returns:
-            Dictionary containing the run data, or None if no pending runs found
-        """
+    def claim_scheduled_prompt_run(self, holmes_id: str) -> Optional[Dict]:
         if not self.enabled:
             return None
 
         try:
-            res = (
-                self.client.table(SCHEDULED_PROMPTS_RUNS_TABLE)
-                .select("*")
-                .eq("account_id", self.account_id)
-                .eq("cluster_name", self.cluster)
-                .eq("status", "pending")
-                .order("created_at", desc=False)
-                .limit(1)
-                .execute()
-            )
+            res = self.client.rpc(
+                "claim_scheduled_prompt_run",
+                {
+                    "_account_id": self.account_id,
+                    "_cluster_name": self.cluster,
+                    "_holmes_id": holmes_id,
+                },
+            ).execute()
 
-            if not res.data or len(res.data) == 0:
+            if not res.data:
                 return None
 
-            return res.data[0]
+            row = res.data[0] if isinstance(res.data, list) else res.data
+            return row
         except Exception:
             logging.exception(
-                "Supabase error while retrieving pending scheduled prompt run",
+                "Supabase error while claiming scheduled prompt run",
                 exc_info=True,
             )
             return None
 
     def update_run_status(
-        self, run_id: str, status: str, msg: Optional[str] = None
+        self, run_id: str, status: RunStatus, msg: Optional[str] = None
     ) -> bool:
-        """
-        Update the status of a scheduled prompt run and update heartbeat to now.
-
-        Args:
-            run_id: The UUID of the run to update
-            status: The new status (pending, running, failed, completed)
-            msg: Optional message to update
-
-        Returns:
-            True if update was successful, False otherwise
-        """
         if not self.enabled:
             logging.info(
                 "Robusta store not initialized. Skipping updating scheduled prompt run status."
             )
             return False
 
-        valid_statuses = {"pending", "running", "failed", "completed"}
-        if status not in valid_statuses:
-            logging.error(f"Invalid status '{status}'. Must be one of {valid_statuses}")
-            return False
+        status_str = status.value
 
         try:
             update_data = {
-                "status": status,
+                "status": status_str,
                 "last_heartbeat_at": datetime.now().isoformat(),
             }
             if msg is not None:
@@ -861,19 +848,63 @@ class SupabaseDal:
             )
             return False
 
+    def finish_scheduled_prompt_run(
+        self,
+        status: RunStatus,
+        result: Dict,
+        run_id: str,
+        scheduled_prompt_definition_id: Optional[str],
+        version: str,
+        metadata: Optional[dict],
+    ) -> bool:
+        if not self.enabled:
+            logging.info(
+                "Robusta store not initialized. Skipping finishing scheduled prompt run."
+            )
+            return False
+
+        if status not in (RunStatus.COMPLETED, RunStatus.FAILED):
+            logging.error(
+                "finish_scheduled_prompt_run received invalid status %s", status
+            )
+            return False
+
+        try:
+            self.client.rpc(
+                "finish_scheduled_prompt_run",
+                {
+                    "_cluster_name": self.cluster,
+                    "_account_id": self.account_id,
+                    "_status": status.value,
+                    "_result": result,
+                    "_scheduled_prompt_run_id": run_id,
+                    "_scheduled_prompt_definition_id": scheduled_prompt_definition_id,
+                    "_version": version,
+                    "_metadata": metadata,
+                },
+            ).execute()
+            return True
+        except Exception:
+            logging.exception(
+                "Supabase error while finishing scheduled prompt run",
+                exc_info=True,
+            )
+            return False
+
     def insert_holmes_result(
         self,
         job_id: Optional[str],
-        job_definition_id: Optional[str],
+        scheduled_prompt_definition_id: Optional[str],
         data: dict,
         version: str,
+        metadata: Optional[dict],
     ) -> bool:
         """
         Insert a successful Holmes result into the HolmesResults table.
 
         Args:
             job_id: The job run ID (from ScheduledPromptsRuns.id)
-            job_definition_id: The parent job definition ID (from ScheduledPromptsRuns.parent_id)
+            scheduled_prompt_definition_id: The parent job definition ID (from ScheduledPromptsRuns.scheduled_prompt_definition_id)
             data: The full response data as a dictionary (will be converted to JSONB)
             version: The Holmes version string
 
@@ -889,21 +920,22 @@ class SupabaseDal:
         try:
             (
                 self.client.table(HOLMES_RESULTS_TABLE)
-                .insert(
+                .upsert(
                     {
                         "job_id": job_id,
-                        "job_definition_id": job_definition_id,
+                        "scheduled_prompt_definition_id": scheduled_prompt_definition_id,
                         "account_id": self.account_id,
                         "cluster_name": self.cluster,
                         "data": data,
                         "version": version,
+                        "metadata": metadata,
                     }
                 )
                 .execute()
             )
 
             logging.debug(
-                f"Inserted holmes result for job_id={job_id}, job_definition_id={job_definition_id}"
+                f"Inserted holmes result for job_id={job_id}, scheduled_prompt_definition_id={scheduled_prompt_definition_id}"
             )
             return True
         except Exception as e:

@@ -1,49 +1,55 @@
 import logging
+import os
 import threading
 import time
-from typing import TYPE_CHECKING, Callable, Dict, Optional, Union
+from datetime import datetime
+from typing import TYPE_CHECKING, Callable, Optional, Union
+
+from pydantic import BaseModel, ValidationError
 
 if TYPE_CHECKING:
+    from fastapi.responses import StreamingResponse
     from holmes.config import Config
     from holmes.core.models import ChatRequest, ChatResponse
     from holmes.core.supabase_dal import SupabaseDal
-    from fastapi.responses import StreamingResponse
 
 from holmes import get_version
 from holmes.core.models import ChatRequest, ChatResponse
+from holmes.core.supabase_dal import RunStatus
 
-# Type definition for the chat function signature
 ChatFunction = Callable[[ChatRequest], Union["ChatResponse", "StreamingResponse"]]
 
 
-class ScheduledPromptsExecutor:
-    """
-    Executor that periodically checks for pending scheduled prompt runs and executes them.
-    Runs in a background thread, checking every minute for pending runs.
-    """
+class ScheduledPrompt(BaseModel):
+    id: str
+    scheduled_prompt_definition_id: Optional[str] = None
+    account_id: str
+    cluster_name: str
+    model_name: str
+    prompt: Union[str, dict]
+    status: str
+    msg: Optional[str] = None
+    created_at: datetime
+    last_heartbeat_at: datetime
+    metadata: Optional[dict] = None
 
+
+class ScheduledPromptsExecutor:
     def __init__(
         self,
         dal: "SupabaseDal",
         config: "Config",
         chat_function: ChatFunction,
     ):
-        """
-        Initialize the ScheduledPromptsExecutor.
-
-        Args:
-            dal: SupabaseDAL instance for database access
-            config: Config instance (kept for compatibility, may be used in future)
-            chat_function: The chat function to call with ChatRequest, signature: def chat(chat_request: ChatRequest) -> ChatResponse | StreamingResponse
-        """
         self.dal = dal
         self.config = config
         self.chat_function = chat_function
         self.running = False
         self.thread: Optional[threading.Thread] = None
+        # this is pod name in kubernetes
+        self.holmes_id = os.environ.get("HOSTNAME") or str(os.getpid())
 
     def start(self):
-        """Start the executor in a background thread."""
         if not self.dal.enabled:
             logging.info(
                 "ScheduledPromptsExecutor not started - Supabase DAL not enabled"
@@ -60,131 +66,130 @@ class ScheduledPromptsExecutor:
         logging.info("ScheduledPromptsExecutor started")
 
     def stop(self):
-        """Stop the executor."""
         self.running = False
         if self.thread:
             self.thread.join(timeout=5)
         logging.info("ScheduledPromptsExecutor stopped")
 
     def _run_loop(self):
-        """Main loop that checks for pending runs every minute."""
         while self.running:
             try:
-                self._check_and_execute_pending_run()
-            except Exception as e:
+                payload = self.dal.claim_scheduled_prompt_run(self.holmes_id)
+                if not payload:
+                    time.sleep(60)
+                    continue
+
+                try:
+                    sp = ScheduledPrompt(**payload)
+                except ValidationError as exc:
+                    logging.exception(
+                        "Skipping invalid scheduled prompt payload: %s",
+                        exc,
+                        exc_info=True,
+                    )
+                    continue
+
+                try:
+                    self._execute_scheduled_prompt(sp)
+                except Exception as exc:
+                    logging.exception(
+                        "Error executing scheduled %s prompt: %s",
+                        sp.id,
+                        exc,
+                        exc_info=True,
+                    )
+            except Exception as exc:
                 logging.exception(
-                    f"Error in ScheduledPromptsExecutor loop: {e}", exc_info=True
+                    "Error in ScheduledPromptsExecutor loop: %s", exc, exc_info=True
                 )
 
-            # Sleep for 60 seconds before next check
-            for _ in range(60):
-                if not self.running:
-                    break
-                time.sleep(1)
-
-    def _check_and_execute_pending_run(self):
-        """Check for a pending run and execute it if found."""
-        pending_run = self.dal.get_one_pending_run()
-        if not pending_run:
-            return
-
-        run_id = pending_run.get("id")
-        if not run_id:
-            logging.error("Pending run found but missing id field")
-            return
-
-        prompt = pending_run.get("prompt", "")
-        model_name = pending_run.get("model_name", "")
-
-        if not prompt:
-            error_msg = "No prompt provided"
-            logging.warning(f"Pending run {run_id} has no prompt, marking as failed")
-            self.dal.update_run_status(run_id, "failed", error_msg)
-            return
-
-        if not model_name:
-            error_msg = "No model_name provided"
-            logging.warning(
-                f"Pending run {run_id} has no model_name, marking as failed"
-            )
-            self.dal.update_run_status(run_id, "failed", error_msg)
-            return
-
-        # Validate that the model exists
+    def _execute_scheduled_prompt(self, sp: ScheduledPrompt):
+        run_id = sp.id
         available_models = self.config.get_models_list()
-        if model_name not in available_models:
-            error_msg = f"Model '{model_name}' not found in available models: {available_models}"
+        if sp.model_name not in available_models:
+            error_msg = f"Model '{sp.model_name}' not found in available models: {available_models}"
             logging.warning(
-                f"Pending run {run_id} has invalid model_name '{model_name}', marking as failed"
+                "Pending run %s has invalid model_name '%s', marking as failed",
+                run_id,
+                sp.model_name,
             )
-            self.dal.update_run_status(run_id, "failed", error_msg)
+            self._finish_run(
+                status=RunStatus.FAILED,
+                result={"error": error_msg},
+                sp=sp,
+            )
             return
 
         logging.info(
-            f"Found pending run {run_id}, executing with model {model_name}"
+            "Found pending run %s, executing with model %s", run_id, sp.model_name
         )
 
-        # Update status to running
-        if not self.dal.update_run_status(run_id, "running"):
-            error_msg = "Failed to update run status to running"
-            logging.error(f"{error_msg} for run {run_id}")
-            self.dal.update_run_status(run_id, "failed", error_msg)
-            return
-
-        # Get parent_id for result tracking
-        parent_id = pending_run.get("parent_id")
-
-        # Execute the prompt
         try:
-            response = self._execute_prompt(run_id, prompt, model_name, parent_id)
-            # Mark as completed on success (clear any previous error message)
-            self.dal.update_run_status(run_id, "completed", None)
-            logging.info(f"Successfully completed run {run_id}")
-        except Exception as e:
-            error_msg = str(e)
+            self._execute_prompt(sp)
+            logging.info("Successfully completed run %s", run_id)
+        except Exception as exc:
+            error_msg = str(exc)
             logging.exception(
-                f"Error executing prompt for run {run_id}: {error_msg}", exc_info=True
+                "Error executing prompt for run %s: %s",
+                run_id,
+                error_msg,
+                exc_info=True,
             )
-            # Mark as failed on error with error message
-            self.dal.update_run_status(
-                run_id, "failed", f"Error: {error_msg[:500]}"
+            self.dal.finish_scheduled_prompt_run(
+                status=RunStatus.FAILED,
+                result={"error": error_msg},
+                run_id=run_id,
+                scheduled_prompt_definition_id=sp.scheduled_prompt_definition_id,
+                version=get_version(),
+                metadata=sp.metadata,
             )
 
     def _execute_prompt(
-        self, run_id: str, prompt: str, model_name: str, parent_id: Optional[str]
+        self,
+        sp: ScheduledPrompt,
     ):
-        """
-        Execute a prompt by building a ChatRequest and calling the chat function.
-
-        Args:
-            run_id: The ID of the run being executed
-            prompt: The prompt text to execute
-            model_name: The model name to use for the LLM
-            parent_id: The parent job definition ID
-
-        Returns:
-            ChatResponse from the chat function
-        """
-        # Build ChatRequest with the prompt and model from the database
+        start = time.perf_counter()
         chat_request = ChatRequest(
-            ask=prompt,
-            model=model_name,
-            conversation_history=None,  # Scheduled prompts start fresh
-            stream=False,  # Scheduled prompts are always non-streaming
+            ask=self._extract_prompt_text(sp.prompt),
+            model=sp.model_name,
+            conversation_history=None,
+            stream=False,
             additional_system_prompt=None,
         )
 
-        # Call the chat function
         response = self.chat_function(chat_request)
+        duration_seconds = time.perf_counter() - start
 
-        # Save result to HolmesResults table (only for ChatResponse, not StreamingResponse)
+        result_data = (
+            response.model_dump() if isinstance(response, ChatResponse) else {}
+        )
+
         if isinstance(response, ChatResponse):
-            self.dal.insert_holmes_result(
-                job_id=run_id,
-                job_definition_id=parent_id,
-                data=response.model_dump(),
-                version=get_version(),
-            )
+            response.metadata = dict(response.metadata or {})
+            response.metadata["duration_seconds"] = duration_seconds
+
+        self._finish_run(status=RunStatus.COMPLETED, result=result_data, sp=sp)
 
         return response
 
+    def _finish_run(
+        self,
+        status: RunStatus,
+        result: dict,
+        sp: ScheduledPrompt,
+    ) -> None:
+        self.dal.finish_scheduled_prompt_run(
+            status=status,
+            result=result,
+            run_id=sp.id,
+            scheduled_prompt_definition_id=sp.scheduled_prompt_definition_id,
+            version=get_version(),
+            metadata=sp.metadata,
+        )
+
+    def _extract_prompt_text(self, prompt: Union[str, dict]) -> str:
+        if isinstance(prompt, dict):
+            raw = prompt.get("raw_prompt")
+            if raw:
+                return raw
+        return str(prompt)
