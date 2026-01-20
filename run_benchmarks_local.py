@@ -356,16 +356,14 @@ Benchmark Types:
   full-benchmark  - Comprehensive tests (markers: easy or medium or hard or regression or benchmark)
 
 Examples:
-  %(prog)s                                    # Default: fast-benchmark with default models
-  %(prog)s --benchmark-type fast-benchmark    # Explicit fast benchmark
-  %(prog)s --benchmark-type full-benchmark    # Full comprehensive benchmark
-  %(prog)s --models gpt-4o                    # Test only gpt-4o (fast-benchmark)
-  %(prog)s --markers easy --iterations 3      # Custom markers (cannot combine with --benchmark-type)
-  %(prog)s --filter 01_how_many_pods          # Run specific test
-  %(prog)s --parallel 6                       # Run with 6 parallel workers
-  %(prog)s --parallel 1                       # Run sequentially (no parallelism)
-  %(prog)s --no-strict-setup                  # Disable strict setup mode
-  %(prog)s --no-braintrust                    # Run without Braintrust (for development only)
+  %(prog)s --models gpt-4o                              # Test gpt-4o with fast-benchmark (default)
+  %(prog)s --models gpt-4o,claude-sonnet                # Test multiple models
+  %(prog)s --models gpt-4o --benchmark-type full        # Full comprehensive benchmark
+  %(prog)s --models gpt-4o --markers easy --iterations 3  # Custom markers
+  %(prog)s --models gpt-4o --filter 01_how_many_pods    # Run specific test
+  %(prog)s --models gpt-4o --parallel 6                 # Run with 6 parallel workers
+  %(prog)s --models gpt-4o --no-strict-setup            # Disable strict setup mode
+  %(prog)s --models gpt-4o --no-braintrust              # Run without Braintrust
 
 Environment variables:
   OPENAI_API_KEY, ANTHROPIC_API_KEY    - LLM API keys
@@ -379,8 +377,8 @@ Environment variables:
     parser.add_argument(
         "--models",
         type=str,
-        default="gpt-5.1,gpt-5,sonnet-4.5,haiku-4.5,deepseek-3.1",
-        help="Comma-separated list of models to test (default: %(default)s)",
+        required=True,
+        help="Comma-separated list of models to test (required)",
     )
 
     parser.add_argument(
