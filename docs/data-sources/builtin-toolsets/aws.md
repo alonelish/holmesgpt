@@ -12,18 +12,6 @@ The AWS MCP server runs as a pod in your Kubernetes cluster.
 !!! note
     Even when using Holmes CLI locally, the AWS MCP server must run in a Kubernetes cluster. Local-only deployment is not currently supported.
 
-## Prerequisites
-
-**For EKS clusters (recommended)**:
-
-- An EKS cluster with an OIDC provider enabled ([how to enable](https://docs.aws.amazon.com/eks/latest/userguide/enable-iam-roles-for-service-accounts.html))
-- An IAM role configured for IRSA (IAM Roles for Service Accounts)
-- The IAM role must have the HolmesGPT read-only policy attached
-
-**For non-EKS clusters**:
-
-- AWS access key and secret key with appropriate permissions
-
 ## Step 1: Set Up IAM Permissions
 
 Before configuring Holmes, you need to create the IAM policy and role that grants AWS access.
