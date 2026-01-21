@@ -130,7 +130,7 @@ Choose your installation method:
 
 === "Robusta Helm Chart"
 
-    **Step 2a: Update your generated_values.yaml**
+    **Step 2a: Update your Helm values**
 
     Add the Holmes MCP addon configuration under the `holmes` section:
 
@@ -361,43 +361,37 @@ Choose your installation method:
 
 For scenarios where you need to access multiple AWS accounts from your EKS clusters, the AWS MCP server supports multi-account access using cross-account IAM roles and EKS token projection.
 
-### When to Use Multi-Account Setup
+??? info "How It Works"
+    When multi-account mode is enabled, the MCP server:
 
-- You have multiple AWS accounts (dev, staging, prod, etc.)
-- You want pods in any cluster to access resources in target accounts
-- You need centralized IAM role management across accounts
-- You're using AWS Organizations or multi-account architectures
+    1. Uses **EKS token projection** instead of IRSA (IAM Roles for Service Accounts)
+    2. Mounts an `accounts.yaml` configuration file that defines target accounts and their IAM roles
+    3. Uses `assume_role_with_web_identity` to assume roles in target accounts
+    4. Allows the LLM to specify which account to use via the `--profile` flag
 
-### How It Works
+### Step 1: Download the Setup Script
 
-When multi-account mode is enabled, the MCP server:
+```bash
+# Download the setup script
+curl -O https://raw.githubusercontent.com/robusta-dev/holmes-mcp-integrations/master/servers/aws/setup-multi-account-iam.sh
+chmod +x setup-multi-account-iam.sh
 
-1. Uses **EKS token projection** instead of IRSA (IAM Roles for Service Accounts)
-2. Mounts an `accounts.yaml` configuration file that defines target accounts and their IAM roles
-3. Uses `assume_role_with_web_identity` to assume roles in target accounts
-4. Allows the LLM to specify which account to use via the `--profile` flag
+# Download example configuration file
+curl -O https://raw.githubusercontent.com/robusta-dev/holmes-mcp-integrations/master/servers/aws/multi-cluster-config-example.yaml
+```
 
-### IAM Setup with setup-multi-account-iam.sh
+??? info "What the Script Does"
+    For each target account, the script:
 
-For multi-account setup, we provide a helper script to automate the setup of cross-account OIDC providers and IAM roles:
+    1. **Creates OIDC Providers**: Sets up OIDC providers for each cluster in the target account
+    2. **Creates IAM Role**: Creates a role with trust policy allowing `assume_role_with_web_identity` from all configured clusters
+    3. **Attaches Permissions**: Applies the read-only permissions policy to the role
 
-- [Multi-Account Setup Script](https://github.com/robusta-dev/holmes-mcp-integrations/blob/master/servers/aws/setup-multi-account-iam.sh)
+    This enables pods running in any of your clusters to assume roles in target accounts and access AWS resources there.
 
-#### What the Script Does
+### Step 2: Create Configuration File
 
-For each target account, the script:
-
-1. **Creates OIDC Providers**: Sets up OIDC providers for each cluster in the target account
-2. **Creates IAM Role**: Creates a role with trust policy allowing `assume_role_with_web_identity` from all configured clusters
-3. **Attaches Permissions**: Applies the read-only permissions policy to the role
-
-This enables pods running in any of your clusters to assume roles in target accounts and access AWS resources there.
-
-#### Configuration File
-
-Create a YAML config file. You can download an example configuration file:
-
-- [Example Configuration File](https://github.com/robusta-dev/holmes-mcp-integrations/blob/master/servers/aws/multi-cluster-config-example.yaml)
+Edit `multi-cluster-config-example.yaml` with your cluster and account details:
 
 Example configuration:
 
@@ -434,9 +428,7 @@ target_accounts:
     description: "Production account"
 ```
 
-#### Getting OIDC Issuer Information
-
-For each cluster, you need the OIDC issuer ID and URL:
+To find your OIDC issuer information for each cluster:
 
 ```bash
 # Get OIDC issuer URL
@@ -446,7 +438,7 @@ aws eks describe-cluster --name <cluster-name> --query "cluster.identity.oidc.is
 # URL format: https://oidc.eks.<region>.amazonaws.com/id/<ISSUER_ID>
 ```
 
-#### Running the Setup
+### Step 3: Run the Setup
 
 ```bash
 # Basic usage (uses default config: multi-cluster-config.yaml)
@@ -465,18 +457,7 @@ aws eks describe-cluster --name <cluster-name> --query "cluster.identity.oidc.is
 ./setup-multi-account-iam.sh teardown my-config.yaml
 ```
 
-#### Download the Script
-
-```bash
-# Download the setup script
-curl -O https://raw.githubusercontent.com/robusta-dev/holmes-mcp-integrations/master/servers/aws/setup-multi-account-iam.sh
-chmod +x setup-multi-account-iam.sh
-
-# Download example configuration file
-curl -O https://raw.githubusercontent.com/robusta-dev/holmes-mcp-integrations/master/servers/aws/multi-cluster-config-example.yaml
-```
-
-### Helm Chart Configuration
+### Step 4: Configure Helm Chart
 
 Once the IAM roles are set up, configure the Helm chart to enable multi-account mode:
 
@@ -520,7 +501,7 @@ Once the IAM roles are set up, configure the Helm chart to enable multi-account 
 
 === "Robusta Helm Chart"
 
-    Add the following configuration to your `generated_values.yaml`:
+    Add the following configuration to your Helm values:
 
     ```yaml
     holmes:
@@ -557,16 +538,15 @@ Once the IAM roles are set up, configure the Helm chart to enable multi-account 
             # annotations are ignored when multiAccount is enabled
     ```
 
-### Important Notes
+!!! note "How Multi-Account Mode Works"
+    When `multiAccount.enabled` is `true`, the Helm chart automatically:
 
-- When `multiAccount.enabled` is `true`, the Helm chart automatically:
-  - Creates an `accounts.yaml` ConfigMap with your account profiles
-  - Mounts the accounts.yaml file at `/etc/aws/accounts.yaml` in the pod
-  - Mounts the EKS service account token at `/var/run/secrets/eks.amazonaws.com/serviceaccount`
-  - Skips IRSA annotations on the service account (since multi-account uses token projection)
-- The `llm_account_descriptions` field is automatically appended to the LLM instructions to help guide the AI on how to use the different accounts
-- Each profile can optionally specify a `region` that overrides the default region from `config.region`
-- The MCP server will use the EKS token to assume roles in target accounts using `assume_role_with_web_identity`
+    - Creates an `accounts.yaml` ConfigMap with your account profiles
+    - Mounts the accounts.yaml file at `/etc/aws/accounts.yaml` in the pod
+    - Mounts the EKS service account token at `/var/run/secrets/eks.amazonaws.com/serviceaccount`
+    - Skips IRSA annotations on the service account (since multi-account uses token projection)
+
+    The `llm_account_descriptions` field is automatically appended to the LLM instructions to help guide the AI on how to use the different accounts. Each profile can optionally specify a `region` that overrides the default region from `config.region`.
 
 ## Capabilities
 
