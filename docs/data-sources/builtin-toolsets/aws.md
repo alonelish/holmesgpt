@@ -137,9 +137,6 @@ Choose your installation method:
     Add the Holmes MCP addon configuration under the `holmes` section:
 
     ```yaml
-    globalConfig:
-      # Your existing Robusta configuration
-
     holmes:
       mcpAddons:
         aws:
