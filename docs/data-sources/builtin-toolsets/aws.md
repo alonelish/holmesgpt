@@ -4,10 +4,13 @@ The AWS MCP server gives Holmes **read-only access to any AWS API** you permit v
 
 ## Overview
 
-The AWS MCP server is deployed as a separate pod in your cluster. Choose your installation method:
+The AWS MCP server runs as a pod in your Kubernetes cluster.
 
-- **Holmes Helm Chart** or **Robusta Helm Chart**: The MCP server is deployed automatically when enabled
-- **Holmes CLI**: Deploy the MCP server manually to your cluster
+- **Helm users**: The pod is deployed automatically when you enable the addon
+- **CLI users**: You deploy the pod manually to your cluster, then point Holmes at it
+
+!!! note
+    Even when using Holmes CLI locally, the AWS MCP server must run in a Kubernetes cluster. Local-only deployment is not currently supported.
 
 ## Prerequisites
 
