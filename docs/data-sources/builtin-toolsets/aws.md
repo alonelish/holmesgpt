@@ -27,7 +27,7 @@ Before configuring Holmes, you need to create the IAM policy and role that grant
 
 ### Create the IAM Policy
 
-The AWS MCP server requires read-only permissions across AWS services. We provide a comprehensive IAM policy that covers most AWS services.
+The AWS MCP server requires read-only permissions across AWS services. We provide a default IAM policy that covers most AWS services.
 
 You can customize the IAM policy to restrict access, but the default policy is recommended for most users.
 
