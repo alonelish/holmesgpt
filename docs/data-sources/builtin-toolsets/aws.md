@@ -393,44 +393,47 @@ curl -O https://raw.githubusercontent.com/robusta-dev/holmes-mcp-integrations/ma
 
 ### Step 2: Create Configuration File
 
-Edit `multi-cluster-config-example.yaml` with your cluster and account details:
+Edit `multi-cluster-config-example.yaml` with your cluster and account details. The script uses this file to:
 
-Example configuration:
+- Create OIDC providers in each target account (using the cluster OIDC URLs)
+- Set up IAM roles with trust policies that allow your clusters to assume them
+- Configure which AWS accounts Holmes can access via `--profile`
 
-```yaml
-clusters:
-  - name: prod-cluster
-    region: us-east-1
-    account_id: "111111111111"
-    oidc_issuer_id: AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
-    oidc_issuer_url: https://oidc.eks.us-east-1.amazonaws.com/id/AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
+??? example "Example Configuration"
+    ```yaml
+    clusters:
+      - name: prod-cluster
+        region: us-east-1
+        account_id: "111111111111"
+        oidc_issuer_id: AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
+        oidc_issuer_url: https://oidc.eks.us-east-1.amazonaws.com/id/AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
 
-  - name: staging-cluster
-    region: us-west-2
-    account_id: "111111111111"
-    oidc_issuer_id: BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB
-    oidc_issuer_url: https://oidc.eks.us-west-2.amazonaws.com/id/BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB
+      - name: staging-cluster
+        region: us-west-2
+        account_id: "111111111111"
+        oidc_issuer_id: BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB
+        oidc_issuer_url: https://oidc.eks.us-west-2.amazonaws.com/id/BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB
 
-kubernetes:
-  namespace: default
-  service_account: multi-account-mcp-sa
+    kubernetes:
+      namespace: default
+      service_account: multi-account-mcp-sa
 
-iam:
-  role_name: EKSMultiAccountMCPRole
-  policy_name: MCPReadOnlyPolicy
-  session_duration: 3600
+    iam:
+      role_name: EKSMultiAccountMCPRole
+      policy_name: MCPReadOnlyPolicy
+      session_duration: 3600
 
-target_accounts:
-  - profile: dev
-    account_id: "111111111111"
-    description: "Development account"
-    
-  - profile: prod
-    account_id: "222222222222"
-    description: "Production account"
-```
+    target_accounts:
+      - profile: dev
+        account_id: "111111111111"
+        description: "Development account"
 
-To find your OIDC issuer information for each cluster:
+      - profile: prod
+        account_id: "222222222222"
+        description: "Production account"
+    ```
+
+To get the OIDC issuer information for each cluster:
 
 ```bash
 # Get OIDC issuer URL
