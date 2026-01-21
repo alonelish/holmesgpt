@@ -22,8 +22,23 @@ The AWS MCP server requires read-only permissions across AWS services. We provid
 
     We provide scripts that automate the IAM setup:
 
-    1. [Enable OIDC Provider Script](https://github.com/robusta-dev/holmes-mcp-integrations/blob/master/servers/aws/enable-oidc-provider.sh) - Enables OIDC for your EKS cluster
-    2. [Setup IRSA Script](https://github.com/robusta-dev/holmes-mcp-integrations/blob/master/servers/aws/setup-irsa.sh) - Creates the policy and IAM role
+    ```bash
+    # Download the scripts
+    curl -O https://raw.githubusercontent.com/robusta-dev/holmes-mcp-integrations/master/servers/aws/enable-oidc-provider.sh
+    curl -O https://raw.githubusercontent.com/robusta-dev/holmes-mcp-integrations/master/servers/aws/setup-irsa.sh
+    chmod +x enable-oidc-provider.sh setup-irsa.sh
+
+    # 1. Enable OIDC provider for your EKS cluster (if not already enabled)
+    ./enable-oidc-provider.sh --cluster-name YOUR_CLUSTER_NAME --region YOUR_REGION
+
+    # 2. Create IAM policy and role
+    ./setup-irsa.sh --cluster-name YOUR_CLUSTER_NAME --region YOUR_REGION
+    ```
+
+    The script outputs the role ARN at the end. Save it for Step 2:
+    ```
+    Role ARN: arn:aws:iam::123456789012:role/HolmesMCPRole
+    ```
 
 === "Manual Setup"
 
