@@ -531,6 +531,7 @@ When asked about content from the HolmesGPT documentation website (https://holme
 ## MkDocs Formatting Notes
 
 When writing documentation in the `docs/` directory:
+
 - **Lists after headers**: Always add a blank line between a header/bold text and a list, otherwise MkDocs won't render the list properly
   ```markdown
   **Good:**
@@ -541,4 +542,28 @@ When writing documentation in the `docs/` directory:
   **Bad:**
   - item 1
   - item 2
+  ```
+
+- **Headers inside tabs**: Use **bold text** for section headings inside tabs, not markdown headers (`##`, `###`, etc.)
+
+  **Why:** MkDocs Material font sizes make H2 (~25px) and H3 (~20px) visually larger than tab titles (~14px). When a header inside a tab is bigger than the tab title itself, it looks like it belongs outside/above the tabs, breaking the visual hierarchy.
+
+  ```markdown
+  <!-- GOOD: Bold text for sections inside tabs -->
+  === "Tab Name"
+
+      **Create the policy:**
+
+      Instructions here...
+
+      **Create the role:**
+
+      More instructions...
+
+  <!-- BAD: Headers inside tabs look like they're outside -->
+  === "Tab Name"
+
+      ### Create the policy
+
+      Instructions here...
   ```
