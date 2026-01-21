@@ -179,10 +179,42 @@ Choose your installation method:
 
     **Step 2a: Create the deployment manifest**
 
-    Create a file named `aws-mcp-deployment.yaml`. Choose your authentication method:
+    Create a file named `aws-mcp-deployment.yaml`. The manifest below uses IRSA (recommended for EKS). Replace `ACCOUNT_ID` with your AWS account ID in the role ARN annotation.
 
-    - **IRSA (recommended for EKS)**: Use the ServiceAccount annotation with your IAM role ARN from Step 1
-    - **Access keys**: Skip the annotation and add credential environment variables instead (see below)
+    ??? info "Using Access Keys Instead of IRSA"
+        If you're not on EKS or prefer access keys, make these changes to the manifest:
+
+        **1. Remove the annotation** from the ServiceAccount:
+        ```yaml
+        apiVersion: v1
+        kind: ServiceAccount
+        metadata:
+          name: aws-mcp-sa
+          namespace: holmes-mcp
+          # No annotations needed for access keys
+        ```
+
+        **2. Create a secret** with your credentials:
+        ```bash
+        kubectl create secret generic aws-credentials \
+          --from-literal=aws-access-key-id=YOUR_KEY \
+          --from-literal=aws-secret-access-key=YOUR_SECRET \
+          -n holmes-mcp
+        ```
+
+        **3. Add environment variables** to the container spec (after `AWS_DEFAULT_REGION`):
+        ```yaml
+        - name: AWS_ACCESS_KEY_ID
+          valueFrom:
+            secretKeyRef:
+              name: aws-credentials
+              key: aws-access-key-id
+        - name: AWS_SECRET_ACCESS_KEY
+          valueFrom:
+            secretKeyRef:
+              name: aws-credentials
+              key: aws-secret-access-key
+        ```
 
     ```yaml
     apiVersion: v1
@@ -330,33 +362,6 @@ Choose your installation method:
 
     ```yaml
     url: "http://localhost:8000"
-    ```
-
-    **Using access keys instead of IRSA**
-
-    If not using EKS, remove the ServiceAccount annotation and add credentials to the deployment:
-
-    ```bash
-    kubectl create secret generic aws-credentials \
-      --from-literal=aws-access-key-id=YOUR_KEY \
-      --from-literal=aws-secret-access-key=YOUR_SECRET \
-      -n holmes-mcp
-    ```
-
-    Then add these environment variables to the container spec:
-
-    ```yaml
-    env:
-      - name: AWS_ACCESS_KEY_ID
-        valueFrom:
-          secretKeyRef:
-            name: aws-credentials
-            key: aws-access-key-id
-      - name: AWS_SECRET_ACCESS_KEY
-        valueFrom:
-          secretKeyRef:
-            name: aws-credentials
-            key: aws-secret-access-key
     ```
 
 ## Multi-Account Setup (Alternative)
