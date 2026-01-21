@@ -1,6 +1,6 @@
 # AWS (MCP)
 
-The AWS MCP server provides comprehensive access to AWS services through a secure, read-only interface. It enables Holmes to investigate AWS infrastructure issues, analyze CloudTrail events, examine security configurations, and troubleshoot service-specific problems, answer cost related questions, analyze ELB issues and much more.
+The AWS MCP server provides read-only access to AWS services for investigating infrastructure issues, analyzing CloudTrail events, and troubleshooting problems across EC2, RDS, ELB, CloudWatch, and more.
 
 ## Overview
 
@@ -62,7 +62,13 @@ The complete policy is available on GitHub: [aws-mcp-iam-policy.json](https://gi
 
 ### Create the IAM Role for IRSA
 
-Create an IAM role that can be assumed by the Kubernetes service account:
+Create an IAM role that can be assumed by the Kubernetes service account.
+
+**Service account names by installation method:**
+
+- Holmes Helm Chart: `aws-api-mcp-sa`
+- Robusta Helm Chart: `aws-api-mcp-sa`
+- CLI deployment: `aws-mcp-sa` (as defined in the manifest)
 
 ```bash
 # Get your OIDC provider URL
@@ -81,7 +87,7 @@ cat > trust-policy.json << EOF
       "Action": "sts:AssumeRoleWithWebIdentity",
       "Condition": {
         "StringEquals": {
-          "${OIDC_PROVIDER}:sub": "system:serviceaccount:YOUR_NAMESPACE:aws-mcp-server-sa"
+          "${OIDC_PROVIDER}:sub": "system:serviceaccount:YOUR_NAMESPACE:SERVICE_ACCOUNT_NAME"
         }
       }
     }
@@ -139,10 +145,10 @@ Choose your installation method:
 
     ```bash
     # Check that the MCP server pod is running
-    kubectl get pods -l app=aws-mcp-server
+    kubectl get pods -l app.kubernetes.io/name=aws-mcp-server
 
     # Check the logs for any errors
-    kubectl logs -l app=aws-mcp-server
+    kubectl logs -l app.kubernetes.io/name=aws-mcp-server
     ```
 
 === "Robusta Helm Chart"
@@ -182,10 +188,10 @@ Choose your installation method:
 
     ```bash
     # Check that the MCP server pod is running
-    kubectl get pods -l app=aws-mcp-server
+    kubectl get pods -l app.kubernetes.io/name=aws-mcp-server
 
     # Check the logs for any errors
-    kubectl logs -l app=aws-mcp-server
+    kubectl logs -l app.kubernetes.io/name=aws-mcp-server
     ```
 
 === "Holmes CLI"
@@ -346,40 +352,18 @@ Choose your installation method:
 
 ## Alternative: Using Access Keys Instead of IRSA
 
-If you're not using EKS or prefer static credentials, you can use AWS access keys instead of IRSA.
+If you're not using EKS or prefer static credentials, you can use AWS access keys for CLI deployments.
 
-**For Helm charts**, add the credentials to your values:
-
-```yaml
-mcpAddons:
-  aws:
-    enabled: true
-    config:
-      region: "us-east-1"
-    # Add credentials via environment variables
-    extraEnv:
-      - name: AWS_ACCESS_KEY_ID
-        valueFrom:
-          secretKeyRef:
-            name: aws-credentials
-            key: aws-access-key-id
-      - name: AWS_SECRET_ACCESS_KEY
-        valueFrom:
-          secretKeyRef:
-            name: aws-credentials
-            key: aws-secret-access-key
-```
-
-Create the secret first:
+Create a secret with your credentials:
 
 ```bash
 kubectl create secret generic aws-credentials \
   --from-literal=aws-access-key-id=YOUR_KEY \
   --from-literal=aws-secret-access-key=YOUR_SECRET \
-  -n YOUR_NAMESPACE
+  -n holmes-mcp
 ```
 
-**For CLI deployments**, update the deployment manifest to include the credentials:
+Then update the deployment manifest to reference the secret:
 
 ```yaml
 env:
