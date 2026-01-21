@@ -450,14 +450,14 @@ Edit `multi-cluster-config-example.yaml` with your cluster and account details. 
         description: "Production account"
     ```
 
-To get the OIDC issuer information for each cluster:
+To get the `oidc_issuer_url` and `oidc_issuer_id` values for each cluster in the config file:
 
 ```bash
-# Get OIDC issuer URL
+# Get the OIDC issuer URL for your cluster
 aws eks describe-cluster --name <cluster-name> --query "cluster.identity.oidc.issuer" --output text
+# Output: https://oidc.eks.us-east-1.amazonaws.com/id/AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
 
-# Extract issuer ID from the URL
-# URL format: https://oidc.eks.<region>.amazonaws.com/id/<ISSUER_ID>
+# The issuer ID is the last part of the URL (after /id/)
 ```
 
 ### Step 3: Run the Setup
