@@ -12,7 +12,9 @@ The AWS MCP server runs as a pod in your Kubernetes cluster.
 !!! note
     Even when using Holmes CLI locally, the AWS MCP server must run in a Kubernetes cluster. Local-only deployment is not currently supported.
 
-## Step 1: Set Up IAM Permissions
+## Single Account Setup
+
+### Step 1: Set Up IAM Permissions
 
 The AWS MCP server requires read-only permissions across AWS services. We provide a default IAM policy that works for most users. You can customize it to restrict access if needed.
 
@@ -85,7 +87,7 @@ The AWS MCP server requires read-only permissions across AWS services. We provid
 
     **Note the role ARN** - you'll need it in the next step: `arn:aws:iam::ACCOUNT_ID:role/HolmesMCPRole`
 
-## Step 2: Configure and Deploy
+### Step 2: Configure and Deploy
 
 Choose your installation method:
 
@@ -357,9 +359,9 @@ Choose your installation method:
             key: aws-secret-access-key
     ```
 
-## Multi-Account Setup
+## Multi-Account Setup (Alternative)
 
-For scenarios where you need to access multiple AWS accounts from your EKS clusters, the AWS MCP server supports multi-account access using cross-account IAM roles and EKS token projection.
+If you need to access multiple AWS accounts from your EKS clusters, use this setup instead of the single account setup above.
 
 ??? info "How It Works"
     When multi-account mode is enabled, the MCP server:
@@ -548,58 +550,28 @@ Once the IAM roles are set up, configure the Helm chart to enable multi-account 
 
     The `llm_account_descriptions` field is automatically appended to the LLM instructions to help guide the AI on how to use the different accounts. Each profile can optionally specify a `region` that overrides the default region from `config.region`.
 
-## Capabilities
-
-The AWS MCP server provides access to all AWS services through the AWS CLI. Common investigation patterns include:
-
-### CloudTrail Investigation
-- Query recent API calls and configuration changes
-- Find who made specific changes
-- Correlate changes with issue timelines
-- Audit security events
-
-### EC2 and Networking
-- Describe instances, security groups, VPCs
-- Check network ACLs and route tables
-- Investigate connectivity issues
-- Review instance metadata and status
-
-### RDS Database Issues
-- Check database instance status and configuration
-- Review security groups and network access
-- Analyze performance metrics
-- Look up recent events and modifications
-
-### EKS/Container Issues
-- Describe cluster configuration
-- Check node group status
-- Query CloudWatch Container Insights
-- Review pod logs and metrics
-
-### Load Balancers
-- Check target health
-- Review listener configurations
-- Investigate traffic patterns
-- Analyze access logs
-
-### Cost and Usage
-- Query cost and usage reports
-- Analyze spending trends
-- Identify expensive resources
-
 ## Example Usage
 
-### Database Connection Issues
 ```
-"My application can't connect to RDS after 3 PM yesterday"
-```
-
-### Cost Spike Investigation
-```
-"Our AWS costs increased 40% last week"
+"Why can't my application connect to RDS? It stopped working after 3 PM yesterday."
 ```
 
-### Check IAM Policy for a k8s workload
 ```
-"What IAM policy is the aws mcp using? What capabilities does it have?"
+"What changed in our AWS infrastructure in the last 24 hours?"
+```
+
+```
+"Why did our AWS costs increase 40% last week?"
+```
+
+```
+"Is there something wrong with our load balancer? Users are reporting timeouts."
+```
+
+```
+"What security groups are attached to our production EC2 instances?"
+```
+
+```
+"Can you check the EKS node group status and see if there are any capacity issues?"
 ```
