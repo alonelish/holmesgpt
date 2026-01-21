@@ -1,6 +1,6 @@
 # AWS (MCP)
 
-The AWS MCP server provides read-only access to AWS services for investigating infrastructure issues, analyzing CloudTrail events, and troubleshooting problems across EC2, RDS, ELB, CloudWatch, and more.
+The AWS MCP server gives Holmes access to **any AWS API** you permit via IAM. This means Holmes can query EC2, RDS, ELB, CloudWatch, CloudTrail, S3, Lambda, Cost Explorer, and hundreds of other AWS services - limited only by the IAM policy you attach. All access is read-only by default.
 
 ## Overview
 
