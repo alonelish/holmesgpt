@@ -421,105 +421,50 @@ kubectl create secret generic gcp-sa-key \
   --namespace=holmes
 ```
 
-## Capabilities
+## Common Use Cases
 
-### gcloud MCP
-- **Multi-project support**: Query resources across multiple GCP projects
-- **GKE management**: Cluster configs, node pools, workload identity
-- **Networking**: VPCs, firewalls, load balancers, Cloud NAT, SSL certificates
-- **IAM & Security**: Service accounts, IAM policies, OAuth scopes
-- **Compute resources**: VMs, disks, snapshots, images
-- **Infrastructure**: Cloud SQL, Pub/Sub, Cloud Run, Cloud Functions
-
-### Observability MCP
-- **Historical data**: Retrieve logs from deleted Kubernetes resources
-- **Cloud Logging**: Query logs with complex filters
-- **Cloud Monitoring**: Metrics and time series data
-- **Cloud Trace**: Distributed tracing across services
-- **Error Reporting**: Application error statistics
-- **Audit logs**: Track who made what changes and when
-- **Alert policies**: Review monitoring configurations
-
-### Storage MCP
-- **Bucket operations**: List, describe, check IAM policies
-- **Object management**: List objects (including versions), check ACLs
-- **Lifecycle policies**: Review automatic deletion/archival rules
-- **Cost analysis**: Identify large objects and storage classes
-- **Access troubleshooting**: Debug permission issues
-- **Compliance**: Check encryption and retention settings
-
-## Example Usage
-
-### Investigating Deleted Pod Logs
 ```
 "Show me logs from the payment-service pod that was OOMKilled this morning"
 ```
-Holmes will use the Observability MCP to retrieve historical logs even though the pod no longer exists.
 
-### Cross-Project Resource Discovery
 ```
 "List all GKE clusters across our dev, staging, and prod projects"
 ```
-Holmes will use the gcloud MCP to query multiple projects.
 
-### Audit Trail Investigation
 ```
 "Who modified the firewall rules in the last 24 hours?"
 ```
-Holmes will query Cloud Audit logs to find configuration changes.
 
-### Storage Access Issues
 ```
 "Why is my application getting 403 errors accessing the data-bucket?"
 ```
-Holmes will check bucket IAM policies and object ACLs to identify permission issues.
 
-### SSL Certificate Problems
 ```
 "Check the SSL certificates on our load balancers"
 ```
-Holmes will examine certificate configurations and expiration dates.
 
 ## Troubleshooting
 
-### Authentication Errors
 ```bash
-# Check if secret is mounted
+# Authentication errors - check if secret is mounted
 kubectl exec -n holmes deployment/holmes-gcp-mcp-server -c gcloud-mcp -- \
   ls -la /var/secrets/gcp/
 
 # Verify authentication
 kubectl exec -n holmes deployment/holmes-gcp-mcp-server -c gcloud-mcp -- \
   gcloud auth list
-```
 
-### Permission Denied
-If you get permission errors, verify the service account has the necessary roles:
-```bash
+# Permission denied - verify service account roles
 gcloud projects get-iam-policy PROJECT_ID \
   --flatten="bindings[].members" \
   --filter="bindings.members:holmes-gcp-mcp@"
-```
 
-### Pod Not Starting
-```bash
-# Check pod events
+# Pod not starting - check events and logs
 kubectl describe pod -n holmes -l app.kubernetes.io/component=gcp-mcp-server
-
-# Check logs
 kubectl logs -n holmes deployment/holmes-gcp-mcp-server --all-containers
 ```
 
-### gcloud MCP Version Issues
-The gcloud MCP requires version 550.0.0+ to work correctly. The provided Docker images include the correct version.
-
-## Security Best Practices
-
-1. **Use least privilege**: The setup script only grants read-only roles without data access
-2. **Rotate keys regularly**: Re-run the setup script every 90 days
-3. **Delete local keys**: Remove key files after creating Kubernetes secret
-4. **Monitor usage**: Check audit logs for service account activity
-5. **Enable network policies**: Set `networkPolicy.enabled: true` in Helm values
+**Note:** The gcloud MCP requires version 550.0.0+. The provided Docker images include the correct version.
 
 ## Additional Resources
 
