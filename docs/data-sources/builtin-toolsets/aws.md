@@ -25,6 +25,8 @@ The AWS MCP server requires read-only permissions across AWS services. We provid
 
 === "Manual Setup"
 
+    **Create the IAM policy:**
+
     ```bash
     # Download the policy
     curl -O https://raw.githubusercontent.com/robusta-dev/holmes-mcp-integrations/master/servers/aws/aws-mcp-iam-policy.json
@@ -37,53 +39,51 @@ The AWS MCP server requires read-only permissions across AWS services. We provid
 
     The complete policy is available on GitHub: [aws-mcp-iam-policy.json](https://github.com/robusta-dev/holmes-mcp-integrations/blob/master/servers/aws/aws-mcp-iam-policy.json)
 
-### Create the IAM Role for IRSA
+    **Create the IAM role:**
 
-Create an IAM role that can be assumed by the Kubernetes service account.
+    Service account names by installation method:
 
-**Service account names by installation method:**
+    - Holmes Helm Chart: `aws-api-mcp-sa`
+    - Robusta Helm Chart: `aws-api-mcp-sa`
+    - CLI deployment: `aws-mcp-sa` (as defined in the manifest)
 
-- Holmes Helm Chart: `aws-api-mcp-sa`
-- Robusta Helm Chart: `aws-api-mcp-sa`
-- CLI deployment: `aws-mcp-sa` (as defined in the manifest)
+    ```bash
+    # Get your OIDC provider URL
+    OIDC_PROVIDER=$(aws eks describe-cluster --name YOUR_CLUSTER_NAME --query "cluster.identity.oidc.issuer" --output text | sed -e "s/^https:\/\///")
 
-```bash
-# Get your OIDC provider URL
-OIDC_PROVIDER=$(aws eks describe-cluster --name YOUR_CLUSTER_NAME --query "cluster.identity.oidc.issuer" --output text | sed -e "s/^https:\/\///")
-
-# Create the trust policy
-cat > trust-policy.json << EOF
-{
-  "Version": "2012-10-17",
-  "Statement": [
+    # Create the trust policy
+    cat > trust-policy.json << EOF
     {
-      "Effect": "Allow",
-      "Principal": {
-        "Federated": "arn:aws:iam::ACCOUNT_ID:oidc-provider/${OIDC_PROVIDER}"
-      },
-      "Action": "sts:AssumeRoleWithWebIdentity",
-      "Condition": {
-        "StringEquals": {
-          "${OIDC_PROVIDER}:sub": "system:serviceaccount:YOUR_NAMESPACE:SERVICE_ACCOUNT_NAME"
+      "Version": "2012-10-17",
+      "Statement": [
+        {
+          "Effect": "Allow",
+          "Principal": {
+            "Federated": "arn:aws:iam::ACCOUNT_ID:oidc-provider/${OIDC_PROVIDER}"
+          },
+          "Action": "sts:AssumeRoleWithWebIdentity",
+          "Condition": {
+            "StringEquals": {
+              "${OIDC_PROVIDER}:sub": "system:serviceaccount:YOUR_NAMESPACE:SERVICE_ACCOUNT_NAME"
+            }
+          }
         }
-      }
+      ]
     }
-  ]
-}
-EOF
+    EOF
 
-# Create the role
-aws iam create-role \
-  --role-name HolmesMCPRole \
-  --assume-role-policy-document file://trust-policy.json
+    # Create the role
+    aws iam create-role \
+      --role-name HolmesMCPRole \
+      --assume-role-policy-document file://trust-policy.json
 
-# Attach the policy to the role
-aws iam attach-role-policy \
-  --role-name HolmesMCPRole \
-  --policy-arn arn:aws:iam::ACCOUNT_ID:policy/HolmesMCPReadOnly
-```
+    # Attach the policy to the role
+    aws iam attach-role-policy \
+      --role-name HolmesMCPRole \
+      --policy-arn arn:aws:iam::ACCOUNT_ID:policy/HolmesMCPReadOnly
+    ```
 
-**Note the role ARN** - you'll need it in the next step: `arn:aws:iam::ACCOUNT_ID:role/HolmesMCPRole`
+    **Note the role ARN** - you'll need it in the next step: `arn:aws:iam::ACCOUNT_ID:role/HolmesMCPRole`
 
 ## Step 2: Configure and Deploy
 
