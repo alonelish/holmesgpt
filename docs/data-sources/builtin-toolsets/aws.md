@@ -466,6 +466,10 @@ aws eks describe-cluster --name <cluster-name> --query "cluster.identity.oidc.is
 
 Once the IAM roles are set up, configure the Helm chart to enable multi-account mode:
 
+=== "Holmes CLI"
+
+    Multi-account mode is not currently supported for CLI deployments. Use the [Single Account Setup](#single-account-setup) instead, or deploy Holmes via Helm.
+
 === "Holmes Helm Chart"
 
     Add the following configuration to your `values.yaml` file:
