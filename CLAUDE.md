@@ -567,3 +567,27 @@ When writing documentation in the `docs/` directory:
 
       Instructions here...
   ```
+
+- **Avoid excessive headers**: Don't create a header for every small section. Headers should be used sparingly for major sections. For minor sections like test steps or examples, use bold text or combine content into a single code block with comments instead of separate headers.
+
+  ```markdown
+  <!-- BAD: Header for every test step -->
+  ## Testing
+  ### Test 1: Check Status
+  ### Test 2: Check Logs
+  ### Test 3: Health Check
+
+  <!-- GOOD: Single section with combined content -->
+  ## Testing the Connection
+
+  ```bash
+  # Check pod status
+  kubectl get pods -n YOUR_NAMESPACE
+
+  # Check logs
+  kubectl logs -n YOUR_NAMESPACE
+
+  # Health check
+  curl http://localhost:8000/health
+  ```
+  ```
