@@ -2,7 +2,7 @@
 
 Connect HolmesGPT to Prometheus for metrics analysis and PromQL query generation.
 
-**Jump to:** [Standard Prometheus](#configuration) | [Coralogix](#coralogix) | [AWS AMP](#aws-managed-prometheus-amp) | [Google Managed](#google-managed-prometheus) | [Grafana Cloud](#grafana-cloud-mimir)
+**Jump to:** [Standard Prometheus](#configuration) | [Coralogix](#coralogix) | [AWS AMP](#aws-managed-prometheus-amp) | [Azure](#azure-managed-prometheus) | [Google Managed](#google-managed-prometheus) | [Grafana Cloud](#grafana-cloud-mimir)
 
 ---
 
@@ -131,6 +131,37 @@ toolsets:
 
 ---
 
+## Azure Managed Prometheus
+
+```yaml
+toolsets:
+  prometheus/metrics:
+    enabled: true
+    config:
+      prometheus_url: "https://<your-workspace>.<region>.prometheus.monitor.azure.com:443/"
+      # azure_client_id: "{{ env.AZURE_CLIENT_ID }}"
+      # azure_tenant_id: "{{ env.AZURE_TENANT_ID }}"
+      # azure_client_secret: "{{ env.AZURE_CLIENT_SECRET }}"
+      # azure_use_managed_id: false              # Use managed identity instead of service principal
+      # refresh_interval_seconds: 900            # Token refresh interval (default: 900)
+      # verify_ssl: true                         # SSL verification (default: true)
+```
+
+**Environment variables** (alternative to config):
+
+- `AZURE_CLIENT_ID`: Service principal client ID
+- `AZURE_TENANT_ID`: Azure AD tenant ID
+- `AZURE_CLIENT_SECRET`: Service principal secret
+- `AZURE_USE_MANAGED_ID`: Set to `true` for managed identity auth
+
+**Notes:**
+
+- Authentication is handled automatically via Azure AD
+- Some tools unavailable: `get_label_values`, `get_metric_metadata`, `list_prometheus_rules`
+- Include trailing slash in `prometheus_url`
+
+---
+
 ## Google Managed Prometheus
 
 ```yaml
@@ -181,5 +212,6 @@ toolsets:
 |-------|----------|
 | Connection refused | Verify URL is accessible from HolmesGPT |
 | Authentication errors | Check `headers` configuration |
+| SSL certificate errors | Set `verify_ssl: false` (not recommended for production) |
 | No metrics returned | Ensure Prometheus is scraping targets |
 | Query timeouts | Increase `query_timeout_seconds_default` |
