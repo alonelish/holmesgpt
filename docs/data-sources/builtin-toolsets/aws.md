@@ -14,34 +14,28 @@ The AWS MCP server runs as a pod in your Kubernetes cluster.
 
 ## Step 1: Set Up IAM Permissions
 
-Before configuring Holmes, you need to create the IAM policy and role that grants AWS access.
+The AWS MCP server requires read-only permissions across AWS services. We provide a default IAM policy that works for most users. You can customize it to restrict access if needed.
 
-### Create the IAM Policy
+=== "Helper Scripts (recommended)"
 
-The AWS MCP server requires read-only permissions across AWS services. We provide a default IAM policy that covers most AWS services.
+    We provide scripts that automate the IAM setup:
 
-You can customize the IAM policy to restrict access, but the default policy is recommended for most users.
+    1. [Enable OIDC Provider Script](https://github.com/robusta-dev/holmes-mcp-integrations/blob/master/servers/aws/enable-oidc-provider.sh) - Enables OIDC for your EKS cluster
+    2. [Setup IRSA Script](https://github.com/robusta-dev/holmes-mcp-integrations/blob/master/servers/aws/setup-irsa.sh) - Creates the policy and IAM role
 
-**Option A: Use the helper scripts (recommended)**
+=== "Manual Setup"
 
-We provide scripts that automate the IAM setup:
+    ```bash
+    # Download the policy
+    curl -O https://raw.githubusercontent.com/robusta-dev/holmes-mcp-integrations/master/servers/aws/aws-mcp-iam-policy.json
 
-1. [Enable OIDC Provider Script](https://github.com/robusta-dev/holmes-mcp-integrations/blob/master/servers/aws/enable-oidc-provider.sh) - Enables OIDC for your EKS cluster
-2. [Setup IRSA Script](https://github.com/robusta-dev/holmes-mcp-integrations/blob/master/servers/aws/setup-irsa.sh) - Creates the policy and IAM role
+    # Create the IAM policy
+    aws iam create-policy \
+      --policy-name HolmesMCPReadOnly \
+      --policy-document file://aws-mcp-iam-policy.json
+    ```
 
-**Option B: Create manually**
-
-```bash
-# Download the policy
-curl -O https://raw.githubusercontent.com/robusta-dev/holmes-mcp-integrations/master/servers/aws/aws-mcp-iam-policy.json
-
-# Create the IAM policy
-aws iam create-policy \
-  --policy-name HolmesMCPReadOnly \
-  --policy-document file://aws-mcp-iam-policy.json
-```
-
-The complete policy is available on GitHub: [aws-mcp-iam-policy.json](https://github.com/robusta-dev/holmes-mcp-integrations/blob/master/servers/aws/aws-mcp-iam-policy.json)
+    The complete policy is available on GitHub: [aws-mcp-iam-policy.json](https://github.com/robusta-dev/holmes-mcp-integrations/blob/master/servers/aws/aws-mcp-iam-policy.json)
 
 ### Create the IAM Role for IRSA
 
@@ -179,11 +173,14 @@ Choose your installation method:
 
 === "Holmes CLI"
 
-    For CLI usage, you need to deploy the AWS MCP server to your cluster, then configure Holmes to connect to it.
+    For CLI usage, you deploy the AWS MCP server to your cluster, then configure Holmes to connect to it.
 
     **Step 2a: Create the deployment manifest**
 
-    Create a file named `aws-mcp-deployment.yaml`:
+    Create a file named `aws-mcp-deployment.yaml`. Choose your authentication method:
+
+    - **IRSA (recommended for EKS)**: Use the ServiceAccount annotation with your IAM role ARN from Step 1
+    - **Access keys**: Skip the annotation and add credential environment variables instead (see below)
 
     ```yaml
     apiVersion: v1
@@ -197,7 +194,7 @@ Choose your installation method:
       name: aws-mcp-sa
       namespace: holmes-mcp
       annotations:
-        # Use the IAM role ARN from Step 1
+        # For IRSA: use the IAM role ARN from Step 1
         eks.amazonaws.com/role-arn: "arn:aws:iam::ACCOUNT_ID:role/HolmesMCPRole"
     ---
     apiVersion: apps/v1
@@ -333,34 +330,32 @@ Choose your installation method:
     url: "http://localhost:8000"
     ```
 
-## Alternative: Using Access Keys Instead of IRSA
+    **Using access keys instead of IRSA**
 
-If you're not using EKS or prefer static credentials, you can use AWS access keys for CLI deployments.
+    If not using EKS, remove the ServiceAccount annotation and add credentials to the deployment:
 
-Create a secret with your credentials:
+    ```bash
+    kubectl create secret generic aws-credentials \
+      --from-literal=aws-access-key-id=YOUR_KEY \
+      --from-literal=aws-secret-access-key=YOUR_SECRET \
+      -n holmes-mcp
+    ```
 
-```bash
-kubectl create secret generic aws-credentials \
-  --from-literal=aws-access-key-id=YOUR_KEY \
-  --from-literal=aws-secret-access-key=YOUR_SECRET \
-  -n holmes-mcp
-```
+    Then add these environment variables to the container spec:
 
-Then update the deployment manifest to reference the secret:
-
-```yaml
-env:
-  - name: AWS_ACCESS_KEY_ID
-    valueFrom:
-      secretKeyRef:
-        name: aws-credentials
-        key: aws-access-key-id
-  - name: AWS_SECRET_ACCESS_KEY
-    valueFrom:
-      secretKeyRef:
-        name: aws-credentials
-        key: aws-secret-access-key
-```
+    ```yaml
+    env:
+      - name: AWS_ACCESS_KEY_ID
+        valueFrom:
+          secretKeyRef:
+            name: aws-credentials
+            key: aws-access-key-id
+      - name: AWS_SECRET_ACCESS_KEY
+        valueFrom:
+          secretKeyRef:
+            name: aws-credentials
+            key: aws-secret-access-key
+    ```
 
 ## Multi-Account Setup
 
