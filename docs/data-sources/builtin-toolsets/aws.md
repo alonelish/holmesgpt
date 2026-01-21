@@ -87,7 +87,7 @@ The AWS MCP server requires read-only permissions across AWS services. We provid
 
     **Note the role ARN** - you'll need it in the next step: `arn:aws:iam::ACCOUNT_ID:role/HolmesMCPRole`
 
-### Step 2: Configure and Deploy
+### Step 2: Deploy AWS MCP
 
 Choose your installation method:
 
@@ -546,16 +546,6 @@ Once the IAM roles are set up, configure the Helm chart to enable multi-account 
             create: true
             # annotations are ignored when multiAccount is enabled
     ```
-
-!!! note "How Multi-Account Mode Works"
-    When `multiAccount.enabled` is `true`, the Helm chart automatically:
-
-    - Creates an `accounts.yaml` ConfigMap with your account profiles
-    - Mounts the accounts.yaml file at `/etc/aws/accounts.yaml` in the pod
-    - Mounts the EKS service account token at `/var/run/secrets/eks.amazonaws.com/serviceaccount`
-    - Skips IRSA annotations on the service account (since multi-account uses token projection)
-
-    The `llm_account_descriptions` field is automatically appended to the LLM instructions to help guide the AI on how to use the different accounts. Each profile can optionally specify a `region` that overrides the default region from `config.region`.
 
 ## Example Usage
 
