@@ -21,7 +21,7 @@ When using the Holmes or Robusta Helm charts, these servers are deployed as sepa
 
     For CLI usage, you need to deploy the GCP MCP servers first, then configure Holmes to connect to them.
 
-    ### Step 1: Deploy the GCP MCP Servers
+    **Step 1: Deploy the GCP MCP Servers**
 
     Create a file named `gcp-mcp-deployment.yaml`:
 
@@ -157,7 +157,7 @@ When using the Holmes or Robusta Helm charts, these servers are deployed as sepa
     kubectl apply -f gcp-mcp-deployment.yaml
     ```
 
-    ### Step 2: Configure GCP Service Account
+    **Step 2: Configure GCP Service Account**
 
     You need to create a GCP service account with appropriate permissions. Use the automated setup script from the [holmes-mcp-integrations repository](https://github.com/robusta-dev/holmes-mcp-integrations/tree/master/servers/gcp):
 
@@ -178,7 +178,7 @@ When using the Holmes or Robusta Helm charts, these servers are deployed as sepa
     - Generate a service account key
     - Create the Kubernetes secret (`gcp-sa-key`)
 
-    ### Step 3: Configure Holmes CLI
+    **Step 3: Configure Holmes CLI**
 
     Add the MCP server configurations to **~/.holmes/config.yaml**:
 
@@ -239,7 +239,7 @@ When using the Holmes or Robusta Helm charts, these servers are deployed as sepa
           - Cost analysis: Review storage classes and find large/old objects
     ```
 
-    ### Step 4: Port Forwarding (Optional for Local Testing)
+    **Step 4: Port Forwarding (Optional for Local Testing)**
 
     If running Holmes CLI locally and need to access the MCP server:
 

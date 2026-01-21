@@ -23,7 +23,7 @@ Before deploying the Azure MCP server, ensure you have:
 
     For CLI usage, you need to deploy the Azure MCP server first, then configure Holmes to connect to it.
 
-    ### Step 1: Deploy the Azure MCP Server
+    **Step 1: Deploy the Azure MCP Server**
 
     Create a file named `azure-mcp-deployment.yaml`:
 
@@ -152,7 +152,7 @@ Before deploying the Azure MCP server, ensure you have:
     kubectl apply -f azure-mcp-deployment.yaml
     ```
 
-    ### Step 2: Configure Azure Authentication
+    **Step 2: Configure Azure Authentication**
 
     Choose one of these authentication methods:
 
@@ -187,7 +187,7 @@ Before deploying the Azure MCP server, ensure you have:
     3. Update the deployment to reference the secret (uncomment the secret reference in the YAML above)
     4. Set `AZ_AUTH_METHOD: "service-principal"` in the ConfigMap
 
-    ### Step 3: Configure Holmes CLI
+    **Step 3: Configure Holmes CLI**
 
     Add the MCP server configuration to **~/.holmes/config.yaml**:
 
@@ -213,7 +213,7 @@ Before deploying the Azure MCP server, ensure you have:
           See the Azure MCP documentation for comprehensive investigation patterns and common commands.
     ```
 
-    ### Step 4: Port Forwarding (Optional for Local Testing)
+    **Step 4: Port Forwarding (Optional for Local Testing)**
 
     If running Holmes CLI locally and need to access the MCP server:
 
@@ -228,7 +228,7 @@ Before deploying the Azure MCP server, ensure you have:
 
 === "Holmes Helm Chart"
 
-    ### Workload Identity Authentication (Recommended for AKS)
+    **Workload Identity Authentication (Recommended for AKS)**
 
     The recommended approach for AKS clusters is to use Workload Identity. This provides secure, passwordless authentication.
 
@@ -261,7 +261,7 @@ Before deploying the Azure MCP server, ensure you have:
     3. Configure federated identity credentials
     4. Deploy with the configuration above
 
-    ### Service Principal Authentication
+    **Service Principal Authentication**
 
     For non-AKS clusters or if Workload Identity is not available:
 
@@ -293,7 +293,7 @@ Before deploying the Azure MCP server, ensure you have:
       -n YOUR_NAMESPACE
     ```
 
-    ### Managed Identity Authentication
+    **Managed Identity Authentication**
 
     For AKS clusters with node-level managed identity:
 
@@ -320,7 +320,7 @@ Before deploying the Azure MCP server, ensure you have:
 
 === "Robusta Helm Chart"
 
-    ### Workload Identity Authentication (Recommended for AKS)
+    **Workload Identity Authentication (Recommended for AKS)**
 
     ```yaml
     globalConfig:
@@ -349,7 +349,7 @@ Before deploying the Azure MCP server, ensure you have:
             readOnlyMode: true
     ```
 
-    ### Service Principal Authentication
+    **Service Principal Authentication**
 
     ```yaml
     globalConfig:
@@ -382,7 +382,7 @@ Before deploying the Azure MCP server, ensure you have:
       -n YOUR_NAMESPACE
     ```
 
-    ### Managed Identity Authentication
+    **Managed Identity Authentication**
 
     ```yaml
     globalConfig:

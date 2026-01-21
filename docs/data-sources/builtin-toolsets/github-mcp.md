@@ -55,7 +55,7 @@ Before deploying the GitHub MCP server, you need a GitHub Personal Access Token 
 
     For CLI usage, you need to deploy the GitHub MCP server first, then configure Holmes to connect to it.
 
-    ### Step 1: Create the GitHub PAT Secret
+    **Step 1: Create the GitHub PAT Secret**
 
     First, create a namespace and secret for the GitHub MCP server:
 
@@ -67,7 +67,7 @@ Before deploying the GitHub MCP server, you need a GitHub Personal Access Token 
       -n holmes-mcp
     ```
 
-    ### Step 2: Deploy the GitHub MCP Server
+    **Step 2: Deploy the GitHub MCP Server**
 
     Create a file named `github-mcp-deployment.yaml`:
 
@@ -142,7 +142,7 @@ Before deploying the GitHub MCP server, you need a GitHub Personal Access Token 
     kubectl apply -f github-mcp-deployment.yaml
     ```
 
-    ### Step 3: Configure Holmes CLI
+    **Step 3: Configure Holmes CLI**
 
     Add the MCP server configuration to **~/.holmes/config.yaml**:
 
@@ -155,7 +155,7 @@ Before deploying the GitHub MCP server, you need a GitHub Personal Access Token 
           mode: "sse"
     ```
 
-    ### Step 4: Port Forwarding (Optional for Local Testing)
+    **Step 4: Port Forwarding (Optional for Local Testing)**
 
     If running Holmes CLI locally and need to access the MCP server:
 
@@ -170,7 +170,7 @@ Before deploying the GitHub MCP server, you need a GitHub Personal Access Token 
 
 === "Holmes Helm Chart"
 
-    ### Basic Configuration
+    **Basic Configuration**
 
     First, create a Kubernetes secret with your GitHub PAT:
 
@@ -190,7 +190,7 @@ Before deploying the GitHub MCP server, you need a GitHub Personal Access Token 
           secretName: "github-mcp-token"
     ```
 
-    ### GitHub Enterprise Configuration
+    **GitHub Enterprise Configuration**
 
     For GitHub Enterprise Server, add the `host` configuration:
 
@@ -212,7 +212,7 @@ Before deploying the GitHub MCP server, you need a GitHub Personal Access Token 
 
 === "Robusta Helm Chart"
 
-    ### Basic Configuration
+    **Basic Configuration**
 
     First, create a Kubernetes secret with your GitHub PAT:
 
@@ -233,7 +233,7 @@ Before deploying the GitHub MCP server, you need a GitHub Personal Access Token 
             secretName: "github-mcp-token"
     ```
 
-    ### GitHub Enterprise Configuration
+    **GitHub Enterprise Configuration**
 
     ```yaml
     holmes:
