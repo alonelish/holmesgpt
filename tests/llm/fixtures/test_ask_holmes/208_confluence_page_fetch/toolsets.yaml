@@ -11,7 +11,7 @@ toolsets:
             type: basic
             username: "{{ env.CONFLUENCE_USER_NAME }}"
             password: "{{ env.CONFLUENCE_API_KEY }}"
-          health_check_url: "https://robusta-llm-test.atlassian.net/wiki/rest/api/user/current"
+          health_check_url: "https://robusta-llm-test.atlassian.net/wiki/rest/api/space?limit=1"
   # Disable K8s-dependent toolsets (no K8s in this test)
   kubernetes/core:
     enabled: false
