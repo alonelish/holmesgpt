@@ -11,7 +11,8 @@ toolsets:
             type: basic
             username: "{{ env.CONFLUENCE_USER_NAME }}"
             password: "{{ env.CONFLUENCE_API_KEY }}"
-          # Note: health_check_url removed - API token has content-read but not space-list permissions
+          # Uses content endpoint - requires same scope as reading pages (read:confluence-content.summary)
+          health_check_url: "https://robusta-llm-test.atlassian.net/wiki/rest/api/content?limit=1"
   # Disable K8s-dependent toolsets (no K8s in this test)
   kubernetes/core:
     enabled: false
