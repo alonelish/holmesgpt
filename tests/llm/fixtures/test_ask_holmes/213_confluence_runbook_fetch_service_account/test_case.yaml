@@ -5,8 +5,10 @@
 # Auth Method: Service Account (Bearer token via api.atlassian.com gateway)
 # URL Pattern: https://api.atlassian.com/ex/confluence/{cloudId}/wiki/rest/api/...
 #
+# The LLM must discover the cloudId by calling /oauth/token/accessible-resources
+# and matching the URL from the user's question.
+#
 # Requirements:
-#   CONFLUENCE_CLOUD_ID - Confluence Cloud instance ID
 #   CONFLUENCE_SERVICE_ACCOUNT_TOKEN - Service account API token (Bearer)
 
 user_prompt: |
@@ -17,7 +19,8 @@ user_prompt: |
 expected_output:
   - "FAIL if fetch_webpage tool was called - this tool must never be used for Confluence pages"
   - "FAIL if fetch_runbook tool was called - this tool must never be used for Confluence pages, even when fetching runbooks"
-  - "Must call http_request tool to fetch the Confluence page via REST API"
+  - "Must call http_request tool to discover cloudId via /oauth/token/accessible-resources OR use the correct cloudId"
+  - "Must call http_request tool to fetch the Confluence page via api.atlassian.com gateway"
   - "Must report the AWS account ID: 938401784103"
 
 include_tool_calls: true

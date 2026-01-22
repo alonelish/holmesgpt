@@ -5,15 +5,19 @@
 # For personal API tokens, use the classic auth eval variant instead (210)
 #
 # Required env vars:
-#   CONFLUENCE_CLOUD_ID - Your Confluence Cloud instance ID
 #   CONFLUENCE_SERVICE_ACCOUNT_TOKEN - Service account Bearer token
+#
+# How cloudId discovery works:
+#   1. LLM calls /oauth/token/accessible-resources to get list of sites with cloudIds
+#   2. LLM matches the Confluence URL from the user's question to find the right cloudId
+#   3. LLM uses cloudId to construct: /ex/confluence/{cloudId}/wiki/rest/api/...
 toolsets:
   http:
     enabled: true
     config:
       endpoints:
         - host: "api.atlassian.com"
-          paths: ["/ex/confluence/*"]
+          paths: ["/ex/confluence/*", "/oauth/token/accessible-resources"]
           auth:
             type: bearer
             token: "{{ env.CONFLUENCE_SERVICE_ACCOUNT_TOKEN }}"

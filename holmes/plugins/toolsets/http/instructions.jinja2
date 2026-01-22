@@ -38,9 +38,20 @@ Use the api.atlassian.com gateway with cloudId:
 - Auth: Bearer token
 - The cloudId is a UUID identifying the Confluence instance
 
-Example: To fetch page 2424833 via gateway (cloudId = abc123):
+**How to discover the cloudId:**
+1. Call `GET https://api.atlassian.com/oauth/token/accessible-resources`
+2. Response is an array of sites: `[{"id": "cloudId-uuid", "url": "https://example.atlassian.net", ...}]`
+3. Match the `url` field to the Confluence instance URL from the user's question
+4. Use the `id` field as the cloudId in subsequent API calls
+
+Example workflow:
 ```
-GET https://api.atlassian.com/ex/confluence/abc123/wiki/rest/api/content/2424833?expand=body.storage
+# Step 1: Discover cloudId
+GET https://api.atlassian.com/oauth/token/accessible-resources
+# Response: [{"id": "1324a887-45db-1bf4-1e99-ef0ff456d421", "url": "https://robusta-llm-test.atlassian.net", ...}]
+
+# Step 2: Use cloudId to fetch page
+GET https://api.atlassian.com/ex/confluence/1324a887-45db-1bf4-1e99-ef0ff456d421/wiki/rest/api/content/2424833?expand=body.storage
 ```
 
 #### Common Notes
