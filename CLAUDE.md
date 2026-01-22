@@ -224,6 +224,24 @@ EVAL_SETUP_TIMEOUT=600 poetry run pytest -m 'llm' -k "slow_test" --no-cov
   - `server`: Uses `build_chat_messages` with ChatRequest for server-style flow
 - `SSL_VERIFY`: Set to `false`, `0`, or `no` to disable SSL certificate verification for litellm and OpenAI client (useful for sandbox environments with TLS interception proxies)
 
+**Using OpenRouter When OpenAI API Key Is Not Available**:
+
+If `OPENAI_API_KEY` is not set but `OPENROUTER_API_KEY` is available, use OpenRouter to run LLM tests:
+
+```bash
+# Use OpenRouter with Claude Sonnet 4
+MODEL=openrouter/anthropic/claude-sonnet-4 CLASSIFIER_MODEL=openrouter/anthropic/claude-sonnet-4 poetry run pytest -m 'llm' -k "test_name" --no-cov
+
+# OpenRouter model format: openrouter/<provider>/<model-name>
+# Examples:
+#   openrouter/anthropic/claude-sonnet-4
+#   openrouter/anthropic/claude-opus-4.5
+#   openrouter/openai/gpt-4o
+#   openrouter/google/gemini-pro
+```
+
+Check available env vars with: `env | grep -iE 'OPENAI|OPENROUTER|ANTHROPIC' | sed 's/=.*/=<set>/'`
+
 **Sandbox/Proxy SSL Issues**:
 
 When running tests in a sandbox environment with a TLS interception proxy, you may encounter SSL certificate verification errors like:
