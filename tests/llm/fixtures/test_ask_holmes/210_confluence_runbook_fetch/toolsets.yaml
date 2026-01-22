@@ -1,5 +1,8 @@
-# Toolset configuration for Confluence runbook fetch test
-# Uses the generic HTTP toolset instead of dedicated Confluence toolset
+# Toolset configuration for Confluence runbook fetch test - Classic Auth
+# Uses personal API token with basic auth on site-specific URL
+#
+# Auth: Basic auth (email:token) on https://{site}.atlassian.net
+# For service account tokens, use the service account eval variant instead
 toolsets:
   http:
     enabled: true
@@ -11,8 +14,8 @@ toolsets:
             type: basic
             username: "{{ env.CONFLUENCE_USER_NAME }}"
             password: "{{ env.CONFLUENCE_API_KEY }}"
-          # Uses content endpoint - requires same scope as reading pages (read:confluence-content.summary)
-          health_check_url: "https://robusta-llm-test.atlassian.net/wiki/rest/api/content?limit=1"
+          # Health check disabled - classic tokens may not have content list permission
+          # health_check_url: "https://robusta-llm-test.atlassian.net/wiki/rest/api/content?limit=1"
   # Disable K8s-dependent toolsets (no K8s in this test)
   kubernetes/core:
     enabled: false

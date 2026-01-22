@@ -1,13 +1,13 @@
-# Test: Fetch runbook from Confluence - Classic Auth
+# Test: Fetch runbook from Confluence - Service Account Auth
 # Must use HTTP toolset, not internal runbook tool.
-# Uses the generic HTTP toolset to access Confluence REST API with classic auth.
+# Uses the generic HTTP toolset to access Confluence REST API with service account auth.
 #
-# Auth Method: Classic (personal API token with basic auth)
-# URL Pattern: https://{site}.atlassian.net/wiki/rest/api/...
+# Auth Method: Service Account (Bearer token via api.atlassian.com gateway)
+# URL Pattern: https://api.atlassian.com/ex/confluence/{cloudId}/wiki/rest/api/...
 #
 # Requirements:
-#   CONFLUENCE_USER_NAME - Email/username for Confluence
-#   CONFLUENCE_API_KEY - Personal API token (not service account token)
+#   CONFLUENCE_CLOUD_ID - Confluence Cloud instance ID
+#   CONFLUENCE_SERVICE_ACCOUNT_TOKEN - Service account API token (Bearer)
 
 user_prompt: |
   I have a runbook stored in Confluence at this URL: https://robusta-llm-test.atlassian.net/wiki/spaces/MFS/pages/2424833/AWS+Account+ID
@@ -24,5 +24,6 @@ include_tool_calls: true
 
 tags:
   - confluence
+  - confluence-service-account
   - question-answer
   - medium

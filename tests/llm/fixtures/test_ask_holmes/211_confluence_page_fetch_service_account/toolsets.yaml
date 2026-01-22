@@ -1,0 +1,28 @@
+# Toolset configuration for Confluence page fetch test - Service Account Auth
+# Uses service account token with Bearer auth via api.atlassian.com gateway
+#
+# Auth: Bearer token on https://api.atlassian.com/ex/confluence/{cloudId}/...
+# For personal API tokens, use the classic auth eval variant instead (208)
+#
+# Required env vars:
+#   CONFLUENCE_CLOUD_ID - Your Confluence Cloud instance ID
+#   CONFLUENCE_SERVICE_ACCOUNT_TOKEN - Service account Bearer token
+toolsets:
+  http:
+    enabled: true
+    config:
+      endpoints:
+        - host: "api.atlassian.com"
+          paths: ["/ex/confluence/*"]
+          auth:
+            type: bearer
+            token: "{{ env.CONFLUENCE_SERVICE_ACCOUNT_TOKEN }}"
+          # Health check uses accessible-resources endpoint to verify token
+          health_check_url: "https://api.atlassian.com/oauth/token/accessible-resources"
+  # Disable K8s-dependent toolsets (no K8s in this test)
+  kubernetes/core:
+    enabled: false
+  kubernetes/logs:
+    enabled: false
+  helm/core:
+    enabled: false

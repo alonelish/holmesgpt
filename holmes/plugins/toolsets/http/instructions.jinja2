@@ -19,18 +19,37 @@ The http_request tool supports:
 ## Common API Patterns
 
 ### Confluence (Atlassian)
-To fetch Confluence pages, use the REST API:
-- Extract the page ID from the URL (the numeric ID in the path, e.g., `2424833` from `/pages/2424833/Page+Title`)
-- If URL format is `/wiki/spaces/SPACE/pages/PAGEID/Title`, the page ID is the number after `/pages/`
-- If URL format is `/wiki/display/SPACE/Title`, you need to search for the page first
-- API endpoint: `https://{instance}.atlassian.net/wiki/rest/api/content/{pageId}?expand=body.storage`
-- The `expand=body.storage` parameter returns the page content in storage format (HTML)
-- Page content is in the response at `.body.storage.value`
+
+Confluence supports two authentication methods with different URL patterns:
+
+#### Method 1: Classic Auth (Personal API Tokens)
+Use site-specific URLs with the instance name:
+- URL pattern: `https://{instance}.atlassian.net/wiki/rest/api/content/{pageId}?expand=body.storage`
+- Auth: Basic auth with email:token
 
 Example: To fetch page 2424833 from robusta-llm-test.atlassian.net:
 ```
 GET https://robusta-llm-test.atlassian.net/wiki/rest/api/content/2424833?expand=body.storage
 ```
+
+#### Method 2: Service Account Auth (Scoped Tokens)
+Use the api.atlassian.com gateway with cloudId:
+- URL pattern: `https://api.atlassian.com/ex/confluence/{cloudId}/wiki/rest/api/content/{pageId}?expand=body.storage`
+- Auth: Bearer token
+- The cloudId is a UUID identifying the Confluence instance
+
+Example: To fetch page 2424833 via gateway (cloudId = abc123):
+```
+GET https://api.atlassian.com/ex/confluence/abc123/wiki/rest/api/content/2424833?expand=body.storage
+```
+
+#### Common Notes
+- Extract the page ID from the URL (the numeric ID in the path, e.g., `2424833` from `/pages/2424833/Page+Title`)
+- If URL format is `/wiki/spaces/SPACE/pages/PAGEID/Title`, the page ID is the number after `/pages/`
+- If URL format is `/wiki/display/SPACE/Title`, you need to search for the page first
+- The `expand=body.storage` parameter returns the page content in storage format (HTML)
+- Page content is in the response at `.body.storage.value`
+- Check which host is whitelisted to determine which URL pattern to use
 
 {% if tool_names|list|length > 0 %}
 Available HTTP tools: {{ ", ".join(tool_names) }}
