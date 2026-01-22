@@ -484,6 +484,9 @@ class TestHttpRequestHealthCheck:
         assert success is False
         assert "Health check failed" in message
         assert "HTTP 401" in message
+        # Should include curl command for troubleshooting (with redacted secrets)
+        assert "To troubleshoot, run: curl" in message
+        assert "$TOKEN" in message  # Bearer token should be redacted
 
     @patch("holmes.plugins.toolsets.http.http_toolset.requests.get")
     def test_health_check_connection_error(self, mock_get):
@@ -505,6 +508,7 @@ class TestHttpRequestHealthCheck:
         assert success is False
         assert "Health check failed" in message
         assert "Connection error" in message
+        assert "To troubleshoot, run: curl" in message
 
     @patch("holmes.plugins.toolsets.http.http_toolset.requests.get")
     def test_health_check_timeout(self, mock_get):

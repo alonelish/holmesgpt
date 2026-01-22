@@ -139,6 +139,21 @@ class HttpToolset(Toolset):
         except Exception as e:
             return False, f"Failed to validate HTTP configuration: {str(e)}"
 
+    def _build_curl_command(self, endpoint: EndpointConfig, url: str) -> str:
+        """Build a curl command for troubleshooting (secrets redacted)."""
+        parts = ["curl", "-v"]
+
+        auth = endpoint.auth
+        if auth.type == "basic":
+            parts.append('-u "$USERNAME:$PASSWORD"')
+        elif auth.type == "bearer":
+            parts.append('-H "Authorization: Bearer $TOKEN"')
+        elif auth.type == "header" and auth.name:
+            parts.append(f'-H "{auth.name}: $SECRET"')
+
+        parts.append(f'"{url}"')
+        return " ".join(parts)
+
     def _check_endpoint_health(
         self, endpoint: EndpointConfig, endpoint_index: int
     ) -> Tuple[bool, str]:
@@ -151,6 +166,8 @@ class HttpToolset(Toolset):
         url = endpoint.health_check_url
         if not url:
             return True, ""
+
+        curl_cmd = self._build_curl_command(endpoint, url)
 
         try:
             headers = self.build_headers(endpoint)
@@ -171,25 +188,29 @@ class HttpToolset(Toolset):
                 return (
                     False,
                     f"Health check failed for endpoint {endpoint_index} ({url}): "
-                    f"HTTP {response.status_code} - {response.text[:200]}",
+                    f"HTTP {response.status_code} - {response.text[:200]}\n"
+                    f"To troubleshoot, run: {curl_cmd}",
                 )
 
         except requests.exceptions.ConnectionError as e:
             return (
                 False,
                 f"Health check failed for endpoint {endpoint_index} ({url}): "
-                f"Connection error - {e}",
+                f"Connection error - {e}\n"
+                f"To troubleshoot, run: {curl_cmd}",
             )
         except requests.exceptions.Timeout:
             return (
                 False,
                 f"Health check failed for endpoint {endpoint_index} ({url}): "
-                f"Request timed out",
+                f"Request timed out\n"
+                f"To troubleshoot, run: {curl_cmd}",
             )
         except Exception as e:
             return (
                 False,
-                f"Health check failed for endpoint {endpoint_index} ({url}): {e}",
+                f"Health check failed for endpoint {endpoint_index} ({url}): {e}\n"
+                f"To troubleshoot, run: {curl_cmd}",
             )
 
     @property
