@@ -578,6 +578,7 @@ class CallablePrerequisite(BaseModel):
 class ToolsetCommandPrerequisite(BaseModel):
     command: str  # must complete successfully (error code 0) for prereq to be satisfied
     expected_output: Optional[str] = None  # optional
+    error_message: Optional[str] = None  # custom error message when command fails
 
 
 class ToolsetEnvironmentPrerequisite(BaseModel):
@@ -784,7 +785,10 @@ class Toolset(BaseModel):
                         self.error = f"`{prereq.command}` did not include `{prereq.expected_output}`"
                 except subprocess.CalledProcessError as e:
                     self.status = ToolsetStatusEnum.FAILED
-                    self.error = f"`{prereq.command}` returned {e.returncode}"
+                    if prereq.error_message:
+                        self.error = prereq.error_message
+                    else:
+                        self.error = f"`{prereq.command}` returned {e.returncode}"
 
             elif isinstance(prereq, ToolsetEnvironmentPrerequisite):
                 for env_var in prereq.env:

@@ -25,6 +25,7 @@ toolsets:
       - core
     prerequisites:
       - command: "argocd version"
+        error_message: "ArgoCD connection failed. Set ARGOCD_SERVER for direct connection or ARGOCD_OPTS for port forwarding. See https://holmesgpt.dev/data-sources/builtin-toolsets/argocd/"
       - env:
           - ARGOCD_AUTH_TOKEN
     tools:
