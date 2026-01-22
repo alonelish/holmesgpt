@@ -224,23 +224,26 @@ EVAL_SETUP_TIMEOUT=600 poetry run pytest -m 'llm' -k "slow_test" --no-cov
   - `server`: Uses `build_chat_messages` with ChatRequest for server-style flow
 - `SSL_VERIFY`: Set to `false`, `0`, or `no` to disable SSL certificate verification for litellm and OpenAI client (useful for sandbox environments with TLS interception proxies)
 
-**Using OpenRouter When OpenAI API Key Is Not Available**:
+**IMPORTANT: Running Evals with OpenRouter**:
 
-If `OPENAI_API_KEY` is not set but `OPENROUTER_API_KEY` is available, use OpenRouter to run LLM tests:
+When running LLM evaluation tests and `OPENAI_API_KEY` is not available, **always check for `OPENROUTER_API_KEY`** and use it as a fallback. Do not give up just because OpenAI key is missing.
 
 ```bash
-# Use OpenRouter with Claude Sonnet 4
-MODEL=openrouter/anthropic/claude-sonnet-4 CLASSIFIER_MODEL=openrouter/anthropic/claude-sonnet-4 poetry run pytest -m 'llm' -k "test_name" --no-cov
+# First, check what API keys are available:
+env | grep -iE 'OPENAI|OPENROUTER|ANTHROPIC' | sed 's/=.*/=<set>/'
+
+# If OPENROUTER_API_KEY is set, use OpenRouter with Claude Opus 4.5:
+MODEL=openrouter/anthropic/claude-opus-4.5 CLASSIFIER_MODEL=openrouter/anthropic/claude-opus-4.5 poetry run pytest -m 'llm' -k "test_name" --no-cov
 
 # OpenRouter model format: openrouter/<provider>/<model-name>
-# Examples:
-#   openrouter/anthropic/claude-sonnet-4
-#   openrouter/anthropic/claude-opus-4.5
+# Recommended models:
+#   openrouter/anthropic/claude-opus-4.5  (best quality)
+#   openrouter/anthropic/claude-sonnet-4  (faster, cheaper)
 #   openrouter/openai/gpt-4o
 #   openrouter/google/gemini-pro
 ```
 
-Check available env vars with: `env | grep -iE 'OPENAI|OPENROUTER|ANTHROPIC' | sed 's/=.*/=<set>/'`
+**Always try OpenRouter before reporting that evals cannot be run due to missing API keys.**
 
 **Sandbox/Proxy SSL Issues**:
 
