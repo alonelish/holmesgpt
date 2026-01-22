@@ -1,7 +1,16 @@
 # Toolset configuration for Confluence URL lookup test
+# Uses the generic HTTP toolset instead of dedicated Confluence toolset
 toolsets:
-  confluence:
+  http:
     enabled: true
+    config:
+      endpoints:
+        - host: "*.atlassian.net"
+          paths: ["/wiki/rest/api/*"]
+          auth:
+            type: basic
+            username: "{{ env.CONFLUENCE_USER_NAME }}"
+            password: "{{ env.CONFLUENCE_API_KEY }}"
   # Disable K8s-dependent toolsets (no K8s in this test)
   kubernetes/core:
     enabled: false

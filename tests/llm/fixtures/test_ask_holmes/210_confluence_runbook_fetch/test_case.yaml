@@ -1,9 +1,9 @@
-# Test: Fetch runbook from Confluence (must use Confluence toolset, not internal runbook tool)
+# Test: Fetch runbook from Confluence (must use HTTP toolset, not internal runbook tool)
+# Uses the generic HTTP toolset to access Confluence REST API.
 #
 # Requirements:
-#   CONFLUENCE_USER - Email/username for Confluence
+#   CONFLUENCE_USER_NAME - Email/username for Confluence
 #   CONFLUENCE_API_KEY - Atlassian API token
-#   CONFLUENCE_BASE_URL - e.g., https://robusta-llm-test.atlassian.net
 
 user_prompt: |
   I have a runbook stored in Confluence at this URL: https://robusta-llm-test.atlassian.net/wiki/spaces/MFS/pages/2424833/AWS+Account+ID
@@ -13,6 +13,7 @@ user_prompt: |
 expected_output:
   - "FAIL if fetch_webpage tool was called - this tool must never be used for Confluence pages"
   - "FAIL if fetch_runbook tool was called - this tool must never be used for Confluence pages, even when fetching runbooks"
+  - "Must call http_request tool to fetch the Confluence page via REST API"
   - "Must report the AWS account ID: 938401784103"
 
 include_tool_calls: true

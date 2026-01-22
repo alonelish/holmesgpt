@@ -1,11 +1,11 @@
 # Test: Fetch Confluence page from URL without page ID
 # Tests that Holmes can fetch a page from a display URL (no page ID in URL).
-# Should FAIL with current toolset - it only supports fetching by page ID.
+# With the generic HTTP toolset, the LLM can search for pages by title/space.
+# Uses the generic HTTP toolset to access Confluence REST API.
 #
 # Requirements:
-#   CONFLUENCE_USER - Email/username for Confluence
+#   CONFLUENCE_USER_NAME - Email/username for Confluence
 #   CONFLUENCE_API_KEY - Atlassian API token
-#   CONFLUENCE_BASE_URL - e.g., https://robusta-llm-test.atlassian.net
 
 user_prompt: |
   Fetch the contents of this Confluence page and tell me the AWS account ID mentioned on it:
@@ -14,6 +14,7 @@ user_prompt: |
 expected_output:
   - "FAIL if fetch_webpage tool was called - this tool must never be used for Confluence pages"
   - "FAIL if fetch_runbook tool was called - this tool must never be used for Confluence pages"
+  - "Must call http_request tool to fetch the Confluence page via REST API"
   - "Must report the AWS account ID: 938401784103"
 
 include_tool_calls: true
