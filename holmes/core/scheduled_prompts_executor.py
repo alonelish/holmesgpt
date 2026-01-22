@@ -3,7 +3,7 @@ import os
 import threading
 import time
 from datetime import datetime
-from typing import TYPE_CHECKING, Callable, Optional, Union
+from typing import TYPE_CHECKING, Any, Callable, Dict, Optional, Union
 
 from pydantic import BaseModel, ValidationError
 
@@ -26,7 +26,7 @@ class ScheduledPrompt(BaseModel):
     account_id: str
     cluster_name: str
     model_name: str
-    prompt: Union[str, dict]
+    prompt: Dict[str, Any]
     status: str
     msg: Optional[str] = None
     created_at: datetime
@@ -82,6 +82,7 @@ class ScheduledPromptsExecutor:
                 try:
                     sp = ScheduledPrompt(**payload)
                 except ValidationError as exc:
+                    logging.warning(f"{str(payload)} is not a valid ScheduledPrompt")
                     logging.exception(
                         "Skipping invalid scheduled prompt payload: %s",
                         exc,
@@ -149,12 +150,13 @@ class ScheduledPromptsExecutor:
         sp: ScheduledPrompt,
     ):
         start = time.perf_counter()
+        additional_system_prompt = sp.prompt.get("additional_system_prompt")
         chat_request = ChatRequest(
             ask=self._extract_prompt_text(sp.prompt),
             model=sp.model_name,
             conversation_history=None,
             stream=False,
-            additional_system_prompt=None,
+            additional_system_prompt=additional_system_prompt,
         )
 
         response = self.chat_function(chat_request)

@@ -805,6 +805,10 @@ class SupabaseDal:
                 return None
 
             row = res.data[0] if isinstance(res.data, list) else res.data
+            # supabase returns empty row if no data found
+            if not row.get("id"):
+                return None
+
             return row
         except Exception:
             logging.exception(
