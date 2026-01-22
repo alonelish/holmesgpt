@@ -1,4 +1,5 @@
 import fnmatch
+import json
 import logging
 import os
 import re
@@ -62,6 +63,8 @@ class EndpointConfig(BaseModel):
         default_factory=lambda: ["GET"]
     )  # Allowed HTTP methods, default GET only
     auth: AuthConfig = Field(default_factory=AuthConfig)
+    # Optional URL to verify auth at initialization time (e.g., a /whoami or /health endpoint)
+    health_check_url: Optional[str] = None
 
     def get_hosts(self) -> List[str]:
         """Return hosts as a list."""
@@ -119,6 +122,13 @@ class HttpToolset(Toolset):
                 if not hosts:
                     return False, f"Endpoint {i} has no hosts configured."
 
+            # Perform health checks for endpoints that have health_check_url configured
+            for i, endpoint in enumerate(self._http_config.endpoints):
+                if endpoint.health_check_url:
+                    success, error_msg = self._check_endpoint_health(endpoint, i)
+                    if not success:
+                        return False, error_msg
+
             endpoint_count = len(self._http_config.endpoints)
             host_count = sum(len(ep.get_hosts()) for ep in self._http_config.endpoints)
             return (
@@ -128,6 +138,59 @@ class HttpToolset(Toolset):
 
         except Exception as e:
             return False, f"Failed to validate HTTP configuration: {str(e)}"
+
+    def _check_endpoint_health(
+        self, endpoint: EndpointConfig, endpoint_index: int
+    ) -> Tuple[bool, str]:
+        """
+        Perform a health check request to validate authentication.
+
+        Returns:
+            Tuple of (success, error_message)
+        """
+        url = endpoint.health_check_url
+        if not url:
+            return True, ""
+
+        try:
+            headers = self.build_headers(endpoint)
+            basic_auth = self.get_basic_auth(endpoint)
+
+            response = requests.get(
+                url,
+                headers=headers,
+                auth=basic_auth,
+                timeout=10,  # Short timeout for health check
+                verify=self._http_config.verify_ssl if self._http_config else True,
+            )
+
+            if response.ok:
+                logger.info(f"Health check passed for endpoint {endpoint_index}: {url}")
+                return True, ""
+            else:
+                return (
+                    False,
+                    f"Health check failed for endpoint {endpoint_index} ({url}): "
+                    f"HTTP {response.status_code} - {response.text[:200]}",
+                )
+
+        except requests.exceptions.ConnectionError as e:
+            return (
+                False,
+                f"Health check failed for endpoint {endpoint_index} ({url}): "
+                f"Connection error - {e}",
+            )
+        except requests.exceptions.Timeout:
+            return (
+                False,
+                f"Health check failed for endpoint {endpoint_index} ({url}): "
+                f"Request timed out",
+            )
+        except Exception as e:
+            return (
+                False,
+                f"Health check failed for endpoint {endpoint_index} ({url}): {e}",
+            )
 
     @property
     def http_config(self) -> HttpToolsetConfig:
@@ -149,6 +212,8 @@ class HttpToolset(Toolset):
                         "type": "bearer",
                         "token": "your-api-token",
                     },
+                    # Optional: URL to verify auth at startup
+                    "health_check_url": "https://api.example.com/health",
                 }
             ],
             "verify_ssl": True,
@@ -302,6 +367,7 @@ class HttpRequest(Tool, JsonFilterMixin):
         self._toolset = toolset
 
     def _invoke(self, params: dict, context: ToolInvokeContext) -> StructuredToolResult:
+        _ = context  # Required by interface but not used
         url = params.get("url", "")
         method = params.get("method", "GET").upper()
         body = params.get("body")
@@ -339,10 +405,15 @@ class HttpRequest(Tool, JsonFilterMixin):
         extra_headers = None
         if extra_headers_str:
             try:
-                import json
-
                 extra_headers = json.loads(extra_headers_str)
-            except Exception as e:
+                if not isinstance(extra_headers, dict):
+                    return StructuredToolResult(
+                        status=StructuredToolResultStatus.ERROR,
+                        error="Headers must be a JSON object, not a list or primitive",
+                        params=params,
+                        url=url,
+                    )
+            except json.JSONDecodeError as e:
                 return StructuredToolResult(
                     status=StructuredToolResultStatus.ERROR,
                     error=f"Invalid headers JSON: {e}",
@@ -382,14 +453,21 @@ class HttpRequest(Tool, JsonFilterMixin):
             except Exception:
                 data = response.text
 
-            result = StructuredToolResult(
-                status=StructuredToolResultStatus.SUCCESS
-                if response.ok
-                else StructuredToolResultStatus.ERROR,
-                data={"status_code": response.status_code, "body": data},
-                params=params,
-                url=url,
-            )
+            if response.ok:
+                result = StructuredToolResult(
+                    status=StructuredToolResultStatus.SUCCESS,
+                    data={"status_code": response.status_code, "body": data},
+                    params=params,
+                    url=url,
+                )
+            else:
+                result = StructuredToolResult(
+                    status=StructuredToolResultStatus.ERROR,
+                    error=f"HTTP {response.status_code}: {data}",
+                    data={"status_code": response.status_code, "body": data},
+                    params=params,
+                    url=url,
+                )
 
             # Apply JSON filtering from mixin
             return self.filter_result(result, params)
