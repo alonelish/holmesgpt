@@ -1,9 +1,12 @@
+import json
 import logging
 import os
 import threading
 import time
 from datetime import datetime
 from typing import TYPE_CHECKING, Any, Callable, Dict, Optional, Union
+from urllib.error import HTTPError, URLError
+from urllib.request import urlopen
 
 from pydantic import BaseModel, ValidationError
 
@@ -35,6 +38,11 @@ class ScheduledPrompt(BaseModel):
 
 
 class ScheduledPromptsExecutor:
+    ADDITIONAL_SYSTEM_PROMPT_URL = os.environ.get(
+        "ADDITIONAL_SYSTEM_PROMPT_URL",
+        "https://platform.robusta.dev/api/additional-system-prompt.json",
+    )
+
     def __init__(
         self,
         dal: "SupabaseDal",
@@ -150,7 +158,9 @@ class ScheduledPromptsExecutor:
         sp: ScheduledPrompt,
     ):
         start = time.perf_counter()
-        additional_system_prompt = sp.prompt.get("additional_system_prompt")
+        additional_system_prompt = self._fetch_additional_system_prompt(
+            sp.prompt.get("additional_system_prompt")
+        )
         chat_request = ChatRequest(
             ask=self._extract_prompt_text(sp.prompt),
             model=sp.model_name,
@@ -173,6 +183,29 @@ class ScheduledPromptsExecutor:
         self._finish_run(status=RunStatus.COMPLETED, result=result_data, sp=sp)
 
         return response
+
+    def _fetch_additional_system_prompt(
+        self, fallback: Optional[str] = None
+    ) -> Optional[str]:
+        """
+        Fetches the additional system prompt from the Robusta platform.
+        Falls back to the provided value if the fetch fails.
+        """
+        try:
+            with urlopen(self.ADDITIONAL_SYSTEM_PROMPT_URL, timeout=10) as resp:
+                if resp.status != 200:
+                    logging.warning(
+                        "Failed to fetch additional system prompt, status: %s",
+                        resp.status,
+                    )
+                    return fallback
+                data = json.loads(resp.read().decode("utf-8"))
+                return data.get("additional_system_prompt", fallback)
+        except (HTTPError, URLError, TimeoutError, ValueError) as exc:
+            logging.warning(
+                "Error fetching additional system prompt, using fallback: %s", exc
+            )
+            return fallback
 
     def _finish_run(
         self,

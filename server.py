@@ -31,6 +31,7 @@ from fastapi.responses import StreamingResponse
 from holmes.utils.stream import stream_investigate_formatter, stream_chat_formatter
 from holmes.common.env_vars import (
     ENABLE_CONNECTION_KEEPALIVE,
+    ENABLED_SCHEDULED_PROMPTS,
     HOLMES_HOST,
     HOLMES_PORT,
     LOG_PERFORMANCE,
@@ -109,6 +110,8 @@ def sync_before_server_start():
         holmes_sync_toolsets_status(dal, config)
     except Exception:
         logging.error("Failed to synchronise holmes toolsets", exc_info=True)
+    if not ENABLED_SCHEDULED_PROMPTS:
+        return
     try:
         scheduled_prompts_executor.start()
     except Exception:

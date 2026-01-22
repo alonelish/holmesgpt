@@ -129,3 +129,6 @@ ENABLE_CONNECTION_KEEPALIVE = load_bool("ENABLE_CONNECTION_KEEPALIVE", False)
 KEEPALIVE_IDLE = int(os.environ.get("KEEPALIVE_IDLE", 2))
 KEEPALIVE_INTVL = int(os.environ.get("KEEPALIVE_INTVL", 2))
 KEEPALIVE_CNT = int(os.environ.get("KEEPALIVE_CNT", 5))
+
+# Controls whether scheduled prompts executor runs at startup (defaults to on)
+ENABLED_SCHEDULED_PROMPTS = load_bool("ENABLED_SCHEDULED_PROMPTS", True)
