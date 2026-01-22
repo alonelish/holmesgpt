@@ -84,6 +84,9 @@ class HttpToolsetConfig(BaseModel):
     verify_ssl: bool = True
     timeout_seconds: int = 30
     default_headers: Dict[str, str] = Field(default_factory=dict)
+    # Custom instructions for the LLM about how to use these endpoints
+    # These are appended to the generic HTTP toolset instructions
+    instructions: Optional[str] = None
 
 
 class HttpToolset(Toolset):
@@ -128,6 +131,14 @@ class HttpToolset(Toolset):
                     success, error_msg = self._check_endpoint_health(endpoint, i)
                     if not success:
                         return False, error_msg
+
+            # Append custom instructions if provided
+            if self._http_config.instructions:
+                self.llm_instructions = (
+                    (self.llm_instructions or "")
+                    + "\n\n## API-Specific Instructions\n\n"
+                    + self._http_config.instructions
+                )
 
             endpoint_count = len(self._http_config.endpoints)
             host_count = sum(len(ep.get_hosts()) for ep in self._http_config.endpoints)

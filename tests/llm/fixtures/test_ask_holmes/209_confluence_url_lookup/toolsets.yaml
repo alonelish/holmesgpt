@@ -14,8 +14,26 @@ toolsets:
             type: basic
             username: "{{ env.CONFLUENCE_USER_NAME }}"
             password: "{{ env.CONFLUENCE_API_KEY }}"
-          # Health check disabled - classic tokens may not have content list permission
-          # health_check_url: "https://robusta-llm-test.atlassian.net/wiki/rest/api/content?limit=1"
+      instructions: |
+        ### Confluence (Atlassian) - Classic Auth
+
+        To fetch Confluence pages, use the REST API with site-specific URLs:
+        - URL pattern: `https://{instance}.atlassian.net/wiki/rest/api/content/{pageId}?expand=body.storage`
+        - Extract the page ID from the URL (the numeric ID, e.g., `2424833` from `/pages/2424833/Title`)
+        - If URL format is `/wiki/spaces/SPACE/pages/PAGEID/Title`, the page ID is after `/pages/`
+        - If URL format is `/wiki/display/SPACE/Title`, search for the page by title first
+        - The `expand=body.storage` parameter returns page content in HTML format
+        - Page content is in the response at `.body.storage.value`
+
+        Example: To fetch page 2424833:
+        ```
+        GET https://robusta-llm-test.atlassian.net/wiki/rest/api/content/2424833?expand=body.storage
+        ```
+
+        To search for pages by title in a space:
+        ```
+        GET https://{instance}.atlassian.net/wiki/rest/api/content?spaceKey=SPACE&title=Page+Title&expand=body.storage
+        ```
   # Disable K8s-dependent toolsets (no K8s in this test)
   kubernetes/core:
     enabled: false

@@ -23,6 +23,42 @@ toolsets:
             token: "{{ env.CONFLUENCE_SERVICE_ACCOUNT_TOKEN }}"
           # Health check uses accessible-resources endpoint to verify token
           health_check_url: "https://api.atlassian.com/oauth/token/accessible-resources"
+      instructions: |
+        ### Confluence (Atlassian) - Service Account Auth
+
+        Service account tokens require using the api.atlassian.com gateway with cloudId.
+
+        **Step 1: Discover the cloudId**
+        First, call the accessible-resources endpoint to get the cloudId for the site:
+        ```
+        GET https://api.atlassian.com/oauth/token/accessible-resources
+        ```
+        Response contains an array of sites. Match the `url` field to the Confluence site from the user's question.
+        The `id` field is the cloudId you need.
+
+        Example response:
+        ```json
+        [{"id": "abc123-...", "url": "https://robusta-llm-test.atlassian.net", "name": "robusta-llm-test", ...}]
+        ```
+
+        **Step 2: Fetch the page**
+        Use the cloudId to construct the API URL:
+        - URL pattern: `https://api.atlassian.com/ex/confluence/{cloudId}/wiki/rest/api/content/{pageId}?expand=body.storage`
+        - Extract the page ID from the URL (the numeric ID, e.g., `2424833` from `/pages/2424833/Title`)
+        - If URL format is `/wiki/spaces/SPACE/pages/PAGEID/Title`, the page ID is after `/pages/`
+        - If URL format is `/wiki/display/SPACE/Title`, search for the page by title first
+        - The `expand=body.storage` parameter returns page content in HTML format
+        - Page content is in the response at `.body.storage.value`
+
+        Example: To fetch page 2424833 from site with cloudId "abc123":
+        ```
+        GET https://api.atlassian.com/ex/confluence/abc123/wiki/rest/api/content/2424833?expand=body.storage
+        ```
+
+        To search for pages by title in a space:
+        ```
+        GET https://api.atlassian.com/ex/confluence/{cloudId}/wiki/rest/api/content?spaceKey=SPACE&title=Page+Title&expand=body.storage
+        ```
   # Disable K8s-dependent toolsets (no K8s in this test)
   kubernetes/core:
     enabled: false
