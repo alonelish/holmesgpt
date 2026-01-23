@@ -46,6 +46,38 @@ OVERRIDE_MAX_OUTPUT_TOKEN = environ_get_safe_int("OVERRIDE_MAX_OUTPUT_TOKEN")
 OVERRIDE_MAX_CONTENT_SIZE = environ_get_safe_int("OVERRIDE_MAX_CONTENT_SIZE")
 
 
+# Patterns to detect model names missing provider prefixes
+# Maps pattern keywords to (provider_prefix, example_model)
+MODEL_PROVIDER_HINTS = {
+    "claude": ("anthropic", "anthropic/claude-sonnet-4-5-20250929"),
+    "opus": ("anthropic", "anthropic/claude-opus-4-5-20251101"),
+    "sonnet": ("anthropic", "anthropic/claude-sonnet-4-5-20250929"),
+    "haiku": ("anthropic", "anthropic/claude-haiku-3-5-20241022"),
+}
+
+
+def get_provider_suggestion(model: str) -> Optional[str]:
+    """
+    Check if a model name appears to be missing a provider prefix.
+    Returns a helpful suggestion string if a pattern is detected, None otherwise.
+    """
+    model_lower = model.lower()
+
+    # Skip if model already has a provider prefix
+    if "/" in model:
+        return None
+
+    for keyword, (provider, example) in MODEL_PROVIDER_HINTS.items():
+        if keyword in model_lower:
+            return (
+                f"Model '{model}' appears to be an {provider.title()} model but is missing the provider prefix. "
+                f"Try using '{provider}/{model}' or a full model name like '{example}'. "
+                f"See https://docs.litellm.ai/docs/providers/{provider} for supported model names."
+            )
+
+    return None
+
+
 def get_context_window_compaction_threshold_pct() -> int:
     """Get the compaction threshold percentage at runtime to support test overrides."""
     return environ_get_safe_int("CONTEXT_WINDOW_COMPACTION_THRESHOLD_PCT", default="95")
@@ -187,7 +219,14 @@ class DefaultLLM(LLM):
         logging.debug(f"Checking LiteLLM model {model}")
         lookup = litellm.get_llm_provider(model)
         if not lookup:
-            raise Exception(f"Unknown provider for model {model}")
+            suggestion = get_provider_suggestion(model)
+            if suggestion:
+                raise Exception(suggestion)
+            raise Exception(
+                f"Unknown provider for model '{model}'. "
+                f"Most models require a provider prefix (e.g., 'anthropic/claude-sonnet-4-5-20250929', 'openai/gpt-4'). "
+                f"See https://docs.litellm.ai/docs/providers for supported providers and model names."
+            )
         provider = lookup[1]
         if provider == "watsonx":
             # NOTE: LiteLLM's validate_environment does not currently include checks for IBM WatsonX.
