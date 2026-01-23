@@ -1,0 +1,128 @@
+#!/usr/bin/env python3
+"""
+Send test traces to Coralogix via OTLP gRPC.
+
+Usage:
+    python send_traces.py --domain eu2.coralogix.com --api-key <key> \
+        --app-name holmes-eval-174 --subsystem traces-test \
+        --trace-id TRACE-ABC123 --error-code ERR-5847
+
+Environment variables (alternative to CLI args):
+    CORALOGIX_DOMAIN, CORALOGIX_API_KEY
+"""
+
+import argparse
+import os
+import sys
+import time
+
+
+def send_traces(domain: str, api_key: str, app_name: str, subsystem: str,
+                trace_id: str, error_code: str) -> bool:
+    """Send test traces to Coralogix via OTLP gRPC."""
+    try:
+        from opentelemetry import trace
+        from opentelemetry.exporter.otlp.proto.grpc.trace_exporter import OTLPSpanExporter
+        from opentelemetry.sdk.resources import Resource
+        from opentelemetry.sdk.trace import TracerProvider
+        from opentelemetry.sdk.trace.export import BatchSpanProcessor
+        from opentelemetry.trace import Status, StatusCode
+    except ImportError:
+        print("ERROR: OpenTelemetry packages not installed. Run:")
+        print("  pip install opentelemetry-api opentelemetry-sdk opentelemetry-exporter-otlp-proto-grpc")
+        return False
+
+    # Configure resource with Coralogix-specific attributes
+    resource = Resource.create({
+        "service.name": app_name,
+        "cx.application.name": app_name,
+        "cx.subsystem.name": subsystem,
+    })
+
+    # Configure OTLP exporter for Coralogix
+    endpoint = f"ingress.{domain}:443"
+    exporter = OTLPSpanExporter(
+        endpoint=endpoint,
+        headers={
+            "Authorization": f"Bearer {api_key}",
+            "CX-Application-Name": app_name,
+            "CX-Subsystem-Name": subsystem,
+        },
+    )
+
+    # Set up tracer provider
+    provider = TracerProvider(resource=resource)
+    provider.add_span_processor(BatchSpanProcessor(exporter))
+    trace.set_tracer_provider(provider)
+
+    tracer = trace.get_tracer(__name__)
+
+    print(f"Sending traces to {endpoint}...")
+
+    # Create a realistic trace with multiple spans
+    with tracer.start_as_current_span("http_request") as root_span:
+        root_span.set_attribute("http.method", "POST")
+        root_span.set_attribute("http.url", "/api/checkout")
+        root_span.set_attribute("trace.id.custom", trace_id)
+
+        # Simulate database query
+        with tracer.start_as_current_span("db_query") as db_span:
+            db_span.set_attribute("db.system", "postgresql")
+            db_span.set_attribute("db.operation", "SELECT")
+            db_span.set_attribute("db.statement", "SELECT * FROM orders WHERE id = ?")
+            time.sleep(0.05)
+
+        # Simulate external API call that fails
+        with tracer.start_as_current_span("external_api_call") as api_span:
+            api_span.set_attribute("http.url", "https://payment-gateway.example.com/charge")
+            api_span.set_attribute("error.code", error_code)
+            api_span.set_attribute("error.message", f"Payment gateway timeout - {error_code}")
+            api_span.set_status(Status(StatusCode.ERROR, f"Payment failed: {error_code}"))
+            time.sleep(0.02)
+
+        # Mark root span as error due to child failure
+        root_span.set_status(Status(StatusCode.ERROR, "Request failed"))
+        root_span.set_attribute("error", True)
+
+    # Force flush to ensure spans are sent
+    provider.force_flush()
+    provider.shutdown()
+
+    print(f"✅ Traces sent successfully with trace_id={trace_id}, error_code={error_code}")
+    return True
+
+
+def main():
+    parser = argparse.ArgumentParser(description="Send test traces to Coralogix")
+    parser.add_argument("--domain", default=os.environ.get("CORALOGIX_DOMAIN"),
+                        help="Coralogix domain (e.g., eu2.coralogix.com)")
+    parser.add_argument("--api-key", default=os.environ.get("CORALOGIX_API_KEY"),
+                        help="Coralogix API key")
+    parser.add_argument("--app-name", required=True, help="Application name")
+    parser.add_argument("--subsystem", required=True, help="Subsystem name")
+    parser.add_argument("--trace-id", required=True, help="Custom trace ID for verification")
+    parser.add_argument("--error-code", required=True, help="Error code to inject")
+
+    args = parser.parse_args()
+
+    if not args.domain:
+        print("ERROR: --domain or CORALOGIX_DOMAIN required")
+        sys.exit(1)
+    if not args.api_key:
+        print("ERROR: --api-key or CORALOGIX_API_KEY required")
+        sys.exit(1)
+
+    success = send_traces(
+        domain=args.domain,
+        api_key=args.api_key,
+        app_name=args.app_name,
+        subsystem=args.subsystem,
+        trace_id=args.trace_id,
+        error_code=args.error_code,
+    )
+
+    sys.exit(0 if success else 1)
+
+
+if __name__ == "__main__":
+    main()

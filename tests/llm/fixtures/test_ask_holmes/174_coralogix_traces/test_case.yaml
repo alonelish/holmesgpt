@@ -1,0 +1,88 @@
+# Test: Coralogix Trace Search with DataPrime
+# Tests that Holmes can search traces using Coralogix DataPrime query language
+#
+# This is a fast cloud-only test that sends traces via OTLP gRPC to Coralogix,
+# no Kubernetes cluster required.
+#
+# Requirements:
+# - CORALOGIX_API_KEY: API key with DataQuerying and Send Data permissions
+# - CORALOGIX_DOMAIN: e.g., "eu2.coralogix.com"
+# - CORALOGIX_TEAM_HOSTNAME: Your team name
+# - OpenTelemetry Python packages (installed via poetry)
+#
+# Anti-hallucination: The test injects a specific error code (ERR-XXXX format)
+# and trace ID that the LLM can only find by actually querying Coralogix.
+
+user_prompt: "Search the Coralogix traces for the 'holmes-eval-174' application. Look for failed spans and report what error codes you find. Also identify which operation failed."
+
+expected_output:
+  - "Must identify that there are error/failed spans"
+  - "Must find the error code ERR-5847"
+  - "Must mention that the external_api_call or payment gateway operation failed"
+
+tags:
+  - coralogix
+  - traces
+  - medium
+
+setup_timeout: 300
+
+before_test: |
+  source ../../shared/coralogix/coralogix_test_utils.sh
+  cx_setup
+  set -e
+
+  echo "🚀 Setting up Coralogix traces test 174"
+
+  APP_NAME="holmes-eval-174"
+  SUBSYSTEM="checkout-service"
+  TRACE_ID="TRACE-174-$(date +%s)"
+  ERROR_CODE="ERR-5847"
+
+  echo "⏳ Sending traces to Coralogix via OTLP..."
+
+  # Send traces using Python OTLP exporter
+  python3 ../../shared/coralogix/send_traces.py \
+    --app-name "$APP_NAME" \
+    --subsystem "$SUBSYSTEM" \
+    --trace-id "$TRACE_ID" \
+    --error-code "$ERROR_CODE"
+
+  if [ $? -ne 0 ]; then
+    echo "❌ Failed to send traces"
+    exit 1
+  fi
+
+  echo "✅ Traces sent to $APP_NAME/$SUBSYSTEM"
+
+  # Wait for traces to be queryable
+  echo "⏳ Waiting for traces to be queryable in Coralogix..."
+  QUERY_URL="https://ng-api-http.${CORALOGIX_DOMAIN}/api/v1/dataprime/query"
+
+  TRACES_READY=false
+  for i in {1..60}; do
+    RESULT=$(curl -sf -X POST "$QUERY_URL" \
+      -H "Authorization: Bearer ${CORALOGIX_API_KEY}" \
+      -H "Content-Type: application/json" \
+      -d "{\"query\": \"source spans | lucene 'holmes-eval-174 AND $ERROR_CODE' | limit 1\", \"metadata\": {\"syntax\": \"QUERY_SYNTAX_DATAPRIME\"}}" 2>/dev/null)
+
+    if echo "$RESULT" | grep -q "$ERROR_CODE"; then
+      echo "✅ Traces are queryable after $((i * 5)) seconds"
+      TRACES_READY=true
+      break
+    fi
+
+    echo "   Attempt $i/60: Traces not yet indexed, waiting 5s..."
+    sleep 5
+  done
+
+  if [ "$TRACES_READY" = false ]; then
+    echo "❌ Timeout waiting for traces to be queryable"
+    exit 1
+  fi
+
+  echo "✅ Test setup complete!"
+
+after_test: |
+  # No cleanup needed - traces will naturally age out of Coralogix
+  echo "✅ Cleanup complete (traces will age out naturally)"

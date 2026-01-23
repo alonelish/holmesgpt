@@ -1,0 +1,87 @@
+# Test: Coralogix Metrics Query via Prometheus API
+# Tests that Holmes can query metrics from Coralogix using the Prometheus API
+#
+# This is a fast cloud-only test that sends metrics via OTLP gRPC to Coralogix,
+# then queries them via the Prometheus-compatible API. No Kubernetes required.
+#
+# Requirements:
+# - CORALOGIX_API_KEY: API key with DataQuerying and Send Data permissions
+# - CORALOGIX_DOMAIN: e.g., "eu2.coralogix.com"
+# - CORALOGIX_TEAM_HOSTNAME: Your team name
+# - OpenTelemetry Python packages (installed via poetry)
+#
+# Anti-hallucination: The test creates metrics with a unique prefix (eval175_)
+# that the LLM can only find by actually querying Coralogix.
+
+user_prompt: "Query the Coralogix metrics for the 'holmes-eval-175' application. Look for HTTP request metrics with prefix 'eval175_' and tell me: what metrics are available, how many total requests were made, and what endpoints have the most errors."
+
+expected_output:
+  - "Must identify metrics with the eval175_ prefix"
+  - "Must mention eval175_http_requests_total, eval175_http_errors_total, or eval175_request_latency_seconds"
+  - "Must provide information about request counts or error rates by endpoint"
+
+tags:
+  - coralogix
+  - metrics
+  - prometheus
+  - medium
+
+setup_timeout: 300
+
+before_test: |
+  source ../../shared/coralogix/coralogix_test_utils.sh
+  cx_setup
+  set -e
+
+  echo "🚀 Setting up Coralogix metrics test 175"
+
+  APP_NAME="holmes-eval-175"
+  SUBSYSTEM="api-gateway"
+  METRIC_PREFIX="eval175"
+
+  echo "⏳ Sending metrics to Coralogix via OTLP..."
+
+  # Send metrics using Python OTLP exporter
+  python3 ../../shared/coralogix/send_metrics.py \
+    --app-name "$APP_NAME" \
+    --subsystem "$SUBSYSTEM" \
+    --metric-prefix "$METRIC_PREFIX"
+
+  if [ $? -ne 0 ]; then
+    echo "❌ Failed to send metrics"
+    exit 1
+  fi
+
+  echo "✅ Metrics sent to $APP_NAME/$SUBSYSTEM"
+
+  # Wait for metrics to be queryable via Prometheus API
+  echo "⏳ Waiting for metrics to be queryable in Coralogix..."
+  PROMETHEUS_URL="https://ng-api-http.${CORALOGIX_DOMAIN}/metrics"
+
+  METRICS_READY=false
+  for i in {1..60}; do
+    # Query for our specific metric
+    RESULT=$(curl -sf -G "$PROMETHEUS_URL/api/v1/query" \
+      -H "Authorization: Bearer ${CORALOGIX_API_KEY}" \
+      --data-urlencode "query=${METRIC_PREFIX}_http_requests_total" 2>/dev/null)
+
+    if echo "$RESULT" | grep -q "${METRIC_PREFIX}_http_requests_total"; then
+      echo "✅ Metrics are queryable after $((i * 5)) seconds"
+      METRICS_READY=true
+      break
+    fi
+
+    echo "   Attempt $i/60: Metrics not yet available, waiting 5s..."
+    sleep 5
+  done
+
+  if [ "$METRICS_READY" = false ]; then
+    echo "❌ Timeout waiting for metrics to be queryable"
+    exit 1
+  fi
+
+  echo "✅ Test setup complete!"
+
+after_test: |
+  # No cleanup needed - metrics will naturally age out of Coralogix
+  echo "✅ Cleanup complete (metrics will age out naturally)"
