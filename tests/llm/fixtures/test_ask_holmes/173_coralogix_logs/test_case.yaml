@@ -1,134 +1,119 @@
-user_prompt:
-  - "The payment service in namespace app-173 is experiencing issues."
+# Test: Coralogix Log Search with DataPrime
+# Tests that Holmes can search logs using Coralogix DataPrime query language
+#
+# This is a fast cloud-only test that writes logs directly to Coralogix via REST API,
+# no Kubernetes cluster required.
+#
+# Requirements:
+# - CORALOGIX_API_KEY: API key with DataQuerying and Send Data permissions
+# - CORALOGIX_DOMAIN: e.g., "eu2.coralogix.com"
+# - CORALOGIX_TEAM_HOSTNAME: Your team name
+#
+# Anti-hallucination: The test injects 3 specific error codes (ERR-XXXX format).
+# The LLM cannot know these codes without actually querying Coralogix.
+
+user_prompt: "Search the Coralogix logs for the 'holmes-eval-173' application. Find ERROR level messages and report what error codes (format ERR-XXXX) appear in the logs."
 
 expected_output:
-  - The answer must identify that database connection timeouts are occurring
-  - The answer must mention Database connection pool exhausted, or MaxConnectionsReached
+  - "Must identify that there are ERROR level logs"
+  - "Must find and list the 3 specific error codes: ERR-7291, ERR-4058, and ERR-9463"
+  - "The response should mention the services or error messages associated with these codes"
 
 tags:
-  - kubernetes
-  - chain-of-causation
-  - logs
   - coralogix
+  - logs
+  - medium
 
-setup_timeout: 900  # 15 minutes to handle pod scheduling delays
+setup_timeout: 300
 
 before_test: |
-  # Validate required Coralogix environment variables
-  [ -n "${CORALOGIX_API_KEY:-}" ] && [ -n "${CORALOGIX_DOMAIN:-}" ] && [ -n "${CORALOGIX_TEAM_HOSTNAME:-}" ] || { for v in CORALOGIX_API_KEY CORALOGIX_DOMAIN CORALOGIX_TEAM_HOSTNAME; do [ -n "${!v:-}" ] || echo "Missing env var: $v"; done; exit 1; }
+  source ../../shared/coralogix/coralogix_test_utils.sh
+  cx_setup
+  set -e
 
-  echo "🚀 Setting up test 163 - Creating namespace app-173"
-  kubectl create namespace app-173 || true
-  echo "✅ Namespace app-173 created successfully!"
+  echo "🚀 Setting up Coralogix logs test 173"
 
-  echo "🔐 Creating payment-app secret from shared coralogix_app.py"
-  kubectl create secret generic payment-app \
-    --from-file=app.py=../../shared/coralogix/coralogix_app.py \
-    -n app-173 --dry-run=client -o yaml | kubectl apply -f -
+  APP_NAME="holmes-eval-173"
+  SUBSYSTEM="payment-api"
 
-  echo "🔐 Creating traffic-generator secret from shared traffic_generator.py"
-  kubectl create secret generic coralogix-generator-app \
-    --from-file=traffic_generator.py=../../shared/coralogix/traffic_generator.py \
-    -n app-173 --dry-run=client -o yaml | kubectl apply -f -
+  # Define the specific error codes for anti-hallucination testing
+  ERROR_CODE_1="ERR-7291"
+  ERROR_CODE_2="ERR-4058"
+  ERROR_CODE_3="ERR-9463"
 
-  echo "💳 Deploying payment service"
-  kubectl apply -f payment-service.yaml -n app-173
+  # Get timestamps (Coralogix expects milliseconds since epoch)
+  NOW=$(date +%s)
+  TS1=$(( (NOW - 300) * 1000 ))
+  TS2=$(( (NOW - 240) * 1000 ))
+  TS3=$(( (NOW - 180) * 1000 ))
+  TS4=$(( (NOW - 120) * 1000 ))
+  TS5=$(( (NOW - 60) * 1000 ))
+  TS6=$(( NOW * 1000 ))
 
-  echo "⏳ Waiting for payment pod to exist"
+  echo "⏳ Sending logs to Coralogix..."
+
+  # Build log entries JSON (avoiding heredoc for YAML compatibility)
+  LOG_ENTRIES="[{\"timestamp\": $TS1, \"severity\": 3, \"text\": \"Service started successfully - payment-api initialized\"}, {\"timestamp\": $TS2, \"severity\": 5, \"text\": \"Database connection timeout - $ERROR_CODE_1: Failed to connect to primary database after 30s\"}, {\"timestamp\": $TS3, \"severity\": 4, \"text\": \"Retrying database connection attempt 1\"}, {\"timestamp\": $TS4, \"severity\": 5, \"text\": \"Payment validation failed - $ERROR_CODE_2: Invalid card number format for user U-12345\"}, {\"timestamp\": $TS5, \"severity\": 3, \"text\": \"Processing order batch complete - 150 orders processed\"}, {\"timestamp\": $TS6, \"severity\": 5, \"text\": \"Stock sync failed - $ERROR_CODE_3: External inventory API returned 503\"}]"
+
+  # Send logs via REST API
+  INGRESS_URL="https://ingress.${CORALOGIX_DOMAIN}"
+
+  RESPONSE=$(curl -sf -X POST "${INGRESS_URL}/logs/v1/singles" \
+    -H "Authorization: Bearer ${CORALOGIX_API_KEY}" \
+    -H "Content-Type: application/json" \
+    -d "{\"applicationName\": \"$APP_NAME\", \"subsystemName\": \"$SUBSYSTEM\", \"logEntries\": $LOG_ENTRIES}" 2>&1)
+
+  if [ $? -ne 0 ]; then
+    echo "❌ Failed to send logs: $RESPONSE"
+    exit 1
+  fi
+
+  echo "✅ Logs sent to $APP_NAME/$SUBSYSTEM"
+
+  # Wait for logs to be queryable (Coralogix has some ingestion delay)
+  echo "⏳ Waiting for logs to be queryable in Coralogix..."
+  QUERY_URL="https://ng-api-http.${CORALOGIX_DOMAIN}/api/v1/dataprime/query"
+
+  LOGS_READY=false
   for i in {1..60}; do
-    if kubectl get pod -l app=payment -n app-173 2>/dev/null | grep -q payment; then
-      echo "✅ Payment pod exists"
+    RESULT=$(curl -sf -X POST "$QUERY_URL" \
+      -H "Authorization: Bearer ${CORALOGIX_API_KEY}" \
+      -H "Content-Type: application/json" \
+      -d "{\"query\": \"source logs | lucene 'holmes-eval-173 AND $ERROR_CODE_1' | limit 1\", \"metadata\": {\"syntax\": \"QUERY_SYNTAX_DATAPRIME\"}}" 2>/dev/null)
+
+    if echo "$RESULT" | grep -q "$ERROR_CODE_1"; then
+      echo "✅ Logs are queryable after $((i * 5)) seconds"
+      LOGS_READY=true
       break
     fi
-    echo "Waiting for payment pod to be created... ($i/60)"
-    sleep 2
+
+    echo "   Attempt $i/60: Logs not yet indexed, waiting 5s..."
+    sleep 5
   done
 
-  echo "⏳ Waiting for payment pod to be ready (timeout 780s)"
-  PAYMENT_POD_READY=false
-  for i in {1..156}; do
-    if kubectl wait --for=condition=ready pod -l app=payment -n app-173 --timeout=5s 2>/dev/null; then
-      echo "✅ Payment pod is ready!"
-      PAYMENT_POD_READY=true
-      break
-    else
-      echo "⏳ Attempt $i/156: Payment pod not ready yet, waiting 5s..."
-      sleep 5
-    fi
-  done
-
-  if [ "$PAYMENT_POD_READY" = false ]; then
-    echo "❌ Payment pod failed to become ready after 780 seconds"
-    kubectl get pods -n app-173 -l app=payment
+  if [ "$LOGS_READY" = false ]; then
+    echo "❌ Timeout waiting for logs to be queryable"
     exit 1
   fi
 
-  echo "🔍 Checking payment deployment status"
-  kubectl get pods -n app-173 -l app=payment
+  # Verify all 3 error codes are queryable
+  echo "🔍 Verifying all error codes are queryable..."
+  for CODE in $ERROR_CODE_1 $ERROR_CODE_2 $ERROR_CODE_3; do
+    VERIFY=$(curl -sf -X POST "$QUERY_URL" \
+      -H "Authorization: Bearer ${CORALOGIX_API_KEY}" \
+      -H "Content-Type: application/json" \
+      -d "{\"query\": \"source logs | lucene 'holmes-eval-173 AND $CODE' | limit 1\", \"metadata\": {\"syntax\": \"QUERY_SYNTAX_DATAPRIME\"}}" 2>/dev/null)
 
-  echo "🚦 Deploying coralogix traffic generator"
-  kubectl apply -f traffic-generator.yaml -n app-173
-
-  echo "⏳ Waiting for traffic-generator pod to exist"
-  for i in {1..60}; do
-    if kubectl get pod -l app=traffic-generator -n app-173 2>/dev/null | grep -q traffic-generator; then
-      echo "✅ Traffic-generator pod exists"
-      break
+    if ! echo "$VERIFY" | grep -q "$CODE"; then
+      echo "❌ Could not find error code $CODE"
+      exit 1
     fi
-    echo "Waiting for traffic-generator pod to be created... ($i/60)"
-    sleep 2
+    echo "   ✓ Found $CODE"
   done
-
-  echo "⏳ Waiting for traffic-generator pod to be ready (timeout 780s)"
-  TRAFFIC_POD_READY=false
-  for i in {1..156}; do
-    if kubectl wait --for=condition=ready pod -l app=traffic-generator -n app-173 --timeout=5s 2>/dev/null; then
-      echo "✅ Traffic-generator pod is ready!"
-      TRAFFIC_POD_READY=true
-      break
-    else
-      echo "⏳ Attempt $i/156: Traffic-generator pod not ready yet, waiting 5s..."
-      sleep 5
-    fi
-  done
-
-  if [ "$TRAFFIC_POD_READY" = false ]; then
-    echo "❌ Traffic-generator pod failed to become ready after 780 seconds"
-    kubectl get pods -n app-173 -l app=traffic-generator
-    exit 1
-  fi
-
-  echo "🔍 Checking all pods status"
-  kubectl get pods -n app-173
-
-  echo "⏰ Waiting for traffic generator to produce requests and errors..."
-  TRAFFIC_READY=false
-  for i in {1..90}; do
-    PAYMENT_LOGS=$(kubectl logs -n app-173 -l app=payment --tail=100 2>/dev/null | grep -c "Processing payment request" || echo "0")
-    ERROR_LOGS=$(kubectl logs -n app-173 -l app=payment --tail=100 2>/dev/null | grep -c "ERROR\|WARN" || echo "0")
-
-    if [ "$PAYMENT_LOGS" -gt "10" ] && [ "$ERROR_LOGS" -gt "0" ]; then
-      echo "✅ Found required logs after $i seconds:"
-      echo "   - Payment processing logs: $PAYMENT_LOGS"
-      echo "   - Error/Warning logs: $ERROR_LOGS"
-      TRAFFIC_READY=true
-      sleep 10
-      break
-    fi
-
-    echo "⏳ Attempt $i/90: PAYMENT=$PAYMENT_LOGS, ERRORS=$ERROR_LOGS"
-    sleep 1
-  done
-
-  if [ "$TRAFFIC_READY" = false ]; then
-    echo "❌ Failed to generate required traffic patterns"
-    exit 1
-  fi
-
-  # Delete traffic generator so the ai won't cheat
-  kubectl delete -f traffic-generator.yaml -n app-173
 
   echo "✅ Test setup complete!"
 
 after_test: |
-  kubectl delete namespace app-173 || true
+  # No cleanup needed - logs will naturally age out of Coralogix
+  # The application name is unique to this test so it won't interfere with others
+  echo "✅ Cleanup complete (logs will age out naturally)"
