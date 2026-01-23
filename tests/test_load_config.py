@@ -2,7 +2,7 @@ import os
 
 import pytest
 
-from holmes.utils.env import get_env_replacement
+from holmes.utils.env import MissingEnvironmentVariableError, get_env_replacement
 
 
 @pytest.mark.parametrize(
@@ -64,34 +64,39 @@ def test_get_env_replacement_successful(
 
 
 @pytest.mark.parametrize(
-    "input_value, mock_environ, expected_exception_type, expected_exception_message_regex",
+    "input_value, mock_environ, expected_env_var",
     [
         (
             "{{ env.NON_EXISTENT_VAR }}",
             {},  # Ensure the variable is not in the environment
-            Exception,
-            r"ENV var replacement NON_EXISTENT_VAR does not exist",
+            "NON_EXISTENT_VAR",
         ),
         (
             "{{ env. }}",
             {},
-            Exception,
-            r"ENV var replacement  does not exist",  # Note: two spaces for empty key
+            "",  # Empty key
         ),
     ],
 )
 def test_get_env_replacement_exceptions(
     input_value,
     mock_environ,
-    expected_exception_type,
-    expected_exception_message_regex,
+    expected_env_var,
     monkeypatch,
 ):
     """
-    Tests scenarios where get_env_replacement is expected to raise an Exception
-    and log an error.
+    Tests scenarios where get_env_replacement is expected to raise a
+    MissingEnvironmentVariableError and log an error.
     """
     monkeypatch.setattr(os, "environ", mock_environ.copy())
 
-    with pytest.raises(expected_exception_type, match=expected_exception_message_regex):
+    with pytest.raises(MissingEnvironmentVariableError) as exc_info:
         get_env_replacement(input_value)
+
+    # Verify the exception contains helpful instructions
+    error_message = str(exc_info.value)
+    assert f"Environment variable '{expected_env_var}' is not set" in error_message
+    assert "For CLI users:" in error_message
+    assert "For Helm chart users" in error_message
+    assert "additionalEnvVars:" in error_message
+    assert "https://holmesgpt.dev" in error_message

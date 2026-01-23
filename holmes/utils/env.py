@@ -6,6 +6,46 @@ from typing import Any, Optional
 from pydantic import SecretStr
 
 
+class MissingEnvironmentVariableError(ValueError):
+    """
+    Exception raised when an environment variable referenced in config is not set.
+    Provides helpful instructions for CLI and Helm chart users.
+    """
+
+    DOCS_BASE_URL = "https://holmesgpt.dev"
+
+    def __init__(self, env_var_key: str):
+        self.env_var_key = env_var_key
+        message = self._build_error_message()
+        super().__init__(message)
+
+    def _build_error_message(self) -> str:
+        lines = [
+            f"Environment variable '{self.env_var_key}' is not set.",
+            "",
+            "To fix this issue:",
+            "",
+            "  For CLI users:",
+            f"    export {self.env_var_key}=<your-value>",
+            "",
+            "  For Helm chart users (Holmes or Robusta):",
+            "    Add the environment variable to your values.yaml:",
+            "",
+            "    additionalEnvVars:",
+            f"      - name: {self.env_var_key}",
+            '        value: "<your-value>"',
+            "    # Or use a secret:",
+            f"    #   - name: {self.env_var_key}",
+            "    #     valueFrom:",
+            "    #       secretKeyRef:",
+            "    #         name: <secret-name>",
+            "    #         key: <secret-key>",
+            "",
+            f"For more information, see: {self.DOCS_BASE_URL}/data-sources/builtin-toolsets/",
+        ]
+        return "\n".join(lines)
+
+
 def environ_get_safe_int(env_var: str, default: str = "0") -> int:
     try:
         return max(int(os.environ.get(env_var, default)), 0)
@@ -25,9 +65,9 @@ def get_env_replacement(value: str) -> Optional[str]:
         if env_var_key in os.environ:
             replacement = os.environ[env_var_key]
         else:
-            msg = f"ENV var replacement {env_var_key} does not exist"
-            logging.error(msg)
-            raise ValueError(msg)
+            error = MissingEnvironmentVariableError(env_var_key)
+            logging.error(str(error))
+            raise error
         result = re.sub(pattern_regex, replacement, result)
 
     return result
