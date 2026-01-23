@@ -209,6 +209,34 @@ class ShowCommandCompleter(Completer):
                         )
 
 
+def build_welcome_banner(ai: "ToolCallingLLM") -> str:
+    """Build a welcome banner showing model, toolsets, and command hints."""
+    lines = []
+
+    # Header with model info
+    model_name = ai.llm.model if hasattr(ai.llm, "model") else "unknown"
+    lines.append(f"[bold {HELP_COLOR}]Welcome to {agent_name}[/bold {HELP_COLOR}] [dim](model: {model_name})[/dim]")
+
+    # Toolset summary
+    toolsets = ai.tool_executor.toolsets if hasattr(ai, "tool_executor") else []
+    if toolsets:
+        enabled = [t for t in toolsets if t.is_enabled()]
+        disabled = [t for t in toolsets if not t.is_enabled()]
+        total_tools = sum(len(t.tools) for t in enabled)
+
+        toolset_info = f"[dim]Toolsets: {len(enabled)} active ({total_tools} tools)"
+        if disabled:
+            toolset_info += f", {len(disabled)} disabled"
+        toolset_info += "[/dim]"
+        lines.append(toolset_info)
+
+    # Command hints
+    lines.append("[dim]Commands: /help, /tools, /context, /clear, /exit[/dim]")
+
+    return "\n".join(lines)
+
+
+# Legacy banner for backwards compatibility
 WELCOME_BANNER = f"[bold {HELP_COLOR}]Welcome to {agent_name}:[/bold {HELP_COLOR}] Type '{SlashCommands.EXIT.command}' to exit, '{SlashCommands.HELP.command}' for commands."
 
 
@@ -479,6 +507,35 @@ def show_tool_output_modal(tool_call: ToolCallResult, console: Console) -> None:
         # Fallback to regular display
         console.print(f"[bold red]Error showing modal: {e}[/bold red]")
         console.print(format_tool_call_output(tool_call))
+
+
+def check_context_warning(messages, ai: ToolCallingLLM, console: Console) -> None:
+    """Check context usage and warn if getting high. Called before LLM calls."""
+    if messages is None:
+        return
+
+    try:
+        tokens_metadata = ai.llm.count_tokens(messages)
+        max_context_size = ai.llm.get_context_window_size()
+        max_output_tokens = ai.llm.get_maximum_output_token()
+        available_tokens = max_context_size - tokens_metadata.total_tokens - max_output_tokens
+
+        usage_percent = (tokens_metadata.total_tokens / max_context_size) * 100
+
+        if available_tokens < 0:
+            console.print(
+                f"[bold {ERROR_COLOR}]⚠ Context full ({usage_percent:.0f}%) - will be truncated. "
+                f"Use /clear to reset.[/bold {ERROR_COLOR}]"
+            )
+        elif usage_percent >= 80:
+            console.print(
+                f"[bold yellow]⚠ Context {usage_percent:.0f}% full "
+                f"({tokens_metadata.total_tokens:,}/{max_context_size:,} tokens). "
+                f"Consider /clear to reset.[/bold yellow]"
+            )
+    except Exception:
+        # Don't fail the main flow if context check fails
+        pass
 
 
 def handle_context_command(messages, ai: ToolCallingLLM, console: Console) -> None:
@@ -1122,12 +1179,13 @@ def run_interactive_loop(
 
     input_prompt = [("class:prompt", "User: ")]
 
-    # TODO: merge the /feedback command description to WELCOME_BANNER once we implement feedback callback
-    welcome_banner = WELCOME_BANNER
+    # Build dynamic welcome banner with model and toolset info
+    welcome_banner = build_welcome_banner(ai)
     if feedback_callback:
-        welcome_banner = (
-            welcome_banner.rstrip(".")
-            + f", '{SlashCommands.FEEDBACK.command}' to share your thoughts."
+        # Add feedback hint to the command hints line
+        welcome_banner = welcome_banner.replace(
+            "/exit[/dim]",
+            "/exit, /feedback[/dim]"
         )
     console.print(welcome_banner)
 
@@ -1258,6 +1316,9 @@ def run_interactive_loop(
                 )
             else:
                 messages.append({"role": "user", "content": user_input})
+
+            # Warn if context is getting full
+            check_context_warning(messages, ai, console)
 
             console.print(f"\n[bold {AI_COLOR}]Thinking...[/bold {AI_COLOR}]\n")
 

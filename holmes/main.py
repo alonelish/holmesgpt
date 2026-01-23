@@ -9,14 +9,16 @@ if add_custom_certificate(ADDITIONAL_CERTIFICATE):
 
 # DO NOT ADD ANY IMPORTS OR CODE ABOVE THIS LINE
 # IMPORTING ABOVE MIGHT INITIALIZE AN HTTPS CLIENT THAT DOESN'T TRUST THE CUSTOM CERTIFICATE
-import sys
-from holmes.utils.colors import USER_COLOR
+import glob
 import json
 import logging
 import socket
+import sys
 import uuid
 from pathlib import Path
 from typing import List, Optional
+
+from holmes.utils.colors import USER_COLOR
 
 import typer
 from rich.markdown import Markdown
@@ -71,39 +73,41 @@ app.add_typer(toolset_app, name="toolset")
 # The defaults for options that are also in the config file MUST be None or else the cli defaults will override settings in the config file
 opt_api_key: Optional[str] = typer.Option(
     None,
-    help="API key to use for the LLM (if not given, uses environment variables OPENAI_API_KEY or AZURE_API_KEY)",
+    help="API key for the LLM (defaults to OPENAI_API_KEY or ANTHROPIC_API_KEY env vars)",
 )
-opt_model: Optional[str] = typer.Option(None, help="Model to use for the LLM")
+opt_model: Optional[str] = typer.Option(
+    None, help="LLM model to use (e.g., gpt-4.1, anthropic/claude-sonnet-4-5-20250929)"
+)
 opt_fast_model: Optional[str] = typer.Option(
-    None, help="Optional fast model for summarization tasks"
+    None, help="Faster/cheaper model for internal summarization (optional)"
 )
 opt_config_file: Optional[Path] = typer.Option(
     DEFAULT_CONFIG_LOCATION,  # type: ignore
     "--config",
-    help="Path to the config file. Defaults to ~/.holmes/config.yaml when it exists. Command line arguments take precedence over config file settings",
+    help="Config file path (default: ~/.holmes/config.yaml). CLI args override config file",
 )
 opt_custom_toolsets: Optional[List[Path]] = typer.Option(
     [],
     "--custom-toolsets",
     "-t",
-    help="Path to a custom toolsets. The status of the custom toolsets specified here won't be cached (can specify -t multiple times to add multiple toolsets)",
+    help="Load additional toolset from YAML file (can repeat: -t file1.yaml -t file2.yaml)",
 )
 opt_custom_runbooks: Optional[List[Path]] = typer.Option(
     [],
     "--custom-runbooks",
     "-r",
-    help="Path to a custom runbooks (can specify -r multiple times to add multiple runbooks)",
+    help="Load runbook from YAML file (can repeat: -r file1.yaml -r file2.yaml)",
 )
 opt_max_steps: Optional[int] = typer.Option(
     40,
     "--max-steps",
-    help="Advanced. Maximum number of steps the LLM can take to investigate the issue",
+    help="Max tool-calling iterations before stopping (default: 40)",
 )
 opt_verbose: Optional[List[bool]] = typer.Option(
     [],
     "--verbose",
     "-v",
-    help="Verbose output. You can pass multiple times to increase the verbosity. e.g. -v or -vv or -vvv",
+    help="Increase verbosity (repeat for more: -v, -vv, -vvv)",
 )
 opt_log_costs: bool = typer.Option(
     False,
@@ -156,6 +160,42 @@ def parse_documents(documents: Optional[str]) -> List[ResourceInstructionDocumen
     return resource_documents
 
 
+def expand_file_globs(file_paths: Optional[List[Path]]) -> List[Path]:
+    """
+    Expand glob patterns in file paths.
+
+    Args:
+        file_paths: List of file paths, which may contain glob patterns
+
+    Returns:
+        List of expanded file paths (no duplicates, sorted)
+    """
+    if not file_paths:
+        return []
+
+    expanded: List[Path] = []
+    seen: set[Path] = set()
+
+    for path in file_paths:
+        path_str = str(path)
+        # Check if this looks like a glob pattern
+        if any(c in path_str for c in ["*", "?", "["]):
+            # Expand the glob pattern
+            matches = glob.glob(path_str, recursive=True)
+            for match in sorted(matches):
+                match_path = Path(match)
+                if match_path.is_file() and match_path not in seen:
+                    expanded.append(match_path)
+                    seen.add(match_path)
+        else:
+            # Regular file path
+            if path not in seen:
+                expanded.append(path)
+                seen.add(path)
+
+    return expanded
+
+
 # TODO: add streaming output
 @app.command()
 def ask(
@@ -184,13 +224,13 @@ def ask(
     show_tool_output: bool = typer.Option(
         False,
         "--show-tool-output",
-        help="Advanced. Show the output of each tool that was called",
+        help="Display tool outputs after each response (toggle with /auto in interactive mode)",
     ),
     include_file: Optional[List[Path]] = typer.Option(
         [],
         "--file",
         "-f",
-        help="File to append to prompt (can specify -f multiple times to add multiple files)",
+        help="Attach file to prompt. Supports glob patterns (e.g., -f 'logs/*.txt')",
     ),
     json_output_file: Optional[str] = opt_json_output_file,
     echo_request: bool = opt_echo_request,
@@ -198,7 +238,7 @@ def ask(
         True,
         "--interactive/--no-interactive",
         "-i/-n",
-        help="Enter interactive mode after the initial question? For scripting, disable this with --no-interactive",
+        help="Interactive mode with follow-up questions (default: on). Use -n for scripting",
     ),
     refresh_toolsets: bool = typer.Option(
         False,
@@ -282,6 +322,13 @@ def ask(
             # Only piped data, no prompt - ask what to do with it
             prompt = f"Here's some piped output:\n\n{piped_data}\n\nWhat can you tell me about this output?"
 
+    # Expand glob patterns in file paths
+    expanded_files = expand_file_globs(include_file)
+    if expanded_files and len(expanded_files) != len(include_file or []):
+        console.print(
+            f"[dim]Expanded file patterns to {len(expanded_files)} file(s)[/dim]"
+        )
+
     if echo_request and not interactive and prompt:
         console.print(f"[bold {USER_COLOR}]User:[/bold {USER_COLOR}] {prompt}")
 
@@ -290,7 +337,7 @@ def ask(
             ai,
             console,
             prompt,
-            include_file,
+            expanded_files,
             show_tool_output,
             tracer,
             config.get_runbook_catalog(),
@@ -302,7 +349,7 @@ def ask(
     messages = build_initial_ask_messages(
         console,
         prompt,  # type: ignore
-        include_file,
+        expanded_files,
         ai.tool_executor,
         config.get_runbook_catalog(),
         system_prompt_additions,
