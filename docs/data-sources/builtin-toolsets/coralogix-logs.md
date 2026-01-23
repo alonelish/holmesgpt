@@ -33,7 +33,7 @@ toolsets:
 
 ```
 
-**Note**: Both toolsets use the same API key. The DataPrime toolset supports fields (`CoralogixConfig`): `api_key`, `domain`, `team_hostname`, optional `labels`.
+**Note**: Both toolsets use the same API key. The DataPrime toolset supports fields (`CoralogixConfig`): `api_key`, `domain`, `team_hostname`.
 
 ## Recommended: Customize Coralogix Instructions
 
