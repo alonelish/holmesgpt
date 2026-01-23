@@ -12,8 +12,8 @@ from uuid import uuid4
 
 import sentry_sdk
 import yaml  # type: ignore
-from dateutil import parser as dateutil_parser
 from cachetools import TTLCache  # type: ignore
+from dateutil import parser as dateutil_parser
 from postgrest._sync import request_builder as supabase_request_builder
 from postgrest._sync.request_builder import SyncQueryRequestBuilder
 from postgrest.base_request_builder import QueryArgs
