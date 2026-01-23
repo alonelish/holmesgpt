@@ -125,6 +125,11 @@ SSE_READ_TIMEOUT = float(os.environ.get("SSE_READ_TIMEOUT", "120"))
 
 LLM_REQUEST_TIMEOUT = float(os.environ.get("LLM_REQUEST_TIMEOUT", "600"))
 
+# Retry configuration for transient network errors (e.g., RemoteProtocolError)
+LLM_MAX_RETRIES = int(os.environ.get("LLM_MAX_RETRIES", "3"))
+LLM_RETRY_BASE_DELAY = float(os.environ.get("LLM_RETRY_BASE_DELAY", "1.0"))
+LLM_RETRY_MAX_DELAY = float(os.environ.get("LLM_RETRY_MAX_DELAY", "30.0"))
+
 ENABLE_CONNECTION_KEEPALIVE = load_bool("ENABLE_CONNECTION_KEEPALIVE", False)
 KEEPALIVE_IDLE = int(os.environ.get("KEEPALIVE_IDLE", 2))
 KEEPALIVE_INTVL = int(os.environ.get("KEEPALIVE_INTVL", 2))

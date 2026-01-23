@@ -51,6 +51,7 @@ from holmes.plugins.prompts import load_and_render_prompt
 from holmes.plugins.runbooks import RunbookCatalog
 from holmes.utils import sentry_helper
 from holmes.utils.colors import AI_COLOR
+from holmes.utils.llm_retry import retry_on_network_error
 from holmes.utils.global_instructions import (
     Instructions,
     generate_runbooks_args,
@@ -354,7 +355,8 @@ class ToolCallingLLM:
             logging.debug(f"sending messages={messages}\n\ntools={tools}")
 
             try:
-                full_response = self.llm.completion(
+                full_response = retry_on_network_error(
+                    self.llm.completion,
                     messages=parse_messages_tags(messages),
                     tools=tools,
                     tool_choice=tool_choice,
@@ -812,7 +814,8 @@ class ToolCallingLLM:
             logging.debug(f"sending messages={messages}\n\ntools={tools}")
 
             try:
-                full_response = self.llm.completion(
+                full_response = retry_on_network_error(
+                    self.llm.completion,
                     messages=parse_messages_tags(messages),  # type: ignore
                     tools=tools,
                     tool_choice=tool_choice,
