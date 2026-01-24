@@ -254,8 +254,9 @@ def generate_markdown_report(
             markdown += f", {workload_health_mock_failures} mock failures"
         markdown += "\n"
 
-    # Generate detailed table
-    markdown += "\n\n| Status | Test case | Time | Turns | Tools | Cost |\n"
+    # Generate detailed table (wrapped in collapsible details)
+    markdown += "\n<details>\n<summary><b>Detailed Results</b></summary>\n\n"
+    markdown += "| Status | Test case | Time | Turns | Tools | Cost |\n"
     markdown += "| --- | --- | --- | --- | --- | --- |\n"
 
     # Track totals for summary row
@@ -323,6 +324,8 @@ def generate_markdown_report(
     avg_tools_str = f"{total_tools / tools_count:.1f}" if tools_count > 0 else "—"
     total_cost_str = f"${total_cost:.4f}" if total_cost > 0 else "—"
     markdown += f"| | **Total** | **{avg_time_str}** avg | **{avg_turns_str}** avg | **{avg_tools_str}** avg | **{total_cost_str}** |\n"
+
+    markdown += "\n</details>\n"
 
     # Add footer explaining historical comparison status
     if historical and comparison_map:
