@@ -225,6 +225,17 @@ def generate_markdown_report(
             elif status.is_mock_failure:
                 workload_health_mock_failures += 1
 
+    # Calculate totals for overall status
+    total_tests = ask_holmes_total + investigate_total + workload_health_total
+    total_passed = ask_holmes_passed + investigate_passed + workload_health_passed
+    total_regressions = ask_holmes_regressions + investigate_regressions + workload_health_regressions
+
+    # Generate overall status banner
+    if total_regressions == 0:
+        markdown += f"### ✅ All {total_passed}/{total_tests} tests passed\n\n"
+    else:
+        markdown += f"### ❌ {total_regressions} regression(s) — {total_passed}/{total_tests} tests passed\n\n"
+
     # Generate summary lines
     if ask_holmes_total > 0:
         markdown += f"- ask_holmes: {ask_holmes_passed}/{ask_holmes_total} test cases were successful, {ask_holmes_regressions} regressions"
