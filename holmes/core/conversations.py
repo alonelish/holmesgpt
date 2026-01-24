@@ -168,6 +168,8 @@ def build_issue_chat_messages(
     template_path = "builtin://generic_ask_for_issue_conversation.jinja2"
 
     conversation_history = issue_chat_request.conversation_history
+    if conversation_history:
+        conversation_history = conversation_history.copy()
     user_prompt = issue_chat_request.ask
     investigation_analysis = issue_chat_request.investigation_result.result
     tools_for_investigation = issue_chat_request.investigation_result.tools
@@ -540,6 +542,8 @@ def build_workload_health_chat_messages(
     template_path = "builtin://kubernetes_workload_chat.jinja2"
 
     conversation_history = workload_health_chat_request.conversation_history
+    if conversation_history:
+        conversation_history = conversation_history.copy()
     user_prompt = workload_health_chat_request.ask
     workload_analysis = workload_health_chat_request.workload_health_result.analysis
     tools_for_workload = workload_health_chat_request.workload_health_result.tools

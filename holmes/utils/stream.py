@@ -120,7 +120,7 @@ def stream_chat_formatter(
     except litellm.exceptions.RateLimitError as e:
         yield create_rate_limit_error_message(str(e))
     except Exception as e:
-        logging.error(e)
+        logging.error("Error in stream_chat_formatter: %s", e, exc_info=True)
         if "Model is getting throttled" in str(e):  # happens for bedrock
             yield create_rate_limit_error_message(str(e))
         else:

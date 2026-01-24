@@ -2,6 +2,7 @@ import concurrent.futures
 import json
 import logging
 import textwrap
+import threading
 from typing import Any, Callable, Dict, List, Optional, Type, Union
 
 import sentry_sdk
@@ -175,13 +176,15 @@ class ToolCallingLLM:
             Callable[[StructuredToolResult], tuple[bool, Optional[str]]]
         ] = None
 
+        self._runbook_lock = threading.Lock()
         self._runbook_in_use: bool = False
 
     def reset_interaction_state(self) -> None:
         """
         For interactive loop, reset runbooks in use
         """
-        self._runbook_in_use = False
+        with self._runbook_lock:
+            self._runbook_in_use = False
 
     def process_tool_decisions(
         self, messages: List[Dict[str, Any]], tool_decisions: List[ToolApprovalDecision]
@@ -229,6 +232,12 @@ class ToolCallingLLM:
             error_message = f"Received {len(tool_decisions)} tool decisions but no pending approvals found"
             logging.error(error_message)
             raise Exception(error_message)
+
+        # Sort by message_index to ensure correct insertion order when multiple
+        # tool calls come from messages at different positions
+        pending_tool_calls.sort(key=lambda x: x.message_index)
+        insertion_offset = 0
+
         for tool_call_with_decision in pending_tool_calls:
             tool_call_message: dict
             tool_call = tool_call_with_decision.tool_call
@@ -267,8 +276,10 @@ class ToolCallingLLM:
             # The API call may contain a user ask which is appended to the messages so we can't just append
             # tool call results; they need to be inserted right after the llm's message requesting tool calls
             messages.insert(
-                tool_call_with_decision.message_index + 1, tool_call_message
+                tool_call_with_decision.message_index + 1 + insertion_offset,
+                tool_call_message,
             )
+            insertion_offset += 1
 
         return messages, events
 
@@ -304,7 +315,8 @@ class ToolCallingLLM:
 
     def _should_include_restricted_tools(self) -> bool:
         """Check if restricted tools should be included in the tools list."""
-        return self._runbook_in_use
+        with self._runbook_lock:
+            return self._runbook_in_use
 
     def _get_tools(self) -> list:
         """Get tools list, filtering restricted tools based on authorization."""
@@ -441,7 +453,7 @@ class ToolCallingLLM:
                 f"The AI requested [bold]{len(tools_to_call) if tools_to_call else 0}[/bold] tool call(s)."
             )
             with concurrent.futures.ThreadPoolExecutor(max_workers=16) as executor:
-                futures = []
+                futures: list[concurrent.futures.Future] = []
                 futures_tool_numbers: dict[
                     concurrent.futures.Future, Optional[int]
                 ] = {}
@@ -460,7 +472,10 @@ class ToolCallingLLM:
                     futures_tool_numbers[future] = tool_number
                     futures.append(future)
 
-                for future in concurrent.futures.as_completed(futures):
+                # Wait for all futures and collect results in submission order
+                # (as_completed returns in completion order which is non-deterministic)
+                concurrent.futures.wait(futures)
+                for future in futures:
                     tool_call_result: ToolCallResult = future.result()
 
                     tool_number = (
@@ -491,7 +506,9 @@ class ToolCallingLLM:
                 tool_number_offset += len(tools_to_call)
 
                 # Re-fetch tools if runbook was just activated (enables restricted tools)
-                if self._runbook_in_use:
+                with self._runbook_lock:
+                    runbook_active = self._runbook_in_use
+                if runbook_active:
                     new_tools = self._get_tools()
                     if len(new_tools) != len(tools):
                         logging.info(
@@ -541,7 +558,8 @@ class ToolCallingLLM:
                 tool_name == "fetch_runbook"
                 and tool_response.status == StructuredToolResultStatus.SUCCESS
             ):
-                self._runbook_in_use = True
+                with self._runbook_lock:
+                    self._runbook_in_use = True
                 logging.debug("Runbook fetched - restricted tools now available")
 
         except Exception as e:
@@ -899,7 +917,7 @@ class ToolCallingLLM:
             approval_required_tools = []
 
             with concurrent.futures.ThreadPoolExecutor(max_workers=16) as executor:
-                futures = []
+                futures: list[concurrent.futures.Future] = []
                 for tool_index, t in enumerate(tools_to_call, 1):  # type: ignore
                     tool_number = tool_number_offset + tool_index
 
@@ -916,7 +934,10 @@ class ToolCallingLLM:
                         data={"tool_name": t.function.name, "id": t.id},
                     )
 
-                for future in concurrent.futures.as_completed(futures):
+                # Wait for all futures and process in submission order for deterministic
+                # message ordering (important for LLM context consistency)
+                concurrent.futures.wait(futures)
+                for future in futures:
                     tool_call_result: ToolCallResult = future.result()
 
                     if (
@@ -990,7 +1011,9 @@ class ToolCallingLLM:
                 tool_number_offset += len(tools_to_call)
 
                 # Re-fetch tools if runbook was just activated (enables restricted tools)
-                if self._runbook_in_use:
+                with self._runbook_lock:
+                    runbook_active = self._runbook_in_use
+                if runbook_active:
                     new_tools = self._get_tools()
                     if len(new_tools) != len(tools):
                         logging.info(
