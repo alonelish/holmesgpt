@@ -5,7 +5,7 @@ import textwrap
 from typing import Any, Callable, Dict, List, Optional, Type, Union
 
 import sentry_sdk
-from openai import BadRequestError
+from openai import BadRequestError, NotFoundError
 from openai.types.chat.chat_completion_message_tool_call import (
     ChatCompletionMessageToolCall,
 )
@@ -74,6 +74,42 @@ class LLMCosts(BaseModel):
     total_tokens: int = 0
     prompt_tokens: int = 0
     completion_tokens: int = 0
+
+
+def _get_azure_deployment_not_found_message(model: str) -> str:
+    """Generate a helpful error message when Azure deployment is not found.
+
+    Args:
+        model: The model string that was used (e.g., "azure/my-deployment")
+
+    Returns:
+        A detailed error message with troubleshooting steps
+    """
+    deployment_name = (
+        model.replace("azure/", "") if model.startswith("azure/") else model
+    )
+    return textwrap.dedent(f"""\
+        Azure OpenAI deployment not found: '{deployment_name}'
+
+        The deployment name you specified does not exist in your Azure OpenAI resource.
+        Note: The deployment name is NOT the model name (e.g., 'gpt-4o'). It's the custom
+        name you chose when creating the deployment in Azure.
+
+        To troubleshoot:
+
+        1. List your deployments using Azure CLI:
+           az cognitiveservices account deployment list \\
+             --resource-group <your-resource-group> \\
+             --name <your-openai-resource-name>
+
+        2. Or check in Azure Portal:
+           https://portal.azure.com/#view/Microsoft_Azure_ProjectOxford/CognitiveServicesHub/~/OpenAI
+
+        3. Verify your model parameter uses the correct deployment name:
+           --model="azure/<your-deployment-name>"
+
+        If you just created the deployment, wait a few minutes and try again.
+        """)
 
 
 def _extract_cost_from_response(full_response) -> float:
@@ -375,6 +411,16 @@ class ToolCallingLLM:
                     raise Exception(
                         "The Azure model you chose is not supported. Model version 1106 and higher required."
                     )
+                else:
+                    raise
+            except NotFoundError as e:
+                if (
+                    "deployment" in str(e).lower()
+                    and "does not exist" in str(e).lower()
+                ):
+                    raise Exception(
+                        _get_azure_deployment_not_found_message(self.llm.model)
+                    ) from e
                 else:
                     raise
 
@@ -832,6 +878,16 @@ class ToolCallingLLM:
                 ):
                     raise Exception(
                         "The Azure model you chose is not supported. Model version 1106 and higher required."
+                    ) from e
+                else:
+                    raise
+            except NotFoundError as e:
+                if (
+                    "deployment" in str(e).lower()
+                    and "does not exist" in str(e).lower()
+                ):
+                    raise Exception(
+                        _get_azure_deployment_not_found_message(self.llm.model)
                     ) from e
                 else:
                     raise
