@@ -143,9 +143,9 @@ def generate_markdown_report(
     # Check if running on a specific branch (for cross-branch comparison)
     eval_branch = os.environ.get("EVAL_BRANCH", "")
     if eval_branch:
-        markdown = f"## Results of HolmesGPT evals (branch: `{eval_branch}`)\n\n"
+        markdown = f"#### Results of HolmesGPT evals (branch: `{eval_branch}`)\n\n"
     else:
-        markdown = "## Results of HolmesGPT evals\n\n"
+        markdown = "#### Results of HolmesGPT evals\n\n"
 
     # Fetch historical metrics for comparison (only for passing tests)
     historical: Dict[str, HistoricalMetrics] = {}
@@ -236,35 +236,6 @@ def generate_markdown_report(
     else:
         markdown += f"### ❌ {total_regressions} regression(s) — {total_passed}/{total_tests} tests passed\n\n"
 
-    # Generate summary lines
-    if ask_holmes_total > 0:
-        markdown += f"- ask_holmes: {ask_holmes_passed}/{ask_holmes_total} test cases were successful, {ask_holmes_regressions} regressions"
-        if ask_holmes_skipped > 0:
-            markdown += f", {ask_holmes_skipped} skipped"
-        if ask_holmes_setup_failures > 0:
-            markdown += f", {ask_holmes_setup_failures} setup failures"
-        if ask_holmes_mock_failures > 0:
-            markdown += f", {ask_holmes_mock_failures} mock failures"
-        markdown += "\n"
-    if investigate_total > 0:
-        markdown += f"- investigate: {investigate_passed}/{investigate_total} test cases were successful, {investigate_regressions} regressions"
-        if investigate_skipped > 0:
-            markdown += f", {investigate_skipped} skipped"
-        if investigate_setup_failures > 0:
-            markdown += f", {investigate_setup_failures} setup failures"
-        if investigate_mock_failures > 0:
-            markdown += f", {investigate_mock_failures} mock failures"
-        markdown += "\n"
-    if workload_health_total > 0:
-        markdown += f"- workload_health: {workload_health_passed}/{workload_health_total} test cases were successful, {workload_health_regressions} regressions"
-        if workload_health_skipped > 0:
-            markdown += f", {workload_health_skipped} skipped"
-        if workload_health_setup_failures > 0:
-            markdown += f", {workload_health_setup_failures} setup failures"
-        if workload_health_mock_failures > 0:
-            markdown += f", {workload_health_mock_failures} mock failures"
-        markdown += "\n"
-
     # Generate detailed table (wrapped in collapsible details)
     markdown += "\n<details>\n<summary><b>Detailed Results</b></summary>\n\n"
     markdown += "| Status | Test case | Time | Turns | Tools | Cost |\n"
@@ -336,15 +307,15 @@ def generate_markdown_report(
     total_cost_str = f"${total_cost:.4f}" if total_cost > 0 else "—"
     markdown += f"| | **Total** | **{avg_time_str}** avg | **{avg_turns_str}** avg | **{avg_tools_str}** avg | **{total_cost_str}** |\n"
 
-    markdown += "\n</details>\n"
-
-    # Add footer explaining historical comparison status
+    # Add footer explaining historical comparison status (inside details)
     if historical and comparison_map:
         markdown += "\n_Time/Cost columns show % change vs historical average (↑slower/costlier, ↓faster/cheaper). Changes under 10% shown as ±0%._\n"
     elif historical_details and historical_details.status:
         markdown += (
             f"\n_Historical comparison unavailable: {historical_details.status}_\n"
         )
+
+    markdown += "\n</details>\n"
 
     # Add collapsible details section for historical comparison transparency
     if historical_details:
