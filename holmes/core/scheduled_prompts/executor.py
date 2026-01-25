@@ -3,46 +3,35 @@ import logging
 import os
 import threading
 import time
-from datetime import datetime
-from typing import TYPE_CHECKING, Any, Callable, Dict, Optional, Union
+from typing import TYPE_CHECKING, Callable, Optional, Union
 from urllib.error import HTTPError, URLError
 from urllib.request import urlopen
 
-from pydantic import BaseModel, ValidationError
-
-if TYPE_CHECKING:
-    from fastapi.responses import StreamingResponse
-    from holmes.config import Config
-    from holmes.core.models import ChatRequest, ChatResponse
-    from holmes.core.supabase_dal import SupabaseDal
+from pydantic import ValidationError
 
 from holmes import get_version
+from holmes.common.env_vars import (
+    ADDITIONAL_SYSTEM_PROMPT_URL,
+    SCHEDULED_PROMPTS_POLL_INTERVAL_SECONDS,
+)
 from holmes.core.models import ChatRequest, ChatResponse
+from holmes.core.scheduled_prompts.heartbeat_tracer import (
+    ScheduledPromptsHeartbeatTracer,
+)
+from holmes.core.scheduled_prompts.models import ScheduledPrompt
 from holmes.core.supabase_dal import RunStatus
+
+# to prevent circular imports due to type hints
+if TYPE_CHECKING:
+    from fastapi.responses import StreamingResponse
+
+    from holmes.config import Config
+    from holmes.core.supabase_dal import SupabaseDal
 
 ChatFunction = Callable[[ChatRequest], Union["ChatResponse", "StreamingResponse"]]
 
 
-class ScheduledPrompt(BaseModel):
-    id: str
-    scheduled_prompt_definition_id: Optional[str] = None
-    account_id: str
-    cluster_name: str
-    model_name: str
-    prompt: Dict[str, Any]
-    status: str
-    msg: Optional[str] = None
-    created_at: datetime
-    last_heartbeat_at: datetime
-    metadata: Optional[dict] = None
-
-
 class ScheduledPromptsExecutor:
-    ADDITIONAL_SYSTEM_PROMPT_URL = os.environ.get(
-        "ADDITIONAL_SYSTEM_PROMPT_URL",
-        "https://platform.robusta.dev/api/additional-system-prompt.json",
-    )
-
     def __init__(
         self,
         dal: "SupabaseDal",
@@ -82,35 +71,46 @@ class ScheduledPromptsExecutor:
     def _run_loop(self):
         while self.running:
             try:
-                payload = self.dal.claim_scheduled_prompt_run(self.holmes_id)
-                if not payload:
-                    time.sleep(60)
-                    continue
-
-                try:
-                    sp = ScheduledPrompt(**payload)
-                except ValidationError as exc:
-                    logging.warning(f"{str(payload)} is not a valid ScheduledPrompt")
-                    logging.exception(
-                        "Skipping invalid scheduled prompt payload: %s",
-                        exc,
-                        exc_info=True,
-                    )
-                    continue
-
-                try:
-                    self._execute_scheduled_prompt(sp)
-                except Exception as exc:
-                    logging.exception(
-                        "Error executing scheduled %s prompt: %s",
-                        sp.id,
-                        exc,
-                        exc_info=True,
-                    )
+                self._process_next_prompt()
             except Exception as exc:
                 logging.exception(
                     "Error in ScheduledPromptsExecutor loop: %s", exc, exc_info=True
                 )
+
+    def _process_next_prompt(self):
+        """Process the next scheduled prompt, if available."""
+        payload = self.dal.claim_scheduled_prompt_run(self.holmes_id)
+        if not payload:
+            time.sleep(SCHEDULED_PROMPTS_POLL_INTERVAL_SECONDS)
+            return
+
+        try:
+            sp = ScheduledPrompt(**payload)
+        except ValidationError as exc:
+            logging.warning(f"{str(payload)} is not a valid ScheduledPrompt")
+            logging.exception(
+                "Skipping invalid scheduled prompt payload: %s",
+                exc,
+                exc_info=True,
+            )
+            return
+
+        self.dal.update_run_status(run_id=sp.id, status=RunStatus.RUNNING)
+
+        try:
+            self._execute_scheduled_prompt(sp)
+        except Exception as exc:
+            logging.exception(
+                "Error executing scheduled %s prompt: %s",
+                sp.id,
+                exc,
+                exc_info=True,
+            )
+            self._finish_run(
+                status=RunStatus.FAILED,
+                result={"error": str(exc)},
+                sp=sp,
+            )
 
     def _execute_scheduled_prompt(self, sp: ScheduledPrompt):
         run_id = sp.id
@@ -132,26 +132,8 @@ class ScheduledPromptsExecutor:
         logging.info(
             "Found pending run %s, executing with model %s", run_id, sp.model_name
         )
-
-        try:
-            self._execute_prompt(sp)
-            logging.info("Successfully completed run %s", run_id)
-        except Exception as exc:
-            error_msg = str(exc)
-            logging.exception(
-                "Error executing prompt for run %s: %s",
-                run_id,
-                error_msg,
-                exc_info=True,
-            )
-            self.dal.finish_scheduled_prompt_run(
-                status=RunStatus.FAILED,
-                result={"error": error_msg},
-                run_id=run_id,
-                scheduled_prompt_definition_id=sp.scheduled_prompt_definition_id,
-                version=get_version(),
-                metadata=sp.metadata,
-            )
+        self._execute_prompt(sp)
+        logging.info("Successfully completed run %s", run_id)
 
     def _execute_prompt(
         self,
@@ -161,12 +143,19 @@ class ScheduledPromptsExecutor:
         additional_system_prompt = self._fetch_additional_system_prompt(
             sp.prompt.get("additional_system_prompt")
         )
+
+        # Create heartbeat tracer
+        heartbeat_tracer = ScheduledPromptsHeartbeatTracer(sp=sp, dal=self.dal)
+        heartbeat_span = heartbeat_tracer.start_trace(name="scheduled_prompt_execution")
+
+        # Create chat request with heartbeat span
         chat_request = ChatRequest(
             ask=self._extract_prompt_text(sp.prompt),
             model=sp.model_name,
             conversation_history=None,
             stream=False,
             additional_system_prompt=additional_system_prompt,
+            trace_span=heartbeat_span,
         )
 
         response = self.chat_function(chat_request)
@@ -192,7 +181,7 @@ class ScheduledPromptsExecutor:
         Falls back to the provided value if the fetch fails.
         """
         try:
-            with urlopen(self.ADDITIONAL_SYSTEM_PROMPT_URL, timeout=10) as resp:
+            with urlopen(ADDITIONAL_SYSTEM_PROMPT_URL, timeout=10) as resp:
                 if resp.status != 200:
                     logging.warning(
                         "Failed to fetch additional system prompt, status: %s",

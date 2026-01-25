@@ -132,3 +132,16 @@ KEEPALIVE_CNT = int(os.environ.get("KEEPALIVE_CNT", 5))
 
 # Controls whether scheduled prompts executor runs at startup (defaults to on)
 ENABLED_SCHEDULED_PROMPTS = load_bool("ENABLED_SCHEDULED_PROMPTS", True)
+# Polling interval in seconds when no scheduled prompts are available
+SCHEDULED_PROMPTS_POLL_INTERVAL_SECONDS = int(
+    os.environ.get("SCHEDULED_PROMPTS_POLL_INTERVAL_SECONDS", 60)
+)
+# Heartbeat interval in seconds for updating scheduled prompt run status during execution
+SCHEDULED_PROMPTS_HEARTBEAT_INTERVAL_SECONDS = int(
+    os.environ.get("SCHEDULED_PROMPTS_HEARTBEAT_INTERVAL_SECONDS", 60)
+)
+# for embedds
+ADDITIONAL_SYSTEM_PROMPT_URL = os.environ.get(
+    "ADDITIONAL_SYSTEM_PROMPT_URL",
+    "https://platform.robusta.dev/api/additional-system-prompt.json",
+)

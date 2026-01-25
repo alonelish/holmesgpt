@@ -61,7 +61,7 @@ from holmes.core.investigation_structured_output import clear_json_markdown
 from holmes.plugins.prompts import load_and_render_prompt
 from holmes.utils.holmes_sync_toolsets import holmes_sync_toolsets_status
 from holmes.utils.log import EndpointFilter
-from holmes.core.scheduled_prompts_executor import ScheduledPromptsExecutor
+from holmes.core.scheduled_prompts import ScheduledPromptsExecutor
 # removed: add_runbooks_to_user_prompt
 
 
@@ -112,6 +112,7 @@ def sync_before_server_start():
         logging.error("Failed to synchronise holmes toolsets", exc_info=True)
     if not ENABLED_SCHEDULED_PROMPTS:
         return
+    # No need to check if dal is enabled again, done at the start of this function
     try:
         scheduled_prompts_executor.start()
     except Exception:
@@ -406,7 +407,10 @@ def chat(chat_request: ChatRequest):
                 media_type="text/event-stream",
             )
         else:
-            llm_call = ai.messages_call(messages=messages)
+            llm_call = ai.messages_call(
+                messages=messages,
+                trace_span=chat_request.trace_span,
+            )
 
             # For non-streaming, we need to handle approvals differently
             # This is a simplified version - in practice, non-streaming with approvals
@@ -427,7 +431,6 @@ def chat(chat_request: ChatRequest):
         raise HTTPException(status_code=500, detail=str(e))
 
 
-# Initialize scheduled prompts executor after chat function is defined
 scheduled_prompts_executor = ScheduledPromptsExecutor(
     dal=dal, config=config, chat_function=chat
 )
