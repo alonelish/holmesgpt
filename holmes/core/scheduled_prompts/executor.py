@@ -16,7 +16,7 @@ from holmes.common.env_vars import (
 )
 from holmes.core.models import ChatRequest, ChatResponse
 from holmes.core.scheduled_prompts.heartbeat_tracer import (
-    ScheduledPromptsHeartbeatTracer,
+    ScheduledPromptsHeartbeatSpan,
 )
 from holmes.core.scheduled_prompts.models import ScheduledPrompt
 from holmes.core.supabase_dal import RunStatus
@@ -87,6 +87,7 @@ class ScheduledPromptsExecutor:
         try:
             sp = ScheduledPrompt(**payload)
         except ValidationError as exc:
+            # due to the rpc call to supabase this row will not be pulled again on the next call of claim_scheduled_prompt_run so there is no worry of an endless loop here
             logging.warning(f"{str(payload)} is not a valid ScheduledPrompt")
             logging.exception(
                 "Skipping invalid scheduled prompt payload: %s",
@@ -94,8 +95,6 @@ class ScheduledPromptsExecutor:
                 exc_info=True,
             )
             return
-
-        self.dal.update_run_status(run_id=sp.id, status=RunStatus.RUNNING)
 
         try:
             self._execute_scheduled_prompt(sp)
@@ -144,9 +143,8 @@ class ScheduledPromptsExecutor:
             sp.prompt.get("additional_system_prompt")
         )
 
-        # Create heartbeat tracer
-        heartbeat_tracer = ScheduledPromptsHeartbeatTracer(sp=sp, dal=self.dal)
-        heartbeat_span = heartbeat_tracer.start_trace(name="scheduled_prompt_execution")
+        # Create heartbeat span
+        heartbeat_span = ScheduledPromptsHeartbeatSpan(sp=sp, dal=self.dal)
 
         # Create chat request with heartbeat span
         chat_request = ChatRequest(
@@ -212,6 +210,10 @@ class ScheduledPromptsExecutor:
         )
 
     def _extract_prompt_text(self, prompt: Union[str, dict]) -> str:
+        """
+        Extracts the prompt text from the prompt.
+        Any additional changes to the prompt object or how we refactor it in the future should be handled here.
+        """
         if isinstance(prompt, dict):
             raw = prompt.get("raw_prompt")
             if raw:
