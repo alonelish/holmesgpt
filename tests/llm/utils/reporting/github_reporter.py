@@ -59,57 +59,34 @@ def _format_cost_with_comparison(
     return base
 
 
-def _generate_historical_details_section(details: HistoricalComparisonDetails) -> str:
-    """Generate a collapsible details section for historical comparison transparency.
+def _generate_historical_comparison_info(details: HistoricalComparisonDetails) -> str:
+    """Generate historical comparison info (without details wrapper).
 
     Args:
         details: HistoricalComparisonDetails with experiment info
 
     Returns:
-        Markdown string with collapsible details section
+        Markdown string with historical comparison info
     """
-    lines = ["<details>", "<summary><b>Historical Comparison Details</b></summary>\n"]
+    lines = []
 
-    # Filter description
-    if details.filter_description:
-        lines.append(f"**Filter:** {details.filter_description}\n")
-
-    # Status
-    if details.status:
-        lines.append(f"**Status:** {details.status}\n")
-    else:
-        lines.append(
-            f"**Status:** Success - {details.metrics_count} test/model combinations loaded\n"
-        )
-
-    # Experiments used
+    # Experiments used (keep it brief)
     if details.experiments:
-        lines.append(f"\n**Experiments compared ({len(details.experiments)}):**\n")
-        # Show first 3 experiments, summarize the rest to reduce email spam
+        exp_links = []
         for exp in details.experiments[:3]:
-            # Build Braintrust URL for the experiment
             exp_url = f"https://www.braintrust.dev/app/{BRAINTRUST_ORG}/p/{BRAINTRUST_PROJECT}/experiments/{exp.id}"
-            branch_info = f" (branch: `{exp.branch}`)" if exp.branch else ""
-            lines.append(f"- [{exp.name}]({exp_url}){branch_info}")
+            exp_links.append(f"[{exp.name}]({exp_url})")
         if len(details.experiments) > 3:
-            lines.append(f"- _...and {len(details.experiments) - 3} more_")
-        lines.append("")
+            exp_links.append(f"_+{len(details.experiments) - 3} more_")
+        lines.append(f"\n_Compared against: {', '.join(exp_links)}_\n")
 
-    # Errors
+    # Errors (if any)
     if details.errors:
-        lines.append("\n**Errors:**\n")
-        lines.append("```")
+        lines.append("\n```")
         for error in details.errors:
             lines.append(error)
         lines.append("```\n")
 
-    # Document comparison thresholds
-    lines.append("**Comparison indicators:**")
-    lines.append("- `±0%` — diff under 10% (within noise threshold)")
-    lines.append("- `↑N%`/`↓N%` — diff 10-25%")
-    lines.append("- **`↑N%`**/**`↓N%`** — diff over 25% (significant)\n")
-
-    lines.append("</details>\n")
     return "\n".join(lines)
 
 
@@ -140,12 +117,7 @@ def generate_markdown_report(
     Returns:
         Tuple of (markdown, sorted_results, total_regressions)
     """
-    # Check if running on a specific branch (for cross-branch comparison)
-    eval_branch = os.environ.get("EVAL_BRANCH", "")
-    if eval_branch:
-        markdown = f"#### Results of HolmesGPT evals (branch: `{eval_branch}`)\n\n"
-    else:
-        markdown = "#### Results of HolmesGPT evals\n\n"
+    markdown = ""
 
     # Fetch historical metrics for comparison (only for passing tests)
     historical: Dict[str, HistoricalMetrics] = {}
@@ -232,12 +204,12 @@ def generate_markdown_report(
 
     # Generate overall status banner
     if total_regressions == 0:
-        markdown += f"### ✅ All {total_passed}/{total_tests} tests passed\n\n"
+        markdown += f"✅ **All {total_passed}/{total_tests} tests passed**\n\n"
     else:
-        markdown += f"### ❌ {total_regressions} regression(s) — {total_passed}/{total_tests} tests passed\n\n"
+        markdown += f"❌ **{total_regressions} regression(s)** — {total_passed}/{total_tests} tests passed\n\n"
 
     # Generate detailed table (wrapped in collapsible details)
-    markdown += "\n<details>\n<summary><b>Detailed Results</b></summary>\n\n"
+    markdown += "<details>\n<summary>Details</summary>\n\n"
     markdown += "| Status | Test case | Time | Turns | Tools | Cost |\n"
     markdown += "| --- | --- | --- | --- | --- | --- |\n"
 
@@ -310,16 +282,16 @@ def generate_markdown_report(
     # Add footer explaining historical comparison status (inside details)
     if historical and comparison_map:
         markdown += "\n_Time/Cost columns show % change vs historical average (↑slower/costlier, ↓faster/cheaper). Changes under 10% shown as ±0%._\n"
+
+        # Add historical comparison transparency info
+        if historical_details:
+            markdown += _generate_historical_comparison_info(historical_details)
     elif historical_details and historical_details.status:
         markdown += (
             f"\n_Historical comparison unavailable: {historical_details.status}_\n"
         )
 
     markdown += "\n</details>\n"
-
-    # Add collapsible details section for historical comparison transparency
-    if historical_details:
-        markdown += _generate_historical_details_section(historical_details)
 
     return (
         markdown,
