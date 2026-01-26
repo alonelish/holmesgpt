@@ -88,6 +88,7 @@ class RunStatus(str, Enum):
     PULLED = "pulled"
     RUNNING = "running"
     FAILED = "failed"
+    FAILED_NO_RETRY = "failed_no_retry"
     COMPLETED = "completed"
 
 
@@ -787,6 +788,32 @@ class SupabaseDal:
                 f"An error occurred during toolset synchronization: {e}", exc_info=True
             )
 
+    def has_scheduled_prompt_definitions(self) -> bool:
+        """
+        Check if the account has any scheduled prompt definitions.
+        Returns True if count > 0, False otherwise.
+        """
+        if not self.enabled:
+            return False
+
+        try:
+            res = (
+                self.client.table("ScheduledPromptsDefinitions")
+                .select("id", count="exact")
+                .eq("account_id", self.account_id)
+                .limit(1)
+                .execute()
+            )
+
+            count = res.count if hasattr(res, "count") else 0
+            return count > 0
+        except Exception:
+            logging.exception(
+                "Supabase error while checking scheduled prompt definitions",
+                exc_info=True,
+            )
+            return False
+
     def claim_scheduled_prompt_run(self, holmes_id: str) -> Optional[Dict]:
         if not self.enabled:
             return None
@@ -867,7 +894,11 @@ class SupabaseDal:
             )
             return False
 
-        if status not in (RunStatus.COMPLETED, RunStatus.FAILED):
+        if status not in (
+            RunStatus.COMPLETED,
+            RunStatus.FAILED,
+            RunStatus.FAILED_NO_RETRY,
+        ):
             logging.error(
                 "finish_scheduled_prompt_run received invalid status %s", status
             )

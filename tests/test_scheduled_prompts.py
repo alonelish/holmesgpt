@@ -23,6 +23,7 @@ def mock_dal():
     dal.update_run_status = MagicMock(return_value=True)
     dal.finish_scheduled_prompt_run = MagicMock(return_value=True)
     dal.get_global_instructions_for_account = MagicMock(return_value=[])
+    dal.has_scheduled_prompt_definitions = MagicMock(return_value=True)
     return dal
 
 
@@ -123,12 +124,11 @@ class TestScheduledPromptsExecutor:
         executor.stop()
         assert executor.running is False
 
-    @patch("holmes.core.scheduled_prompts.executor.time.sleep")
-    def test_process_next_prompt_no_payload(self, mock_sleep, executor, mock_dal):
+    def test_process_next_prompt_no_payload(self, executor, mock_dal):
         """Test processing when no prompt is available."""
         mock_dal.claim_scheduled_prompt_run.return_value = None
-        executor._process_next_prompt()
-        mock_sleep.assert_called_once()
+        result = executor._process_next_prompt()
+        assert result is False
         mock_dal.update_run_status.assert_not_called()
 
     def test_process_next_prompt_invalid_payload(self, executor, mock_dal):
@@ -137,9 +137,16 @@ class TestScheduledPromptsExecutor:
             "id": "test-123",
             # Missing required fields
         }
-        executor._process_next_prompt()
-        # Should log error but not crash
-        mock_dal.update_run_status.assert_not_called()
+        result = executor._process_next_prompt()
+        # Should return True even with invalid payload (payload was found)
+        assert result is True
+        # Should update status to FAILED_NO_RETRY
+        mock_dal.update_run_status.assert_called_once()
+        call_args = mock_dal.update_run_status.call_args
+        assert call_args.kwargs["run_id"] == "test-123"
+        assert call_args.kwargs["status"] == RunStatus.FAILED_NO_RETRY
+        assert "Invalid scheduled prompt payload" in call_args.kwargs["msg"]
+        # Should not call finish since we're just updating status
         mock_dal.finish_scheduled_prompt_run.assert_not_called()
 
     def test_process_next_prompt_success(
@@ -149,8 +156,10 @@ class TestScheduledPromptsExecutor:
         mock_dal.claim_scheduled_prompt_run.return_value = (
             sample_scheduled_prompt_payload
         )
-        executor._process_next_prompt()
+        result = executor._process_next_prompt()
 
+        # Should return True when payload is processed
+        assert result is True
         # Should finish successfully
         mock_dal.finish_scheduled_prompt_run.assert_called_once()
         call_args = mock_dal.finish_scheduled_prompt_run.call_args
@@ -161,20 +170,25 @@ class TestScheduledPromptsExecutor:
         self, mock_dal, mock_config, sample_scheduled_prompt_payload
     ):
         """Test handling execution error."""
+
         # Create chat function that raises an error
         def error_chat_func(request):
             raise Exception("Test error")
 
         executor = ScheduledPromptsExecutor(
-            dal=mock_dal, config=mock_config, chat_function=Mock(side_effect=error_chat_func)
+            dal=mock_dal,
+            config=mock_config,
+            chat_function=Mock(side_effect=error_chat_func),
         )
 
         mock_dal.claim_scheduled_prompt_run.return_value = (
             sample_scheduled_prompt_payload
         )
 
-        executor._process_next_prompt()
+        result = executor._process_next_prompt()
 
+        # Should return True even with execution error (payload was found)
+        assert result is True
         # Should finish with failed status
         mock_dal.finish_scheduled_prompt_run.assert_called_once()
         call_args = mock_dal.finish_scheduled_prompt_run.call_args
@@ -206,6 +220,192 @@ class TestScheduledPromptsExecutor:
         call_args = mock_dal.finish_scheduled_prompt_run.call_args
         assert call_args.kwargs["status"] == RunStatus.FAILED
         assert "invalid-model" in call_args.kwargs["result"]["error"]
+
+    def test_update_poll_interval_from_inactive_to_active(self, executor, mock_dal):
+        """Test polling interval changes from inactive to active when prompts are added."""
+        from holmes.common.env_vars import (
+            SCHEDULED_PROMPTS_ACTIVE_POLL_INTERVAL_SECONDS,
+            SCHEDULED_PROMPTS_INACTIVE_POLL_INTERVAL_SECONDS,
+        )
+
+        # Start with inactive interval (no scheduled prompts)
+        executor.poll_interval_seconds = (
+            SCHEDULED_PROMPTS_INACTIVE_POLL_INTERVAL_SECONDS
+        )
+        mock_dal.has_scheduled_prompt_definitions.return_value = True
+
+        with patch("holmes.core.scheduled_prompts.executor.logging") as mock_logging:
+            executor._update_poll_interval()
+
+            # Should update to active interval
+            assert (
+                executor.poll_interval_seconds
+                == SCHEDULED_PROMPTS_ACTIVE_POLL_INTERVAL_SECONDS
+            )
+            # Should log the change
+            mock_logging.info.assert_called_once()
+            log_message = mock_logging.info.call_args[0][0]
+            assert "changed from" in log_message
+            assert "has scheduled prompts" in log_message
+
+    def test_update_poll_interval_from_active_to_inactive(self, executor, mock_dal):
+        """Test polling interval changes from active to inactive when prompts are removed."""
+        from holmes.common.env_vars import (
+            SCHEDULED_PROMPTS_ACTIVE_POLL_INTERVAL_SECONDS,
+            SCHEDULED_PROMPTS_INACTIVE_POLL_INTERVAL_SECONDS,
+        )
+
+        # Start with active interval (has scheduled prompts)
+        executor.poll_interval_seconds = SCHEDULED_PROMPTS_ACTIVE_POLL_INTERVAL_SECONDS
+        mock_dal.has_scheduled_prompt_definitions.return_value = False
+
+        with patch("holmes.core.scheduled_prompts.executor.logging") as mock_logging:
+            executor._update_poll_interval()
+
+            # Should update to inactive interval
+            assert (
+                executor.poll_interval_seconds
+                == SCHEDULED_PROMPTS_INACTIVE_POLL_INTERVAL_SECONDS
+            )
+            # Should log the change
+            mock_logging.info.assert_called_once()
+            log_message = mock_logging.info.call_args[0][0]
+            assert "changed from" in log_message
+            assert "has no scheduled prompts" in log_message
+
+    def test_update_poll_interval_no_change_active(self, executor, mock_dal):
+        """Test polling interval doesn't change when state remains the same (active)."""
+        from holmes.common.env_vars import (
+            SCHEDULED_PROMPTS_ACTIVE_POLL_INTERVAL_SECONDS,
+        )
+
+        # Start with active interval and keep it active
+        executor.poll_interval_seconds = SCHEDULED_PROMPTS_ACTIVE_POLL_INTERVAL_SECONDS
+        mock_dal.has_scheduled_prompt_definitions.return_value = True
+
+        with patch("holmes.core.scheduled_prompts.executor.logging") as mock_logging:
+            executor._update_poll_interval()
+
+            # Interval should remain the same
+            assert (
+                executor.poll_interval_seconds
+                == SCHEDULED_PROMPTS_ACTIVE_POLL_INTERVAL_SECONDS
+            )
+            # Should NOT log (no change)
+            mock_logging.info.assert_not_called()
+
+    def test_update_poll_interval_no_change_inactive(self, executor, mock_dal):
+        """Test polling interval doesn't change when state remains the same (inactive)."""
+        from holmes.common.env_vars import (
+            SCHEDULED_PROMPTS_INACTIVE_POLL_INTERVAL_SECONDS,
+        )
+
+        # Start with inactive interval and keep it inactive
+        executor.poll_interval_seconds = (
+            SCHEDULED_PROMPTS_INACTIVE_POLL_INTERVAL_SECONDS
+        )
+        mock_dal.has_scheduled_prompt_definitions.return_value = False
+
+        with patch("holmes.core.scheduled_prompts.executor.logging") as mock_logging:
+            executor._update_poll_interval()
+
+            # Interval should remain the same
+            assert (
+                executor.poll_interval_seconds
+                == SCHEDULED_PROMPTS_INACTIVE_POLL_INTERVAL_SECONDS
+            )
+            # Should NOT log (no change)
+            mock_logging.info.assert_not_called()
+
+    def test_update_poll_interval_dynamic_changes(self, executor, mock_dal):
+        """
+        Standalone test: Verify polling interval dynamically changes back and forth.
+        Simulates real-world scenario where scheduled prompts are added and removed.
+        """
+        from holmes.common.env_vars import (
+            SCHEDULED_PROMPTS_ACTIVE_POLL_INTERVAL_SECONDS,
+            SCHEDULED_PROMPTS_INACTIVE_POLL_INTERVAL_SECONDS,
+        )
+
+        # Start with inactive interval (no scheduled prompts)
+        executor.poll_interval_seconds = (
+            SCHEDULED_PROMPTS_INACTIVE_POLL_INTERVAL_SECONDS
+        )
+        assert (
+            executor.poll_interval_seconds
+            == SCHEDULED_PROMPTS_INACTIVE_POLL_INTERVAL_SECONDS
+        )
+
+        # Scenario 1: User adds a scheduled prompt
+        mock_dal.has_scheduled_prompt_definitions.return_value = True
+        with patch("holmes.core.scheduled_prompts.executor.logging") as mock_logging:
+            executor._update_poll_interval()
+
+            # Verify interval changed to active
+            assert (
+                executor.poll_interval_seconds
+                == SCHEDULED_PROMPTS_ACTIVE_POLL_INTERVAL_SECONDS
+            )
+            # Verify logging occurred
+            mock_logging.info.assert_called_once()
+            assert "changed from" in mock_logging.info.call_args[0][0]
+            assert "has scheduled prompts" in mock_logging.info.call_args[0][0]
+
+        # Scenario 2: Call again while still active - should not change or log
+        mock_dal.has_scheduled_prompt_definitions.return_value = True
+        with patch("holmes.core.scheduled_prompts.executor.logging") as mock_logging:
+            executor._update_poll_interval()
+
+            # Interval should remain active
+            assert (
+                executor.poll_interval_seconds
+                == SCHEDULED_PROMPTS_ACTIVE_POLL_INTERVAL_SECONDS
+            )
+            # No logging since no change
+            mock_logging.info.assert_not_called()
+
+        # Scenario 3: User deletes all scheduled prompts
+        mock_dal.has_scheduled_prompt_definitions.return_value = False
+        with patch("holmes.core.scheduled_prompts.executor.logging") as mock_logging:
+            executor._update_poll_interval()
+
+            # Verify interval changed back to inactive
+            assert (
+                executor.poll_interval_seconds
+                == SCHEDULED_PROMPTS_INACTIVE_POLL_INTERVAL_SECONDS
+            )
+            # Verify logging occurred
+            mock_logging.info.assert_called_once()
+            assert "changed from" in mock_logging.info.call_args[0][0]
+            assert "has no scheduled prompts" in mock_logging.info.call_args[0][0]
+
+        # Scenario 4: Call again while still inactive - should not change or log
+        mock_dal.has_scheduled_prompt_definitions.return_value = False
+        with patch("holmes.core.scheduled_prompts.executor.logging") as mock_logging:
+            executor._update_poll_interval()
+
+            # Interval should remain inactive
+            assert (
+                executor.poll_interval_seconds
+                == SCHEDULED_PROMPTS_INACTIVE_POLL_INTERVAL_SECONDS
+            )
+            # No logging since no change
+            mock_logging.info.assert_not_called()
+
+        # Scenario 5: User adds scheduled prompts again (cycle back to active)
+        mock_dal.has_scheduled_prompt_definitions.return_value = True
+        with patch("holmes.core.scheduled_prompts.executor.logging") as mock_logging:
+            executor._update_poll_interval()
+
+            # Verify interval changed to active again
+            assert (
+                executor.poll_interval_seconds
+                == SCHEDULED_PROMPTS_ACTIVE_POLL_INTERVAL_SECONDS
+            )
+            # Verify logging occurred
+            mock_logging.info.assert_called_once()
+            assert "changed from" in mock_logging.info.call_args[0][0]
+            assert "has scheduled prompts" in mock_logging.info.call_args[0][0]
 
     def test_extract_prompt_text_string(self, executor):
         """Test extracting prompt text from string."""
@@ -258,9 +458,7 @@ class TestScheduledPromptsExecutor:
         assert executor.chat_function.called
         call_args = executor.chat_function.call_args
         assert call_args.args[0].trace_span is not None
-        assert isinstance(
-            call_args.args[0].trace_span, ScheduledPromptsHeartbeatSpan
-        )
+        assert isinstance(call_args.args[0].trace_span, ScheduledPromptsHeartbeatSpan)
         assert isinstance(response, ChatResponse)
 
 

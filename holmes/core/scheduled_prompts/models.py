@@ -14,5 +14,5 @@ class ScheduledPrompt(BaseModel):
     status: str
     msg: Optional[str] = None
     created_at: datetime
-    last_heartbeat_at: datetime
+    last_heartbeat_at: Optional[datetime] = None
     metadata: Optional[dict] = None

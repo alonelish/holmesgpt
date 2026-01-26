@@ -12,7 +12,8 @@ from pydantic import ValidationError
 from holmes import get_version
 from holmes.common.env_vars import (
     ADDITIONAL_SYSTEM_PROMPT_URL,
-    SCHEDULED_PROMPTS_POLL_INTERVAL_SECONDS,
+    SCHEDULED_PROMPTS_ACTIVE_POLL_INTERVAL_SECONDS,
+    SCHEDULED_PROMPTS_INACTIVE_POLL_INTERVAL_SECONDS,
 )
 from holmes.core.models import ChatRequest, ChatResponse
 from holmes.core.scheduled_prompts.heartbeat_tracer import (
@@ -45,6 +46,8 @@ class ScheduledPromptsExecutor:
         self.thread: Optional[threading.Thread] = None
         # this is pod name in kubernetes
         self.holmes_id = os.environ.get("HOSTNAME") or str(os.getpid())
+        # Dynamic polling interval based on whether account has scheduled prompts
+        self.poll_interval_seconds = SCHEDULED_PROMPTS_INACTIVE_POLL_INTERVAL_SECONDS
 
     def start(self):
         if not self.dal.enabled:
@@ -71,30 +74,67 @@ class ScheduledPromptsExecutor:
     def _run_loop(self):
         while self.running:
             try:
-                self._process_next_prompt()
+                had_payload = self._process_next_prompt()
+                if not had_payload:
+                    # Update polling interval based on current state (may change if prompt deffinition added/removed)
+                    self._update_poll_interval()
+                    time.sleep(self.poll_interval_seconds)
             except Exception as exc:
                 logging.exception(
                     "Error in ScheduledPromptsExecutor loop: %s", exc, exc_info=True
                 )
 
-    def _process_next_prompt(self):
-        """Process the next scheduled prompt, if available."""
+    def _update_poll_interval(self):
+        """
+        Update the polling interval based on whether the account has scheduled prompts.
+        Only logs when the interval actually changes to avoid log spam.
+        """
+        has_scheduled_prompts = self.dal.has_scheduled_prompt_definitions()
+        new_interval = (
+            SCHEDULED_PROMPTS_ACTIVE_POLL_INTERVAL_SECONDS
+            if has_scheduled_prompts
+            else SCHEDULED_PROMPTS_INACTIVE_POLL_INTERVAL_SECONDS
+        )
+
+        if new_interval != self.poll_interval_seconds:
+            old_interval = self.poll_interval_seconds
+            self.poll_interval_seconds = new_interval
+            logging.info(
+                f"Polling interval changed from {old_interval}s to {new_interval}s "
+                f"(account {'has' if has_scheduled_prompts else 'has no'} scheduled prompts)"
+            )
+
+    def _process_next_prompt(self) -> bool:
+        """
+        Process the next scheduled prompt, if available.
+
+        Returns:
+            bool: True if a payload was found and processed, False if no payload available.
+        """
         payload = self.dal.claim_scheduled_prompt_run(self.holmes_id)
         if not payload:
-            time.sleep(SCHEDULED_PROMPTS_POLL_INTERVAL_SECONDS)
-            return
+            return False
 
         try:
             sp = ScheduledPrompt(**payload)
         except ValidationError as exc:
             # due to the rpc call to supabase this row will not be pulled again on the next call of claim_scheduled_prompt_run so there is no worry of an endless loop here
-            logging.warning(f"{str(payload)} is not a valid ScheduledPrompt")
             logging.exception(
                 "Skipping invalid scheduled prompt payload: %s",
                 exc,
                 exc_info=True,
             )
-            return
+            # Mark as failed_no_retry since the payload is invalid and retrying won't help
+            run_id = payload.get("id") if isinstance(payload, dict) else None
+            if run_id:
+                self.dal.update_run_status(
+                    run_id=run_id,
+                    status=RunStatus.FAILED_NO_RETRY,
+                    msg=f"Invalid scheduled prompt payload: {str(exc)}",
+                )
+
+            # Return True since we did find a payload, even if it was invalid
+            return True
 
         try:
             self._execute_scheduled_prompt(sp)
@@ -110,6 +150,8 @@ class ScheduledPromptsExecutor:
                 result={"error": str(exc)},
                 sp=sp,
             )
+
+        return True
 
     def _execute_scheduled_prompt(self, sp: ScheduledPrompt):
         run_id = sp.id
@@ -159,13 +201,13 @@ class ScheduledPromptsExecutor:
         response = self.chat_function(chat_request)
         duration_seconds = time.perf_counter() - start
 
-        result_data = (
-            response.model_dump() if isinstance(response, ChatResponse) else {}
-        )
-
         if isinstance(response, ChatResponse):
             response.metadata = dict(response.metadata or {})
             response.metadata["duration_seconds"] = duration_seconds
+
+        result_data = (
+            response.model_dump() if isinstance(response, ChatResponse) else {}
+        )
 
         self._finish_run(status=RunStatus.COMPLETED, result=result_data, sp=sp)
 
