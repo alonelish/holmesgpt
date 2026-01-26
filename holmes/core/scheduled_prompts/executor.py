@@ -11,7 +11,7 @@ from pydantic import ValidationError
 
 from holmes import get_version
 from holmes.common.env_vars import (
-    ADDITIONAL_SYSTEM_PROMPT_URL,
+    ROBUSTA_UI_DOMAIN,
     SCHEDULED_PROMPTS_ACTIVE_POLL_INTERVAL_SECONDS,
     SCHEDULED_PROMPTS_INACTIVE_POLL_INTERVAL_SECONDS,
 )
@@ -31,6 +31,7 @@ if TYPE_CHECKING:
 
 ChatFunction = Callable[[ChatRequest], Union["ChatResponse", "StreamingResponse"]]
 
+ADDITIONAL_SYSTEM_PROMPT_URL = f"{ROBUSTA_UI_DOMAIN}/api/additional-system-prompt.json"
 
 class ScheduledPromptsExecutor:
     def __init__(

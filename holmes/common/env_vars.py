@@ -143,9 +143,9 @@ SCHEDULED_PROMPTS_HEARTBEAT_INTERVAL_SECONDS = int(
     os.environ.get("SCHEDULED_PROMPTS_HEARTBEAT_INTERVAL_SECONDS", 60)
 )
 # for embedds
-ADDITIONAL_SYSTEM_PROMPT_URL = os.environ.get(
-    "ADDITIONAL_SYSTEM_PROMPT_URL",
-    "https://platform.robusta.dev/api/additional-system-prompt.json",
+ROBUSTA_UI_DOMAIN = os.environ.get(
+    "ROBUSTA_UI_DOMAIN",
+    "https://platform.robusta.dev",
 )
 # Periodic refresh interval for toolset status in server mode (in seconds)
 # Set to 0 to disable periodic refresh
