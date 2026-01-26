@@ -90,8 +90,6 @@ BASH_TOOL_UNSAFE_ALLOW_ALL = load_bool("BASH_TOOL_UNSAFE_ALLOW_ALL", False)
 
 LOG_LLM_USAGE_RESPONSE = load_bool("LOG_LLM_USAGE_RESPONSE", False)
 
-# For CLI only, enable user approval for potentially sensitive commands that would otherwise be rejected
-ENABLE_CLI_TOOL_APPROVAL = load_bool("ENABLE_CLI_TOOL_APPROVAL", True)
 
 MAX_GRAPH_POINTS = float(os.environ.get("MAX_GRAPH_POINTS", 100))
 
@@ -143,5 +141,9 @@ SCHEDULED_PROMPTS_HEARTBEAT_INTERVAL_SECONDS = int(
 # for embedds
 ADDITIONAL_SYSTEM_PROMPT_URL = os.environ.get(
     "ADDITIONAL_SYSTEM_PROMPT_URL",
-    "https://platform.robusta.dev/api/additional-system-prompt.json",
+    "https://platform.robusta.dev/api/additional-system-prompt.json")
+# Periodic refresh interval for toolset status in server mode (in seconds)
+# Set to 0 to disable periodic refresh
+TOOLSET_STATUS_REFRESH_INTERVAL_SECONDS = int(
+    os.environ.get("TOOLSET_STATUS_REFRESH_INTERVAL_SECONDS", 300)
 )
