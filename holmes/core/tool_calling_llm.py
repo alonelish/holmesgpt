@@ -33,6 +33,7 @@ from holmes.core.models import (
 )
 from holmes.core.prompt import generate_user_prompt
 from holmes.core.runbooks import RunbookManager
+from holmes.core.policy import PolicyEnforcer, get_policy_enforcer
 from holmes.core.safeguards import prevent_overly_repeated_tool_call
 from holmes.core.tools import (
     StructuredToolResult,
@@ -165,7 +166,12 @@ class ToolCallingLLM:
     llm: LLM
 
     def __init__(
-        self, tool_executor: ToolExecutor, max_steps: int, llm: LLM, tracer=None
+        self,
+        tool_executor: ToolExecutor,
+        max_steps: int,
+        llm: LLM,
+        tracer=None,
+        policy_enforcer: Optional[PolicyEnforcer] = None,
     ):
         self.tool_executor = tool_executor
         self.max_steps = max_steps
@@ -174,6 +180,8 @@ class ToolCallingLLM:
         self.approval_callback: Optional[
             Callable[[StructuredToolResult], tuple[bool, Optional[str]]]
         ] = None
+        # Use provided policy enforcer or fall back to global one
+        self.policy_enforcer = policy_enforcer or get_policy_enforcer()
 
         self._runbook_in_use: bool = False
 
@@ -523,6 +531,19 @@ class ToolCallingLLM:
                 error=f"Failed to find tool {tool_name}",
                 params=tool_params,
             )
+
+        # Policy enforcement: check if tool call is allowed
+        if self.policy_enforcer:
+            policy_result = self.policy_enforcer.check(tool_name, tool_params)
+            if not policy_result.allowed:
+                logging.warning(
+                    f"Policy denied tool '{tool_name}' with params {tool_params}: {policy_result.message}"
+                )
+                return StructuredToolResult(
+                    status=StructuredToolResultStatus.ERROR,
+                    error=f"Policy denied: {policy_result.message}",
+                    params=tool_params,
+                )
 
         try:
             invoke_context = ToolInvokeContext(

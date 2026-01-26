@@ -11,6 +11,7 @@ from pydantic import BaseModel, ConfigDict, FilePath, PrivateAttr, SecretStr
 
 from holmes.common.env_vars import ROBUSTA_CONFIG_PATH
 from holmes.core.llm import DefaultLLM, LLMModelRegistry
+from holmes.core.policy import PolicyConfig, PolicyEnforcer, init_policy_from_config
 from holmes.core.tools_utils.tool_executor import ToolExecutor
 from holmes.core.toolset_manager import ToolsetManager
 from holmes.plugins.runbooks import (
@@ -97,8 +98,10 @@ class Config(RobustaBaseConfig):
 
     toolsets: Optional[dict[str, dict[str, Any]]] = None
     mcp_servers: Optional[dict[str, dict[str, Any]]] = None
+    policy: Optional[PolicyConfig] = None
 
     _server_tool_executor: Optional[ToolExecutor] = None
+    _policy_enforcer: Optional[PolicyEnforcer] = PrivateAttr(None)
     _agui_tool_executor: Optional[ToolExecutor] = None
 
     # TODO: Separate those fields to facade class, this shouldn't be part of the config.
@@ -118,6 +121,12 @@ class Config(RobustaBaseConfig):
                 custom_runbook_catalogs=self.custom_runbook_catalogs,
             )
         return self._toolset_manager
+
+    @property
+    def policy_enforcer(self) -> Optional[PolicyEnforcer]:
+        if self._policy_enforcer is None and self.policy is not None:
+            self._policy_enforcer = init_policy_from_config(self.policy)
+        return self._policy_enforcer
 
     @property
     def dal(self) -> SupabaseDal:
