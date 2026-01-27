@@ -28,6 +28,7 @@ from holmes.common.env_vars import (
     DEVELOPMENT_MODE,
     ENABLE_CONNECTION_KEEPALIVE,
     ENABLE_TELEMETRY,
+    ENABLED_SCHEDULED_PROMPTS,
     HOLMES_HOST,
     HOLMES_PORT,
     LOG_PERFORMANCE,
@@ -61,6 +62,7 @@ from holmes.utils.global_instructions import generate_runbooks_args
 from holmes.utils.holmes_status import update_holmes_status_in_db
 from holmes.utils.holmes_sync_toolsets import holmes_sync_toolsets_status
 from holmes.utils.log import EndpointFilter
+from holmes.core.scheduled_prompts import ScheduledPromptsExecutor
 from holmes.utils.stream import stream_chat_formatter, stream_investigate_formatter
 
 # removed: add_runbooks_to_user_prompt
@@ -111,6 +113,13 @@ def sync_before_server_start():
         holmes_sync_toolsets_status(dal, config)
     except Exception:
         logging.error("Failed to synchronise holmes toolsets", exc_info=True)
+    if not ENABLED_SCHEDULED_PROMPTS:
+        return
+    # No need to check if dal is enabled again, done at the start of this function
+    try:
+        scheduled_prompts_executor.start()
+    except Exception:
+        logging.error("Failed to start scheduled prompts executor", exc_info=True)
 
 
 def _toolset_status_refresh_loop():
@@ -486,6 +495,7 @@ def chat(chat_request: ChatRequest, http_request: Request):
         else:
             llm_call = ai.messages_call(
                 messages=messages,
+                trace_span=chat_request.trace_span,
                 response_format=chat_request.response_format,
                 request_context=request_context,
             )
@@ -507,6 +517,11 @@ def chat(chat_request: ChatRequest, http_request: Request):
     except Exception as e:
         logging.error(f"Error in /api/chat: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
+
+
+scheduled_prompts_executor = ScheduledPromptsExecutor(
+    dal=dal, config=config, chat_function=chat
+)
 
 
 @app.get("/api/model")
