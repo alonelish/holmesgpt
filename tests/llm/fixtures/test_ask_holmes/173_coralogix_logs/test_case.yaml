@@ -8,7 +8,6 @@
 # - CORALOGIX_SEND_API_KEY: API key with SendData permissions (for ingestion)
 # - CORALOGIX_API_KEY: API key with DataQuerying permissions (for queries)
 # - CORALOGIX_DOMAIN: e.g., "eu2.coralogix.com"
-# - CORALOGIX_TEAM_HOSTNAME: Your team name
 #
 # Note: Coralogix uses separate API keys for sending vs querying data.
 # See: https://coralogix.com/docs/user-guides/account-management/api-keys/api-keys/

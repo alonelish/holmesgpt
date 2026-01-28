@@ -30,6 +30,14 @@ def _build_coralogix_query_url(
     end_date: str,
     tier: Optional[CoralogixTier] = None,
 ) -> Optional[str]:
+    """Build a clickable Coralogix UI permalink URL.
+
+    Returns None if team_hostname is not configured (it's optional).
+    """
+    # team_hostname is optional - without it we can't build UI URLs
+    if not config.team_hostname:
+        return None
+
     try:
         if tier == CoralogixTier.ARCHIVE:
             data_pipeline = "archive-logs"
@@ -199,7 +207,10 @@ class CoralogixToolset(Toolset):
 
     def get_example_config(self):
         example_config = CoralogixConfig(
-            api_key="<cxuw_...>", team_hostname="my-team", domain="eu2.coralogix.com"
+            api_key="<your-api-key>",
+            domain="eu2.coralogix.com",
+            # Optional: set team_hostname to enable clickable UI permalink URLs
+            team_hostname="my-team",
         )
         return example_config.model_dump()
 

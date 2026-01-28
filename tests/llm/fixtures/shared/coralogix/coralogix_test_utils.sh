@@ -7,7 +7,6 @@
 #   CORALOGIX_SEND_API_KEY - API key with SendData permissions (for ingestion)
 #   CORALOGIX_API_KEY - API key with DataQuerying permissions (for queries)
 #   CORALOGIX_DOMAIN - e.g., "eu2.coralogix.com"
-#   CORALOGIX_TEAM_HOSTNAME - Your team name
 #
 # Note: Coralogix uses separate API keys for sending vs querying data.
 # See: https://coralogix.com/docs/user-guides/account-management/api-keys/api-keys/
@@ -26,10 +25,6 @@ cx_validate_env() {
 
   if [ -z "$CORALOGIX_DOMAIN" ]; then
     missing+=("CORALOGIX_DOMAIN")
-  fi
-
-  if [ -z "$CORALOGIX_TEAM_HOSTNAME" ]; then
-    missing+=("CORALOGIX_TEAM_HOSTNAME")
   fi
 
   if [ ${#missing[@]} -gt 0 ]; then

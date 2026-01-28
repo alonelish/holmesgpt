@@ -7,9 +7,11 @@ from pydantic import BaseModel
 
 
 class CoralogixConfig(BaseModel):
-    team_hostname: str
     domain: str
     api_key: str
+    # Optional: only needed to generate clickable UI permalink URLs in tool output
+    # Example URL: https://{team_hostname}.{domain}/#/query-new/logs?query=...
+    team_hostname: Optional[str] = None
 
 
 def parse_json_lines(raw_text) -> List[Dict[str, Any]]:
