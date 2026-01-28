@@ -55,19 +55,29 @@ before_test: |
 
   echo "⏳ Sending logs to Coralogix..."
 
-  # Build log entries JSON (avoiding heredoc for YAML compatibility)
-  LOG_ENTRIES="[{\"timestamp\": $TS1, \"severity\": 3, \"text\": \"Service started successfully - payment-api initialized\"}, {\"timestamp\": $TS2, \"severity\": 5, \"text\": \"Database connection timeout - $ERROR_CODE_1: Failed to connect to primary database after 30s\"}, {\"timestamp\": $TS3, \"severity\": 4, \"text\": \"Retrying database connection attempt 1\"}, {\"timestamp\": $TS4, \"severity\": 5, \"text\": \"Payment validation failed - $ERROR_CODE_2: Invalid card number format for user U-12345\"}, {\"timestamp\": $TS5, \"severity\": 3, \"text\": \"Processing order batch complete - 150 orders processed\"}, {\"timestamp\": $TS6, \"severity\": 5, \"text\": \"Stock sync failed - $ERROR_CODE_3: External inventory API returned 503\"}]"
+  # Build log entries JSON - Coralogix /singles API expects an ARRAY of entries
+  # Each entry must include applicationName and subsystemName
+  # See: https://coralogix.com/docs/developer-portal/apis/log-ingestion/coralogix-rest-api-singles/
+  LOG_ENTRIES="[
+    {\"applicationName\": \"$APP_NAME\", \"subsystemName\": \"$SUBSYSTEM\", \"severity\": 3, \"text\": \"Service started successfully - payment-api initialized\"},
+    {\"applicationName\": \"$APP_NAME\", \"subsystemName\": \"$SUBSYSTEM\", \"severity\": 5, \"text\": \"Database connection timeout - $ERROR_CODE_1: Failed to connect to primary database after 30s\"},
+    {\"applicationName\": \"$APP_NAME\", \"subsystemName\": \"$SUBSYSTEM\", \"severity\": 4, \"text\": \"Retrying database connection attempt 1\"},
+    {\"applicationName\": \"$APP_NAME\", \"subsystemName\": \"$SUBSYSTEM\", \"severity\": 5, \"text\": \"Payment validation failed - $ERROR_CODE_2: Invalid card number format for user U-12345\"},
+    {\"applicationName\": \"$APP_NAME\", \"subsystemName\": \"$SUBSYSTEM\", \"severity\": 3, \"text\": \"Processing order batch complete - 150 orders processed\"},
+    {\"applicationName\": \"$APP_NAME\", \"subsystemName\": \"$SUBSYSTEM\", \"severity\": 5, \"text\": \"Stock sync failed - $ERROR_CODE_3: External inventory API returned 503\"}
+  ]"
 
   # Send logs via REST API
   INGRESS_URL="https://ingress.${CORALOGIX_DOMAIN}"
 
-  RESPONSE=$(curl -sf -X POST "${INGRESS_URL}/logs/v1/singles" \
+  RESPONSE=$(curl -s -X POST "${INGRESS_URL}/logs/v1/singles" \
     -H "Authorization: Bearer ${CORALOGIX_SEND_API_KEY}" \
     -H "Content-Type: application/json" \
-    -d "{\"applicationName\": \"$APP_NAME\", \"subsystemName\": \"$SUBSYSTEM\", \"logEntries\": $LOG_ENTRIES}" 2>&1)
+    -d "$LOG_ENTRIES" 2>&1)
 
-  if [ $? -ne 0 ]; then
-    echo "❌ Failed to send logs: $RESPONSE"
+  # Check for errors in response (Coralogix returns {"message":"OK"} on success)
+  if echo "$RESPONSE" | grep -q "Dropped"; then
+    echo "❌ Logs were dropped by Coralogix: $RESPONSE"
     exit 1
   fi
 

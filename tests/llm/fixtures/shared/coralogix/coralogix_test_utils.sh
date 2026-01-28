@@ -47,38 +47,33 @@ cx_query_url() {
   echo "https://ng-api-http.${CORALOGIX_DOMAIN}/api/v1/dataprime/query"
 }
 
-# Send logs to Coralogix via REST API
+# Send logs to Coralogix via REST API /singles endpoint
 # Uses CORALOGIX_SEND_API_KEY (SendData permissions required)
-# Usage: cx_send_logs "app-name" "subsystem-name" '[{"timestamp":..., "severity":1, "text":"..."}]'
+#
+# The /singles API expects an ARRAY of log entries, where each entry includes
+# applicationName and subsystemName. See:
+# https://coralogix.com/docs/developer-portal/apis/log-ingestion/coralogix-rest-api-singles/
+#
+# Usage: cx_send_logs '[{"applicationName":"app", "subsystemName":"sub", "severity":3, "text":"msg"}]'
 cx_send_logs() {
-  local app_name="$1"
-  local subsystem_name="$2"
-  local log_entries="$3"
+  local log_entries="$1"
 
   local ingress_url=$(cx_ingress_url)
-  local payload=$(cat <<EOF
-{
-  "applicationName": "$app_name",
-  "subsystemName": "$subsystem_name",
-  "logEntries": $log_entries
-}
-EOF
-)
 
   local response
-  response=$(curl -sf -X POST "${ingress_url}/logs/v1/singles" \
+  response=$(curl -s -X POST "${ingress_url}/logs/v1/singles" \
     -H "Authorization: Bearer ${CORALOGIX_SEND_API_KEY}" \
     -H "Content-Type: application/json" \
-    -d "$payload" 2>&1)
-  local exit_code=$?
+    -d "$log_entries" 2>&1)
 
-  if [ $exit_code -ne 0 ]; then
-    echo "❌ Failed to send logs (curl exit code: $exit_code)"
-    echo "Response: $response"
+  # Check for errors - Coralogix returns {"message":"OK"} on success
+  # but may include "Dropped" if entries were rejected
+  if echo "$response" | grep -q "Dropped"; then
+    echo "❌ Logs were dropped by Coralogix: $response"
     return 1
   fi
 
-  echo "✅ Logs sent successfully to $app_name/$subsystem_name"
+  echo "✅ Logs sent successfully"
   return 0
 }
 
