@@ -64,10 +64,11 @@ before_test: |
 
   TRACES_READY=false
   for i in {1..60}; do
-    RESULT=$(curl -sf -X POST "$QUERY_URL" \
+    # Use || true to prevent set -e from exiting on curl failure
+    RESULT=$(curl -s -X POST "$QUERY_URL" \
       -H "Authorization: Bearer ${CORALOGIX_API_KEY}" \
       -H "Content-Type: application/json" \
-      -d "{\"query\": \"source spans | lucene 'holmes-eval-174 AND $ERROR_CODE' | limit 1\", \"metadata\": {\"syntax\": \"QUERY_SYNTAX_DATAPRIME\"}}" 2>/dev/null)
+      -d "{\"query\": \"source spans | lucene 'holmes-eval-174 AND $ERROR_CODE' | limit 1\", \"metadata\": {\"syntax\": \"QUERY_SYNTAX_DATAPRIME\"}}" 2>/dev/null || true)
 
     if echo "$RESULT" | grep -q "$ERROR_CODE"; then
       echo "✅ Traces are queryable after $((i * 5)) seconds"

@@ -79,10 +79,11 @@ before_test: |
 
   LOGS_READY=false
   for i in {1..60}; do
-    RESULT=$(curl -sf -X POST "$QUERY_URL" \
+    # Use || true to prevent set -e from exiting on curl failure
+    RESULT=$(curl -s -X POST "$QUERY_URL" \
       -H "Authorization: Bearer ${CORALOGIX_API_KEY}" \
       -H "Content-Type: application/json" \
-      -d "{\"query\": \"source logs | lucene 'holmes-eval-173 AND $ERROR_CODE_1' | limit 1\", \"metadata\": {\"syntax\": \"QUERY_SYNTAX_DATAPRIME\"}}" 2>/dev/null)
+      -d "{\"query\": \"source logs | lucene 'holmes-eval-173 AND $ERROR_CODE_1' | limit 1\", \"metadata\": {\"syntax\": \"QUERY_SYNTAX_DATAPRIME\"}}" 2>/dev/null || true)
 
     if echo "$RESULT" | grep -q "$ERROR_CODE_1"; then
       echo "✅ Logs are queryable after $((i * 5)) seconds"
@@ -102,10 +103,10 @@ before_test: |
   # Verify all 3 error codes are queryable
   echo "🔍 Verifying all error codes are queryable..."
   for CODE in $ERROR_CODE_1 $ERROR_CODE_2 $ERROR_CODE_3; do
-    VERIFY=$(curl -sf -X POST "$QUERY_URL" \
+    VERIFY=$(curl -s -X POST "$QUERY_URL" \
       -H "Authorization: Bearer ${CORALOGIX_API_KEY}" \
       -H "Content-Type: application/json" \
-      -d "{\"query\": \"source logs | lucene 'holmes-eval-173 AND $CODE' | limit 1\", \"metadata\": {\"syntax\": \"QUERY_SYNTAX_DATAPRIME\"}}" 2>/dev/null)
+      -d "{\"query\": \"source logs | lucene 'holmes-eval-173 AND $CODE' | limit 1\", \"metadata\": {\"syntax\": \"QUERY_SYNTAX_DATAPRIME\"}}" 2>/dev/null || true)
 
     if ! echo "$VERIFY" | grep -q "$CODE"; then
       echo "❌ Could not find error code $CODE"

@@ -63,10 +63,10 @@ before_test: |
 
   METRICS_READY=false
   for i in {1..60}; do
-    # Query for our specific metric
-    RESULT=$(curl -sf -G "$PROMETHEUS_URL/api/v1/query" \
+    # Query for our specific metric (use || true to prevent set -e from exiting on curl failure)
+    RESULT=$(curl -s -G "$PROMETHEUS_URL/api/v1/query" \
       -H "Authorization: Bearer ${CORALOGIX_API_KEY}" \
-      --data-urlencode "query=${METRIC_PREFIX}_http_requests_total" 2>/dev/null)
+      --data-urlencode "query=${METRIC_PREFIX}_http_requests_total" 2>/dev/null || true)
 
     if echo "$RESULT" | grep -q "${METRIC_PREFIX}_http_requests_total"; then
       echo "✅ Metrics are queryable after $((i * 5)) seconds"
