@@ -3,15 +3,41 @@ import logging
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict, model_validator
 
 
 class CoralogixConfig(BaseModel):
+    """Coralogix toolset configuration.
+
+    Required:
+        domain: Coralogix region domain (e.g., "eu2.coralogix.com")
+        api_key: API key with DataQuerying permissions
+
+    Optional:
+        team_slug: Your team's URL slug (e.g., "my-team" from https://my-team.eu2.coralogix.com).
+                   Only needed to generate clickable UI permalink URLs in tool output.
+    """
+
+    model_config = ConfigDict(extra="allow")
+
     domain: str
     api_key: str
-    # Optional: only needed to generate clickable UI permalink URLs in tool output
-    # Example URL: https://{team_hostname}.{domain}/#/query-new/logs?query=...
-    team_hostname: Optional[str] = None
+    team_slug: Optional[str] = None
+
+    @model_validator(mode="after")
+    def handle_deprecated_fields(self):
+        """Handle backwards compatibility for renamed fields."""
+        extra = self.model_extra or {}
+        deprecated = []
+
+        # team_hostname was renamed to team_slug
+        if "team_hostname" in extra and not self.team_slug:
+            self.team_slug = extra["team_hostname"]
+            deprecated.append("team_hostname -> team_slug")
+
+        if deprecated:
+            logging.warning(f"Coralogix: deprecated config field names: {', '.join(deprecated)}")
+        return self
 
 
 def parse_json_lines(raw_text) -> List[Dict[str, Any]]:

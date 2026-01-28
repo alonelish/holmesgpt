@@ -32,10 +32,10 @@ def _build_coralogix_query_url(
 ) -> Optional[str]:
     """Build a clickable Coralogix UI permalink URL.
 
-    Returns None if team_hostname is not configured (it's optional).
+    Returns None if team_slug is not configured (it's optional).
     """
-    # team_hostname is optional - without it we can't build UI URLs
-    if not config.team_hostname:
+    # team_slug is optional - without it we can't build UI URLs
+    if not config.team_slug:
         return None
 
     try:
@@ -51,7 +51,7 @@ def _build_coralogix_query_url(
 
         encoded_query = quote(query)
         encoded_time = quote(time_range)
-        base_url = f"https://{config.team_hostname}.{config.domain}"
+        base_url = f"https://{config.team_slug}.{config.domain}"
 
         url = (
             f"{base_url}/#/query-new/{data_pipeline}"
@@ -209,8 +209,8 @@ class CoralogixToolset(Toolset):
         example_config = CoralogixConfig(
             api_key="<your-api-key>",
             domain="eu2.coralogix.com",
-            # Optional: set team_hostname to enable clickable UI permalink URLs
-            team_hostname="my-team",
+            # Optional: set team_slug to enable clickable UI permalink URLs
+            team_slug="my-team",
         )
         return example_config.model_dump()
 

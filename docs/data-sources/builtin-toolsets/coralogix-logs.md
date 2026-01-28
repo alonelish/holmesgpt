@@ -6,9 +6,9 @@ HolmesGPT can use Coralogix for logs/traces (DataPrime) and, separately, PromQL-
 
 1. A [Coralogix API key](https://coralogix.com/docs/developer-portal/apis/data-query/direct-archive-query-http-api/#api-key) with `DataQuerying` permissions
 2. A [Coralogix domain](https://coralogix.com/docs/user-guides/account-management/account-settings/coralogix-domain/) (e.g., `eu2.coralogix.com`)
-3. (Optional) Your team's [hostname](https://coralogix.com/docs/user-guides/account-management/organization-management/create-an-organization/#teams-in-coralogix) - only needed for generating clickable UI permalink URLs in tool output
+3. (Optional) Your team's [slug](https://coralogix.com/docs/user-guides/account-management/organization-management/create-an-organization/#teams-in-coralogix) - only needed for generating clickable UI permalink URLs in tool output
 
-You can find your `domain` and `team_hostname` from the URL you use to access Coralogix. For example, if you access Coralogix at `https://my-team.app.eu2.coralogix.com/` then `team_hostname` is `my-team` and `domain` is `eu2.coralogix.com`.
+You can find your `domain` and `team_slug` from the URL you use to access Coralogix. For example, if you access Coralogix at `https://my-team.app.eu2.coralogix.com/` then `team_slug` is `my-team` and `domain` is `eu2.coralogix.com`.
 
 ## Configuration
 
@@ -22,7 +22,7 @@ toolsets:
       api_key: "<your Coralogix API key>"
       domain: "eu2.coralogix.com"
       # Optional: enables clickable UI permalink URLs in tool output
-      team_hostname: "your-company-name"
+      team_slug: "your-company-name"
 
   prometheus/metrics:
     enabled: true
@@ -34,7 +34,7 @@ toolsets:
 
 ```
 
-**Note**: Both toolsets use the same API key. The `team_hostname` field is optional - it's only used to generate clickable permalink URLs that open query results in the Coralogix UI (e.g., `https://{team_hostname}.{domain}/#/query-new/...`).
+**Note**: Both toolsets use the same API key. The `team_slug` field is optional - it's only used to generate clickable permalink URLs that open query results in the Coralogix UI (e.g., `https://{team_slug}.{domain}/#/query-new/...`).
 
 ## Recommended: Customize Coralogix Instructions
 

@@ -7,4 +7,4 @@ toolsets:
     config:
       api_key: "{{env.CORALOGIX_API_KEY}}"
       domain: "{{env.CORALOGIX_DOMAIN}}"
-      # team_hostname is optional - only needed for clickable UI permalink URLs
+      # team_slug is optional - only needed for clickable UI permalink URLs
