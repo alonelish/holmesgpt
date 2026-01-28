@@ -5,9 +5,13 @@
 # no Kubernetes cluster required.
 #
 # Requirements:
-# - CORALOGIX_API_KEY: API key with DataQuerying and Send Data permissions
+# - CORALOGIX_SEND_API_KEY: API key with SendData permissions (for ingestion)
+# - CORALOGIX_API_KEY: API key with DataQuerying permissions (for queries)
 # - CORALOGIX_DOMAIN: e.g., "eu2.coralogix.com"
 # - CORALOGIX_TEAM_HOSTNAME: Your team name
+#
+# Note: Coralogix uses separate API keys for sending vs querying data.
+# See: https://coralogix.com/docs/user-guides/account-management/api-keys/api-keys/
 #
 # Anti-hallucination: The test injects 3 specific error codes (ERR-XXXX format).
 # The LLM cannot know these codes without actually querying Coralogix.
@@ -59,7 +63,7 @@ before_test: |
   INGRESS_URL="https://ingress.${CORALOGIX_DOMAIN}"
 
   RESPONSE=$(curl -sf -X POST "${INGRESS_URL}/logs/v1/singles" \
-    -H "Authorization: Bearer ${CORALOGIX_API_KEY}" \
+    -H "Authorization: Bearer ${CORALOGIX_SEND_API_KEY}" \
     -H "Content-Type: application/json" \
     -d "{\"applicationName\": \"$APP_NAME\", \"subsystemName\": \"$SUBSYSTEM\", \"logEntries\": $LOG_ENTRIES}" 2>&1)
 

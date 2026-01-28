@@ -8,7 +8,11 @@ Usage:
         --metric-prefix eval175
 
 Environment variables (alternative to CLI args):
-    CORALOGIX_DOMAIN, CORALOGIX_API_KEY
+    CORALOGIX_DOMAIN - e.g., "eu2.coralogix.com"
+    CORALOGIX_SEND_API_KEY - API key with SendData permissions (for ingestion)
+
+Note: Coralogix uses separate API keys for sending vs querying data.
+See: https://coralogix.com/docs/user-guides/account-management/api-keys/api-keys/
 """
 
 import argparse
@@ -114,8 +118,8 @@ def main():
     parser = argparse.ArgumentParser(description="Send test metrics to Coralogix")
     parser.add_argument("--domain", default=os.environ.get("CORALOGIX_DOMAIN"),
                         help="Coralogix domain (e.g., eu2.coralogix.com)")
-    parser.add_argument("--api-key", default=os.environ.get("CORALOGIX_API_KEY"),
-                        help="Coralogix API key")
+    parser.add_argument("--api-key", default=os.environ.get("CORALOGIX_SEND_API_KEY"),
+                        help="Coralogix Send-Your-Data API key (SendData permissions)")
     parser.add_argument("--app-name", required=True, help="Application name")
     parser.add_argument("--subsystem", required=True, help="Subsystem name")
     parser.add_argument("--metric-prefix", required=True, help="Prefix for metric names")
@@ -126,7 +130,7 @@ def main():
         print("ERROR: --domain or CORALOGIX_DOMAIN required")
         sys.exit(1)
     if not args.api_key:
-        print("ERROR: --api-key or CORALOGIX_API_KEY required")
+        print("ERROR: --api-key or CORALOGIX_SEND_API_KEY required")
         sys.exit(1)
 
     success = send_metrics(

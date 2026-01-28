@@ -5,10 +5,14 @@
 # no Kubernetes cluster required.
 #
 # Requirements:
-# - CORALOGIX_API_KEY: API key with DataQuerying and Send Data permissions
+# - CORALOGIX_SEND_API_KEY: API key with SendData permissions (for ingestion)
+# - CORALOGIX_API_KEY: API key with DataQuerying permissions (for queries)
 # - CORALOGIX_DOMAIN: e.g., "eu2.coralogix.com"
 # - CORALOGIX_TEAM_HOSTNAME: Your team name
 # - OpenTelemetry Python packages (installed via poetry)
+#
+# Note: Coralogix uses separate API keys for sending vs querying data.
+# See: https://coralogix.com/docs/user-guides/account-management/api-keys/api-keys/
 #
 # Anti-hallucination: The test injects a specific error code (ERR-XXXX format)
 # and trace ID that the LLM can only find by actually querying Coralogix.

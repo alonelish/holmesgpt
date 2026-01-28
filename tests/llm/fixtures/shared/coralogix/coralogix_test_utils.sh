@@ -2,10 +2,23 @@
 # Shared utilities for Coralogix eval tests
 # Source this file at the start of before_test scripts:
 #   source ../../shared/coralogix_test_utils.sh
+#
+# Required environment variables:
+#   CORALOGIX_SEND_API_KEY - API key with SendData permissions (for ingestion)
+#   CORALOGIX_API_KEY - API key with DataQuerying permissions (for queries)
+#   CORALOGIX_DOMAIN - e.g., "eu2.coralogix.com"
+#   CORALOGIX_TEAM_HOSTNAME - Your team name
+#
+# Note: Coralogix uses separate API keys for sending vs querying data.
+# See: https://coralogix.com/docs/user-guides/account-management/api-keys/api-keys/
 
 # Validate Coralogix environment variables
 cx_validate_env() {
   local missing=()
+
+  if [ -z "$CORALOGIX_SEND_API_KEY" ]; then
+    missing+=("CORALOGIX_SEND_API_KEY")
+  fi
 
   if [ -z "$CORALOGIX_API_KEY" ]; then
     missing+=("CORALOGIX_API_KEY")
@@ -40,6 +53,7 @@ cx_query_url() {
 }
 
 # Send logs to Coralogix via REST API
+# Uses CORALOGIX_SEND_API_KEY (SendData permissions required)
 # Usage: cx_send_logs "app-name" "subsystem-name" '[{"timestamp":..., "severity":1, "text":"..."}]'
 cx_send_logs() {
   local app_name="$1"
@@ -58,7 +72,7 @@ EOF
 
   local response
   response=$(curl -sf -X POST "${ingress_url}/logs/v1/singles" \
-    -H "Authorization: Bearer ${CORALOGIX_API_KEY}" \
+    -H "Authorization: Bearer ${CORALOGIX_SEND_API_KEY}" \
     -H "Content-Type: application/json" \
     -d "$payload" 2>&1)
   local exit_code=$?
@@ -74,6 +88,7 @@ EOF
 }
 
 # Query Coralogix using DataPrime and return results
+# Uses CORALOGIX_API_KEY (DataQuerying permissions required)
 # Usage: RESULT=$(cx_query "source logs | lucene 'error' | limit 10")
 cx_query() {
   local query="$1"
