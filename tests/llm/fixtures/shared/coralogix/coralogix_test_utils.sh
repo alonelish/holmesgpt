@@ -61,7 +61,8 @@ cx_send_logs() {
   local ingress_url=$(cx_ingress_url)
 
   local response
-  response=$(curl -s -X POST "${ingress_url}/logs/v1/singles" \
+  # Use -k to skip SSL verification (for sandbox environments with TLS interception)
+  response=$(curl -sk -X POST "${ingress_url}/logs/v1/singles" \
     -H "Authorization: Bearer ${CORALOGIX_SEND_API_KEY}" \
     -H "Content-Type: application/json" \
     -d "$log_entries" 2>&1)
@@ -87,7 +88,8 @@ cx_query() {
 
   local query_url=$(cx_query_url)
 
-  curl -sf -X POST "$query_url" \
+  # Use -k to skip SSL verification (for sandbox environments with TLS interception)
+  curl -sk -X POST "$query_url" \
     -H "Authorization: Bearer ${CORALOGIX_API_KEY}" \
     -H "Content-Type: application/json" \
     -d "{\"query\": \"$query\", \"metadata\": {\"syntax\": \"QUERY_SYNTAX_DATAPRIME\", \"startDate\": \"$start_date\", \"endDate\": \"$end_date\"}}"

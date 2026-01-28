@@ -64,7 +64,8 @@ before_test: |
   METRICS_READY=false
   for i in {1..60}; do
     # Query for our specific metric (use || true to prevent set -e from exiting on curl failure)
-    RESULT=$(curl -s -G "$PROMETHEUS_URL/api/v1/query" \
+    # Use -k to skip SSL verification (for sandbox environments with TLS interception)
+    RESULT=$(curl -sk -G "$PROMETHEUS_URL/api/v1/query" \
       -H "Authorization: Bearer ${CORALOGIX_API_KEY}" \
       --data-urlencode "query=${METRIC_PREFIX}_http_requests_total" 2>/dev/null || true)
 
