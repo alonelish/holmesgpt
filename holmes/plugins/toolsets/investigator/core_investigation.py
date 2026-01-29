@@ -14,6 +14,7 @@ from holmes.core.tools import (
     ToolsetTag,
 )
 from holmes.plugins.toolsets.investigator.model import Task, TaskStatus
+from holmes.utils.console.task_display import display_tasks
 
 TODO_WRITE_TOOL_NAME = "TodoWrite"
 
@@ -56,44 +57,15 @@ class TodoWriteTool(Tool):
         ),
     }
 
-    # Print a nice table to console/log
+    # Print a nice table to console/log with in-place updating
     def print_tasks_table(self, tasks):
-        if not tasks:
-            logging.info("No tasks in the investigation plan.")
-            return
+        """
+        Display task table with in-place updating support.
 
-        status_icons = {
-            "pending": "[ ]",
-            "in_progress": "[~]",
-            "completed": "[✓]",
-            "failed": "[✗]",
-        }
-
-        max_id_width = max(len(str(task.id)) for task in tasks)
-        max_content_width = max(len(task.content) for task in tasks)
-        max_status_display_width = max(
-            len(f"{status_icons[task.status.value]} {task.status.value}")
-            for task in tasks
-        )
-
-        id_width = max(max_id_width, len("ID"))
-        content_width = max(max_content_width, len("Content"))
-        status_width = max(max_status_display_width, len("Status"))
-
-        separator = f"+{'-' * (id_width + 2)}+{'-' * (content_width + 2)}+{'-' * (status_width + 2)}+"
-        header = f"| {'ID':<{id_width}} | {'Content':<{content_width}} | {'Status':<{status_width}} |"
-        tasks_to_display = []
-
-        for task in tasks:
-            status_display = f"{status_icons[task.status.value]} {task.status.value}"
-            row = f"| {task.id:<{id_width}} | {task.content:<{content_width}} | {status_display:<{status_width}} |"
-            tasks_to_display.append(row)
-
-        logging.info(
-            f"Task List:\n{separator}\n{header}\n{separator}\n"
-            + "\n".join(tasks_to_display)
-            + f"\n{separator}"
-        )
+        When running in an interactive terminal (TTY), this will update
+        the display in place rather than printing multiple copies.
+        """
+        display_tasks(tasks)
 
     def _invoke(self, params: dict, context: ToolInvokeContext) -> StructuredToolResult:
         try:

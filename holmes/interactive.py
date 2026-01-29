@@ -55,6 +55,7 @@ from holmes.utils.colors import (
     USER_COLOR,
 )
 from holmes.utils.console.consts import agent_name
+from holmes.utils.console.task_display import reset_task_display
 from holmes.utils.file_utils import write_json_file
 from holmes.version import check_version_async
 
@@ -1303,6 +1304,8 @@ def run_interactive_loop(
                     all_tool_calls_history.clear()
                     # Reset the show completer history
                     show_completer.update_history([])
+                    # Reset the task display state for in-place updating
+                    reset_task_display()
                     continue
                 elif command == SlashCommands.TOOLS_CONFIG.command:
                     pretty_print_toolset_status(ai.tool_executor.toolsets, console)
