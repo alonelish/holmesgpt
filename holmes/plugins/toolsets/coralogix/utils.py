@@ -1,9 +1,39 @@
 import json
 import logging
 from datetime import datetime
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, NamedTuple, Optional
 
-from pydantic import BaseModel, ConfigDict, model_validator
+from pydantic import BaseModel, ConfigDict, Field, model_validator
+
+
+class FlattenedLog(NamedTuple):
+    timestamp: str
+    log_message: str
+
+
+class CoralogixQueryResult(BaseModel):
+    logs: List[FlattenedLog]
+    http_status: Optional[int]
+    error: Optional[str]
+
+
+class CoralogixLabelsConfig(BaseModel):
+    pod: str = Field(
+        default="resource.attributes.k8s.pod.name",
+        description="Field path for pod name in log entries",
+    )
+    namespace: str = Field(
+        default="resource.attributes.k8s.namespace.name",
+        description="Field path for namespace in log entries",
+    )
+    log_message: str = Field(
+        default="logRecord.body",
+        description="Field path for log message content",
+    )
+    timestamp: str = Field(
+        default="logRecord.attributes.time",
+        description="Field path for timestamp in log entries",
+    )
 
 
 class CoralogixConfig(BaseModel):
@@ -16,13 +46,28 @@ class CoralogixConfig(BaseModel):
     Optional:
         team_slug: Your team's URL slug (e.g., "my-team" from https://my-team.eu2.coralogix.com).
                    Only needed to generate clickable UI permalink URLs in tool output.
+        labels: Label mappings for log fields (for Kubernetes log extraction)
     """
 
     model_config = ConfigDict(extra="allow")
 
-    domain: str
-    api_key: str
-    team_slug: Optional[str] = None
+    domain: str = Field(
+        description="Coralogix domain",
+        examples=["eu2.coralogix.com", "coralogix.us", "coralogix.in"],
+    )
+    api_key: str = Field(
+        description="Coralogix API key (starts with cxuw_)",
+        examples=["cxuw_xxxxxxxxxxxx"],
+    )
+    team_slug: Optional[str] = Field(
+        default=None,
+        description="Your team's URL slug for generating UI permalinks",
+        examples=["my-team"],
+    )
+    labels: CoralogixLabelsConfig = Field(
+        default_factory=CoralogixLabelsConfig,
+        description="Label mappings for log fields",
+    )
 
     @model_validator(mode="after")
     def handle_deprecated_fields(self):
@@ -80,5 +125,3 @@ def normalize_datetime(date_str: Optional[str]) -> str:
         return normalized_date_time + "Z"
     except Exception:
         return date_str
-
-
