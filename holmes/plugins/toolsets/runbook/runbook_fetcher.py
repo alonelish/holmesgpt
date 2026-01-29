@@ -2,7 +2,7 @@ import logging
 import os
 import textwrap
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Union, cast
+from typing import List, Optional, Union, cast
 
 from holmes.core.supabase_dal import SupabaseDal
 from holmes.core.tools import (
@@ -55,10 +55,10 @@ class RunbookFetcher(Tool):
 
         super().__init__(
             name="fetch_runbook",
-            description="Get runbook content by runbook link. Use this to get troubleshooting steps for incidents",
+            description="Get runbook content from the internal catalog. ONLY accepts UUIDs or .md filenames from the catalog - does NOT fetch URLs from the internet. For internet URLs (http/https), use fetch_webpage instead.",
             parameters={
                 "runbook_id": ToolParameter(
-                    description=f"The runbook_id: either a UUID or a .md filename. Must be one of: {runbook_list}",
+                    description=f"The runbook_id: either a UUID or a .md filename from the catalog. Must be one of: {runbook_list}. Do NOT pass URLs - this tool cannot fetch from the internet.",
                     type="string",
                     required=True,
                 ),
@@ -79,6 +79,21 @@ class RunbookFetcher(Tool):
                 "Runbook link cannot be empty. Please provide a valid runbook path."
             )
             logging.error(err_msg)
+            return StructuredToolResult(
+                status=StructuredToolResultStatus.ERROR,
+                error=err_msg,
+                params=params,
+            )
+
+        # Check if the runbook_id looks like a URL - this tool doesn't fetch from the internet
+        if runbook_id.startswith("http://") or runbook_id.startswith("https://"):
+            err_msg = (
+                f"The fetch_runbook tool does not fetch URLs from the internet. "
+                f"You provided '{runbook_id}' which appears to be a URL. "
+                f"To fetch runbooks from the internet, use the fetch_webpage tool instead. "
+                f"The fetch_runbook tool only accepts UUIDs or .md filenames from the internal catalog."
+            )
+            logging.warning(err_msg)
             return StructuredToolResult(
                 status=StructuredToolResultStatus.ERROR,
                 error=err_msg,

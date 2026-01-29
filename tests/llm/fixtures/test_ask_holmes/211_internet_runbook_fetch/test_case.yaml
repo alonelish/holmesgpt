@@ -1,0 +1,25 @@
+# Test: Fetch runbook from internet URL (must use fetch_webpage, not fetch_runbook)
+#
+# This test verifies that when a user provides a runbook URL from the internet,
+# Holmes uses the fetch_webpage tool (internet toolset) instead of fetch_runbook.
+# The fetch_runbook tool is only for internal catalog runbooks (UUIDs or .md files).
+#
+# This test addresses the issue where Holmes incorrectly tried to use fetch_runbook
+# for internet URLs, which would fail.
+
+user_prompt: |
+  I have a troubleshooting runbook at this URL: https://raw.githubusercontent.com/robusta-dev/holmesgpt/main/README.md
+
+  Please fetch this runbook and tell me what HolmesGPT is described as in the first paragraph.
+
+expected_output:
+  - "FAIL if fetch_runbook tool was called - this tool must never be used for internet URLs, only for internal catalog runbooks"
+  - "Must use fetch_webpage tool to fetch the URL content"
+  - "Must describe HolmesGPT as an open-source AI agent or similar description from the README"
+
+include_tool_calls: true
+
+tags:
+  - runbooks
+  - question-answer
+  - medium
