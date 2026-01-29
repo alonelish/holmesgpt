@@ -759,6 +759,13 @@ jobs:
               body: body
             });
 
+      - name: Create model list file
+        if: steps.check-tests.outputs.should-run == 'true'
+        run: |
+          cat > /tmp/model_list.yaml << 'EOF'
+          ${{ secrets.MODEL_LIST_YAML }}
+          EOF
+
       - name: Run tests
         if: steps.check-tests.outputs.should-run == 'true'
         id: evals
@@ -788,6 +795,7 @@ jobs:
           CORALOGIX_API_KEY: ${{ secrets.CORALOGIX_API_KEY }}
           CORALOGIX_SEND_API_KEY: ${{ secrets.CORALOGIX_SEND_API_KEY }}
           BRAINTRUST_API_KEY: ${{ secrets.BRAINTRUST_API_KEY }}
+          MODEL_LIST_FILE_LOCATION: /tmp/model_list.yaml
           UPLOAD_DATASET: "true"
           EXPERIMENT_ID: github-${{ github.run_id }}.${{ github.run_number }}.${{ github.run_attempt }}
           GENERATE_REGRESSIONS_FILE: "true"
