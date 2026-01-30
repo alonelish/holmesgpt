@@ -7,7 +7,6 @@
 # Requirements:
 # - CORALOGIX_SEND_API_KEY: API key with SendData permissions (for ingestion)
 # - CORALOGIX_API_KEY: API key with DataQuerying permissions (for queries)
-# - CORALOGIX_DOMAIN: e.g., "eu2.coralogix.com"
 # - OpenTelemetry Python packages (installed via poetry)
 #
 # Note: Coralogix uses separate API keys for sending vs querying data.
@@ -59,7 +58,7 @@ before_test: |
 
   # Wait for metrics to be queryable via Prometheus API
   echo "⏳ Waiting for metrics to be queryable in Coralogix..."
-  PROMETHEUS_URL="https://ng-api-http.${CORALOGIX_DOMAIN}/metrics"
+  PROMETHEUS_URL="https://ng-api-http.eu2.coralogix.com/metrics"
 
   METRICS_READY=false
   for i in {1..60}; do

@@ -7,7 +7,6 @@
 # Requirements:
 # - CORALOGIX_SEND_API_KEY: API key with SendData permissions (for ingestion)
 # - CORALOGIX_API_KEY: API key with DataQuerying permissions (for queries)
-# - CORALOGIX_DOMAIN: e.g., "eu2.coralogix.com"
 #
 # Note: Coralogix uses separate API keys for sending vs querying data.
 # See: https://coralogix.com/docs/user-guides/account-management/api-keys/api-keys/
@@ -68,7 +67,7 @@ before_test: |
   ]"
 
   # Send logs via REST API
-  INGRESS_URL="https://ingress.${CORALOGIX_DOMAIN}"
+  INGRESS_URL="https://ingress.eu2.coralogix.com"
 
   RESPONSE=$(curl -sk -X POST "${INGRESS_URL}/logs/v1/singles" \
     -H "Authorization: Bearer ${CORALOGIX_SEND_API_KEY}" \
@@ -85,7 +84,7 @@ before_test: |
 
   # Wait for logs to be queryable (Coralogix has some ingestion delay)
   echo "⏳ Waiting for logs to be queryable in Coralogix..."
-  QUERY_URL="https://ng-api-http.${CORALOGIX_DOMAIN}/api/v1/dataprime/query"
+  QUERY_URL="https://ng-api-http.eu2.coralogix.com/api/v1/dataprime/query"
 
   LOGS_READY=false
   for i in {1..60}; do

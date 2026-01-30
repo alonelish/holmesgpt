@@ -6,7 +6,8 @@
 # Required environment variables:
 #   CORALOGIX_SEND_API_KEY - API key with SendData permissions (for ingestion)
 #   CORALOGIX_API_KEY - API key with DataQuerying permissions (for queries)
-#   CORALOGIX_DOMAIN - e.g., "eu2.coralogix.com"
+#
+# Domain is hardcoded to eu2.coralogix.com
 #
 # Note: Coralogix uses separate API keys for sending vs querying data.
 # See: https://coralogix.com/docs/user-guides/account-management/api-keys/api-keys/
@@ -23,10 +24,6 @@ cx_validate_env() {
     missing+=("CORALOGIX_API_KEY")
   fi
 
-  if [ -z "$CORALOGIX_DOMAIN" ]; then
-    missing+=("CORALOGIX_DOMAIN")
-  fi
-
   if [ ${#missing[@]} -gt 0 ]; then
     echo "❌ Missing required environment variables: ${missing[*]}"
     exit 1
@@ -34,6 +31,9 @@ cx_validate_env() {
 
   echo "✅ Coralogix environment validated"
 }
+
+# Hardcoded Coralogix domain
+CORALOGIX_DOMAIN="eu2.coralogix.com"
 
 # Get the ingestion endpoint for sending logs
 # Usage: INGRESS_URL=$(cx_ingress_url)

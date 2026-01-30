@@ -7,7 +7,6 @@
 # Requirements:
 # - CORALOGIX_SEND_API_KEY: API key with SendData permissions (for ingestion)
 # - CORALOGIX_API_KEY: API key with DataQuerying permissions (for queries)
-# - CORALOGIX_DOMAIN: e.g., "eu2.coralogix.com"
 # - OpenTelemetry Python packages (installed via poetry)
 #
 # Note: Coralogix uses separate API keys for sending vs querying data.
@@ -60,7 +59,7 @@ before_test: |
 
   # Wait for traces to be queryable
   echo "⏳ Waiting for traces to be queryable in Coralogix..."
-  QUERY_URL="https://ng-api-http.${CORALOGIX_DOMAIN}/api/v1/dataprime/query"
+  QUERY_URL="https://ng-api-http.eu2.coralogix.com/api/v1/dataprime/query"
 
   TRACES_READY=false
   for i in {1..60}; do

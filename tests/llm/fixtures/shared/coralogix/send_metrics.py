@@ -8,7 +8,7 @@ Usage:
         --metric-prefix eval175
 
 Environment variables (alternative to CLI args):
-    CORALOGIX_DOMAIN - e.g., "eu2.coralogix.com"
+    Domain defaults to eu2.coralogix.com
     CORALOGIX_SEND_API_KEY - API key with SendData permissions (for ingestion)
 
 Note: Coralogix uses separate API keys for sending vs querying data.
@@ -116,7 +116,7 @@ def send_metrics(domain: str, api_key: str, app_name: str, subsystem: str,
 
 def main():
     parser = argparse.ArgumentParser(description="Send test metrics to Coralogix")
-    parser.add_argument("--domain", default=os.environ.get("CORALOGIX_DOMAIN"),
+    parser.add_argument("--domain", default=os.environ.get("CORALOGIX_DOMAIN", "eu2.coralogix.com"),
                         help="Coralogix domain (e.g., eu2.coralogix.com)")
     parser.add_argument("--api-key", default=os.environ.get("CORALOGIX_SEND_API_KEY"),
                         help="Coralogix Send-Your-Data API key (SendData permissions)")
@@ -126,9 +126,6 @@ def main():
 
     args = parser.parse_args()
 
-    if not args.domain:
-        print("ERROR: --domain or CORALOGIX_DOMAIN required")
-        sys.exit(1)
     if not args.api_key:
         print("ERROR: --api-key or CORALOGIX_SEND_API_KEY required")
         sys.exit(1)
