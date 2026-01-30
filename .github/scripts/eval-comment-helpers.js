@@ -105,7 +105,7 @@ function buildRerunFooter(p, context, options = {}) {
 
   // Only show legend when results are displayed
   if (includeLegend) {
-    footer += '\n<details>\n<summary>📖 <b>Legend</b></summary>\n\n' +
+    footer += '\n<details>\n<summary><b>Legend</b></summary>\n\n' +
       '| Icon | Meaning |\n|------|--------|\n' +
       '| ✅ | The test was successful |\n' +
       '| ➖ | The test was skipped |\n' +
@@ -117,29 +117,24 @@ function buildRerunFooter(p, context, options = {}) {
       '</details>\n';
   }
 
-  footer += '\n<details>\n<summary>🔄 <b>Re-run evals manually</b></summary>\n\n' +
-    '> ⚠️ **Warning:** `/eval` comments always run using the **workflow from master**, not from this PR branch. ' +
-    'If you modified the GitHub Action (e.g., added secrets or env vars), those changes won\'t take effect.\n>\n' +
-    '> **To test workflow changes**, use the GitHub CLI or [Actions UI](' + workflowUrl + ') instead:\n>\n' +
-    '> ```\n> ' + ghCommand + '\n> ```\n\n' +
-    '---\n\n' +
+  footer += '\n<details>\n<summary><b>Re-run evals</b></summary>\n\n' +
+    '> ⚠️ `/eval` comments run using the **workflow from master**. To test workflow changes, use the CLI or Actions UI.\n\n' +
     '**Option 1: Comment on this PR** with `/eval`:\n\n' +
     '```\n/eval\nmarkers: regression\n```\n\n' +
-    'Or with more options (one per line):\n\n' +
+    'With more options:\n\n' +
     '```\n/eval\nmodel: gpt-4o\nmarkers: regression\nfilter: 09_crashpod\niterations: 5\n```\n\n' +
-    'Run evals on a different branch (e.g., master) for comparison:\n\n' +
+    'Compare with a different branch:\n\n' +
     '```\n/eval\nbranch: master\nmarkers: regression\n```\n\n' +
     '| Option | Description |\n|--------|-------------|\n' +
     '| `model` | Model(s) to test (default: same as automatic runs) |\n' +
     '| `markers` | Pytest markers (**no default - runs all tests!**) |\n' +
-    '| `filter` | Pytest -k filter (use `/list` to see valid eval names) |\n' +
+    '| `filter` | Pytest -k filter |\n' +
     '| `iterations` | Number of runs, max 10 |\n' +
-    '| `branch` | Run evals on a different branch (for cross-branch comparison) |\n\n' +
-    '**Quick re-run:** Use `/rerun` to re-run the most recent `/eval` on this PR with the same parameters.\n\n' +
-    '**List available tests:** Use `/list` to see valid eval names for the filter option.\n\n' +
-    `**Option 2: [Trigger via GitHub Actions UI](${workflowUrl})** → "Run workflow"\n\n` +
+    '| `branch` | Run on a different branch (for comparison) |\n\n' +
+    '**Other commands:** `/rerun` (re-run last eval), `/list` (show available tests)\n\n' +
+    `**Option 2: [GitHub Actions UI](${workflowUrl})** → "Run workflow"\n\n` +
     `**Option 3: GitHub CLI**\n\`\`\`\n${ghCommand}\n\`\`\`\n</details>\n` +
-    '\n<details>\n<summary>🏷️ <b>Valid markers</b></summary>\n\n' +
+    '\n<details>\n<summary><b>Valid markers</b></summary>\n\n' +
     markersFormatted +
     '\n</details>\n';
 

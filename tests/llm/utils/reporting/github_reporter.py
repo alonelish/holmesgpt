@@ -279,19 +279,17 @@ def generate_markdown_report(
     total_cost_str = f"${total_cost:.4f}" if total_cost > 0 else "—"
     markdown += f"| | **Total** | **{avg_time_str}** avg | **{avg_turns_str}** avg | **{avg_tools_str}** avg | **{total_cost_str}** |\n"
 
-    # Add footer explaining historical comparison status (inside details)
-    if historical and comparison_map:
-        markdown += "\n_Time/Cost columns show % change vs historical average (↑slower/costlier, ↓faster/cheaper). Changes under 10% shown as ±0%._\n"
+    markdown += "\n</details>\n"
 
-        # Add historical comparison transparency info
+    # Add historical comparison as its own section
+    if historical and comparison_map:
+        markdown += "\n<details>\n<summary><b>Historical comparison</b></summary>\n\n"
+        markdown += "_Time/Cost columns show % change vs historical average (↑slower/costlier, ↓faster/cheaper). Changes under 10% shown as ±0%._\n"
         if historical_details:
             markdown += _generate_historical_comparison_info(historical_details)
+        markdown += "\n</details>\n"
     elif historical_details and historical_details.status:
-        markdown += (
-            f"\n_Historical comparison unavailable: {historical_details.status}_\n"
-        )
-
-    markdown += "\n</details>\n"
+        markdown += f"\n_Historical comparison unavailable: {historical_details.status}_\n"
 
     return (
         markdown,
