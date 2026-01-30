@@ -305,12 +305,27 @@ To use HolmesGPT with a private registry, first mirror the required images:
 docker pull robustadev/holmes:0.0.0
 docker tag robustadev/holmes:0.0.0 your-internal-registry.company.com/holmesgpt/holmes:0.0.0
 docker push your-internal-registry.company.com/holmesgpt/holmes:0.0.0
+```
 
-# Mirror MCP addon images (if using)
+MCP addon images come from different source registries depending on the addon:
+
+```bash
+# AWS MCP addon (from us-central1-docker.pkg.dev/genuine-flight-317411/devel)
 docker pull us-central1-docker.pkg.dev/genuine-flight-317411/devel/aws-api-mcp-server:1.0.1
 docker tag us-central1-docker.pkg.dev/genuine-flight-317411/devel/aws-api-mcp-server:1.0.1 \
   your-internal-registry.company.com/mcp-servers/aws-api-mcp-server:1.0.1
 docker push your-internal-registry.company.com/mcp-servers/aws-api-mcp-server:1.0.1
+
+# GCP, Azure, GitHub, MariaDB addons (from me-west1-docker.pkg.dev/robusta-development/development)
+docker pull me-west1-docker.pkg.dev/robusta-development/development/gcloud-cli-mcp:1.0.7
+docker tag me-west1-docker.pkg.dev/robusta-development/development/gcloud-cli-mcp:1.0.7 \
+  your-internal-registry.company.com/mcp-servers/gcloud-cli-mcp:1.0.7
+docker push your-internal-registry.company.com/mcp-servers/gcloud-cli-mcp:1.0.7
+
+docker pull me-west1-docker.pkg.dev/robusta-development/development/azure-cli-mcp:1.0.1
+docker tag me-west1-docker.pkg.dev/robusta-development/development/azure-cli-mcp:1.0.1 \
+  your-internal-registry.company.com/mcp-servers/azure-cli-mcp:1.0.1
+docker push your-internal-registry.company.com/mcp-servers/azure-cli-mcp:1.0.1
 ```
 
 ### Robusta Platform Integration
