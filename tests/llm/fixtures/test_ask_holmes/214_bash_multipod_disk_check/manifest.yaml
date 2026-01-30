@@ -1,6 +1,7 @@
 # StatefulSet with 100 cache-worker pods
-# Pods 0-89: small /tmp (100KB)
-# Pods 90-99: large /tmp (60MB) - these should be flagged
+# Pods with disk issues are scattered non-sequentially using formula: (ordinal * 7 + 3) % 11 == 0
+# Bad pods: 1, 12, 23, 34, 45, 56, 67, 78, 89 (9 scattered pods)
+# Holmes MUST check every pod to find all of them - can't guess or sample
 apiVersion: v1
 kind: Service
 metadata:
@@ -35,11 +36,17 @@ spec:
           args:
             - |
               POD_ID=$(hostname | sed 's/cache-worker-//')
-              # Pods 90-99 get large files (60MB), others get small (100KB)
-              if [ "$POD_ID" -ge 90 ]; then
+              # Non-sequential pattern: (ordinal * 7 + 3) % 11 == 0 means disk issue
+              # This creates scattered bad pods: 1, 12, 23, 34, 45, 56, 67, 78, 89
+              HASH=$(( (POD_ID * 7 + 3) % 11 ))
+              if [ "$HASH" -eq 0 ]; then
+                # This pod has disk issue - create 60MB file
                 dd if=/dev/zero of=/tmp/cache.dat bs=1M count=60 2>/dev/null
+                echo "DISK_STATUS=CRITICAL" > /tmp/status
               else
+                # Normal pod - small file
                 dd if=/dev/zero of=/tmp/cache.dat bs=1K count=100 2>/dev/null
+                echo "DISK_STATUS=OK" > /tmp/status
               fi
               sleep 3600
           resources:
