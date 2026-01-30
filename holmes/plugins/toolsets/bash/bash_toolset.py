@@ -12,6 +12,7 @@ from typing import Any, Dict, Optional
 from holmes.core.tools import (
     ApprovalRequirement,
     CallablePrerequisite,
+    ClassVar,
     StructuredToolResult,
     StructuredToolResultStatus,
     Tool,
@@ -19,6 +20,7 @@ from holmes.core.tools import (
     ToolParameter,
     Toolset,
     ToolsetTag,
+    Type,
 )
 from holmes.plugins.prompts import load_and_render_prompt
 from holmes.plugins.toolsets.bash.common.bash import BashResult, execute_bash_command
@@ -296,11 +298,8 @@ class BashExecutorToolset(Toolset):
     commands on-the-fly and build their trusted command set over time.
     """
 
+    config_classes: ClassVar[list[Type[BashExecutorConfig]]] = [BashExecutorConfig]
     config: Optional[BashExecutorConfig] = None
-
-    def get_example_config(self):
-        example_config = BashExecutorConfig()
-        return example_config.model_dump()
 
     def __init__(self):
         super().__init__(
