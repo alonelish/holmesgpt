@@ -67,48 +67,6 @@ function renderParamsTable(p, context = null) {
 }
 
 /**
- * Build comment body for running state
- * @param {Object} p - Parameters object
- * @param {Object} extras - Extra options (context)
- * @returns {string} Markdown body
- */
-function buildRunningBody(p, extras = {}) {
-  let body = AUTO_EVAL_COMMENT_IDENTIFIER + '\n';
-
-  if (p.isManual) {
-    body += `## 🚀 Manual Eval Running...\n\n` + renderParamsTable(p, extras.context);
-  } else {
-    body += `## ⏳ HolmesGPT evals running...\n\n` +
-      `Automatically triggered by ${p.trigger}. [View workflow logs](${p.runUrl})\n`;
-  }
-
-  return body;
-}
-
-/**
- * Build comment body for completed state (results)
- * @param {Object} p - Parameters object
- * @param {string} resultsContent - The eval results markdown
- * @param {string} footer - Footer content
- * @returns {string} Markdown body
- */
-function buildResultsBody(p, resultsContent, footer) {
-  let body = AUTO_EVAL_COMMENT_IDENTIFIER + '\n';
-
-  if (p.isManual) {
-    body += `## ✅ Manual Eval Complete\n\n` + renderParamsTable(p) + '\n';
-  } else {
-    body += `## ✅ Results of HolmesGPT evals\n\n` +
-      `Automatically triggered by ${p.trigger}. [View workflow logs](${p.runUrl})\n\n`;
-  }
-
-  body += resultsContent;
-  body += footer;
-
-  return body;
-}
-
-/**
  * Format comma-separated items as code-styled list
  * @param {string} items - Comma-separated items
  * @returns {string} Formatted items
@@ -192,7 +150,5 @@ module.exports = {
   AUTO_EVAL_COMMENT_IDENTIFIER,
   buildParams,
   renderParamsTable,
-  buildRunningBody,
-  buildResultsBody,
   buildRerunFooter
 };
