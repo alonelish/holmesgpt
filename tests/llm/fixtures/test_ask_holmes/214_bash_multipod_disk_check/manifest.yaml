@@ -1,172 +1,51 @@
-# 7 pods with small /tmp usage
----
+# StatefulSet with 100 cache-worker pods
+# Pods 0-89: small /tmp (100KB)
+# Pods 90-99: large /tmp (60MB) - these should be flagged
 apiVersion: v1
-kind: Pod
+kind: Service
 metadata:
-  name: cache-worker-1
+  name: cache-worker
   namespace: app-214
-  labels:
-    app: cache-worker
 spec:
-  containers:
-    - name: worker
-      image: alpine:3.19
-      command: ["/bin/sh", "-c", "dd if=/dev/urandom of=/tmp/cache.dat bs=1K count=100 2>/dev/null; sleep 3600"]
-      resources:
-        limits:
-          memory: "64Mi"
-          cpu: "100m"
+  clusterIP: None
+  selector:
+    app: cache-worker
 ---
-apiVersion: v1
-kind: Pod
+apiVersion: apps/v1
+kind: StatefulSet
 metadata:
-  name: cache-worker-2
+  name: cache-worker
   namespace: app-214
-  labels:
-    app: cache-worker
 spec:
-  containers:
-    - name: worker
-      image: alpine:3.19
-      command: ["/bin/sh", "-c", "dd if=/dev/urandom of=/tmp/cache.dat bs=1K count=100 2>/dev/null; sleep 3600"]
-      resources:
-        limits:
-          memory: "64Mi"
-          cpu: "100m"
----
-apiVersion: v1
-kind: Pod
-metadata:
-  name: cache-worker-3
-  namespace: app-214
-  labels:
-    app: cache-worker
-spec:
-  containers:
-    - name: worker
-      image: alpine:3.19
-      command: ["/bin/sh", "-c", "dd if=/dev/urandom of=/tmp/cache.dat bs=1K count=100 2>/dev/null; sleep 3600"]
-      resources:
-        limits:
-          memory: "64Mi"
-          cpu: "100m"
----
-apiVersion: v1
-kind: Pod
-metadata:
-  name: cache-worker-4
-  namespace: app-214
-  labels:
-    app: cache-worker
-spec:
-  containers:
-    - name: worker
-      image: alpine:3.19
-      command: ["/bin/sh", "-c", "dd if=/dev/urandom of=/tmp/cache.dat bs=1K count=100 2>/dev/null; sleep 3600"]
-      resources:
-        limits:
-          memory: "64Mi"
-          cpu: "100m"
----
-apiVersion: v1
-kind: Pod
-metadata:
-  name: cache-worker-5
-  namespace: app-214
-  labels:
-    app: cache-worker
-spec:
-  containers:
-    - name: worker
-      image: alpine:3.19
-      command: ["/bin/sh", "-c", "dd if=/dev/urandom of=/tmp/cache.dat bs=1K count=100 2>/dev/null; sleep 3600"]
-      resources:
-        limits:
-          memory: "64Mi"
-          cpu: "100m"
----
-apiVersion: v1
-kind: Pod
-metadata:
-  name: cache-worker-6
-  namespace: app-214
-  labels:
-    app: cache-worker
-spec:
-  containers:
-    - name: worker
-      image: alpine:3.19
-      command: ["/bin/sh", "-c", "dd if=/dev/urandom of=/tmp/cache.dat bs=1K count=100 2>/dev/null; sleep 3600"]
-      resources:
-        limits:
-          memory: "64Mi"
-          cpu: "100m"
----
-apiVersion: v1
-kind: Pod
-metadata:
-  name: cache-worker-7
-  namespace: app-214
-  labels:
-    app: cache-worker
-spec:
-  containers:
-    - name: worker
-      image: alpine:3.19
-      command: ["/bin/sh", "-c", "dd if=/dev/urandom of=/tmp/cache.dat bs=1K count=100 2>/dev/null; sleep 3600"]
-      resources:
-        limits:
-          memory: "64Mi"
-          cpu: "100m"
----
-# 3 pods with large /tmp usage (>50MB)
-apiVersion: v1
-kind: Pod
-metadata:
-  name: cache-worker-8
-  namespace: app-214
-  labels:
-    app: cache-worker
-spec:
-  containers:
-    - name: worker
-      image: alpine:3.19
-      command: ["/bin/sh", "-c", "dd if=/dev/urandom of=/tmp/cache.dat bs=1M count=60 2>/dev/null; sleep 3600"]
-      resources:
-        limits:
-          memory: "128Mi"
-          cpu: "100m"
----
-apiVersion: v1
-kind: Pod
-metadata:
-  name: cache-worker-9
-  namespace: app-214
-  labels:
-    app: cache-worker
-spec:
-  containers:
-    - name: worker
-      image: alpine:3.19
-      command: ["/bin/sh", "-c", "dd if=/dev/urandom of=/tmp/cache.dat bs=1M count=75 2>/dev/null; sleep 3600"]
-      resources:
-        limits:
-          memory: "128Mi"
-          cpu: "100m"
----
-apiVersion: v1
-kind: Pod
-metadata:
-  name: cache-worker-10
-  namespace: app-214
-  labels:
-    app: cache-worker
-spec:
-  containers:
-    - name: worker
-      image: alpine:3.19
-      command: ["/bin/sh", "-c", "dd if=/dev/urandom of=/tmp/cache.dat bs=1M count=80 2>/dev/null; sleep 3600"]
-      resources:
-        limits:
-          memory: "128Mi"
-          cpu: "100m"
+  serviceName: cache-worker
+  replicas: 100
+  podManagementPolicy: Parallel
+  selector:
+    matchLabels:
+      app: cache-worker
+  template:
+    metadata:
+      labels:
+        app: cache-worker
+    spec:
+      containers:
+        - name: worker
+          image: alpine:3.19
+          command: ["/bin/sh", "-c"]
+          args:
+            - |
+              POD_ID=$(hostname | sed 's/cache-worker-//')
+              # Pods 90-99 get large files (60MB), others get small (100KB)
+              if [ "$POD_ID" -ge 90 ]; then
+                dd if=/dev/zero of=/tmp/cache.dat bs=1M count=60 2>/dev/null
+              else
+                dd if=/dev/zero of=/tmp/cache.dat bs=1K count=100 2>/dev/null
+              fi
+              sleep 3600
+          resources:
+            limits:
+              memory: "128Mi"
+              cpu: "50m"
+            requests:
+              memory: "32Mi"
+              cpu: "10m"

@@ -1,17 +1,15 @@
-user_prompt: "Write a bash script with a for-loop to test database connectivity from all api-worker pods in namespace app-215. The script should iterate over pods and use nc to check if each can reach the database service on port 5432."
+user_prompt: "Verify that all api-worker pods in namespace app-215 can reach the database service on port 5432. Report which pods have connectivity issues."
 
 include_tool_calls: true
 
 expected_output:
-  - "The bash command must contain a for-loop (e.g., 'for pod in' or 'for i in')"
-  - "Must NOT make separate kubectl exec calls for each pod - must use a single bash script"
-  - "Must identify api-worker-8, api-worker-9, and api-worker-10 as having connectivity issues"
+  - "Must identify api-worker-90 through api-worker-99 as having connectivity issues"
+  - "Must check all 100 pods"
 
 description: |
-  TDD test: This test should FAIL until the bash toolset supports loop constructs.
-  The bash toolset currently blocks for/while loops, so Holmes cannot write the required script.
-  10 worker pods + database are deployed. NetworkPolicy blocks 3 pods from the database.
-  This test validates that we need to add loop support to the bash toolset.
+  TDD test: 100 worker pods deployed - too many for individual kubectl exec calls.
+  Holmes needs to write a bash script with a loop, but bash toolset blocks loops.
+  Pods 0-89 can reach database, pods 90-99 are blocked by NetworkPolicy.
 
 tags:
   - kubernetes
@@ -24,10 +22,10 @@ before_test: |
 
   # Wait for all pods to be ready
   PODS_READY=false
-  for i in {1..90}; do
+  for i in {1..180}; do
     READY_COUNT=$(kubectl get pods -n app-215 --field-selector=status.phase=Running --no-headers 2>/dev/null | wc -l | tr -d ' ')
-    echo "Attempt $i: $READY_COUNT/11 pods ready (10 workers + 1 db)"
-    if [ "$READY_COUNT" -ge 11 ]; then
+    echo "Attempt $i: $READY_COUNT/101 pods ready (100 workers + 1 db)"
+    if [ "$READY_COUNT" -ge 101 ]; then
       echo "All pods ready!"
       PODS_READY=true
       break
@@ -41,10 +39,10 @@ before_test: |
     exit 1
   fi
 
-  # Verify database service is accessible from allowed pod
+  # Verify database service is accessible from allowed pod (pod 0)
   DB_CHECK=false
   for i in {1..30}; do
-    if kubectl exec -n app-215 api-worker-1 -- nc -zv -w 2 database 5432 2>&1 | grep -q "open\|succeeded"; then
+    if kubectl exec -n app-215 api-worker-0 -- nc -zv -w 2 database 5432 2>&1 | grep -q "open\|succeeded"; then
       echo "Database connectivity verified from allowed pod"
       DB_CHECK=true
       break
@@ -54,14 +52,14 @@ before_test: |
 
   if [ "$DB_CHECK" = false ]; then
     echo "Database service not accessible from allowed pod"
-    kubectl exec -n app-215 api-worker-1 -- nc -zv -w 2 database 5432
+    kubectl exec -n app-215 api-worker-0 -- nc -zv -w 2 database 5432
     exit 1
   fi
 
-  # Verify blocked pod cannot connect
+  # Verify blocked pod cannot connect (pod 99)
   BLOCK_CHECK=false
-  if ! kubectl exec -n app-215 api-worker-10 -- nc -zv -w 2 database 5432 2>&1 | grep -q "open\|succeeded"; then
-    echo "NetworkPolicy blocking verified - api-worker-10 cannot reach database"
+  if ! kubectl exec -n app-215 api-worker-99 -- nc -zv -w 2 database 5432 2>&1 | grep -q "open\|succeeded"; then
+    echo "NetworkPolicy blocking verified - api-worker-99 cannot reach database"
     BLOCK_CHECK=true
   fi
 

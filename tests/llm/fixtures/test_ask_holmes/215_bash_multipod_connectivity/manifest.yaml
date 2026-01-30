@@ -17,7 +17,7 @@ spec:
         - -c
         - |
           apk add --no-cache netcat-openbsd >/dev/null 2>&1
-          nc -l -k -p 5432
+          while true; do nc -l -p 5432; done
       ports:
         - containerPort: 5432
       resources:
@@ -58,15 +58,57 @@ spec:
         - protocol: TCP
           port: 5432
 ---
-# 7 worker pods WITH db-access label (can connect)
+# StatefulSet: 90 worker pods WITH db-access label (can connect)
+apiVersion: v1
+kind: Service
+metadata:
+  name: api-worker
+  namespace: app-215
+spec:
+  clusterIP: None
+  selector:
+    app: api-worker
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: api-worker
+  namespace: app-215
+spec:
+  serviceName: api-worker
+  replicas: 90
+  podManagementPolicy: Parallel
+  selector:
+    matchLabels:
+      app: api-worker
+      db-access: allowed
+  template:
+    metadata:
+      labels:
+        app: api-worker
+        db-access: allowed
+    spec:
+      containers:
+        - name: worker
+          image: alpine:3.19
+          command: ["/bin/sh", "-c", "apk add --no-cache netcat-openbsd >/dev/null 2>&1; sleep 3600"]
+          resources:
+            limits:
+              memory: "64Mi"
+              cpu: "50m"
+            requests:
+              memory: "32Mi"
+              cpu: "10m"
+---
+# 10 individual pods WITHOUT db-access label (blocked by NetworkPolicy)
+# Named api-worker-90 through api-worker-99 to continue the sequence
 apiVersion: v1
 kind: Pod
 metadata:
-  name: api-worker-1
+  name: api-worker-90
   namespace: app-215
   labels:
     app: api-worker
-    db-access: allowed
 spec:
   containers:
     - name: worker
@@ -75,16 +117,15 @@ spec:
       resources:
         limits:
           memory: "64Mi"
-          cpu: "100m"
+          cpu: "50m"
 ---
 apiVersion: v1
 kind: Pod
 metadata:
-  name: api-worker-2
+  name: api-worker-91
   namespace: app-215
   labels:
     app: api-worker
-    db-access: allowed
 spec:
   containers:
     - name: worker
@@ -93,16 +134,15 @@ spec:
       resources:
         limits:
           memory: "64Mi"
-          cpu: "100m"
+          cpu: "50m"
 ---
 apiVersion: v1
 kind: Pod
 metadata:
-  name: api-worker-3
+  name: api-worker-92
   namespace: app-215
   labels:
     app: api-worker
-    db-access: allowed
 spec:
   containers:
     - name: worker
@@ -111,16 +151,15 @@ spec:
       resources:
         limits:
           memory: "64Mi"
-          cpu: "100m"
+          cpu: "50m"
 ---
 apiVersion: v1
 kind: Pod
 metadata:
-  name: api-worker-4
+  name: api-worker-93
   namespace: app-215
   labels:
     app: api-worker
-    db-access: allowed
 spec:
   containers:
     - name: worker
@@ -129,16 +168,15 @@ spec:
       resources:
         limits:
           memory: "64Mi"
-          cpu: "100m"
+          cpu: "50m"
 ---
 apiVersion: v1
 kind: Pod
 metadata:
-  name: api-worker-5
+  name: api-worker-94
   namespace: app-215
   labels:
     app: api-worker
-    db-access: allowed
 spec:
   containers:
     - name: worker
@@ -147,16 +185,15 @@ spec:
       resources:
         limits:
           memory: "64Mi"
-          cpu: "100m"
+          cpu: "50m"
 ---
 apiVersion: v1
 kind: Pod
 metadata:
-  name: api-worker-6
+  name: api-worker-95
   namespace: app-215
   labels:
     app: api-worker
-    db-access: allowed
 spec:
   containers:
     - name: worker
@@ -165,16 +202,15 @@ spec:
       resources:
         limits:
           memory: "64Mi"
-          cpu: "100m"
+          cpu: "50m"
 ---
 apiVersion: v1
 kind: Pod
 metadata:
-  name: api-worker-7
+  name: api-worker-96
   namespace: app-215
   labels:
     app: api-worker
-    db-access: allowed
 spec:
   containers:
     - name: worker
@@ -183,35 +219,15 @@ spec:
       resources:
         limits:
           memory: "64Mi"
-          cpu: "100m"
----
-# 3 worker pods WITHOUT db-access label (blocked by NetworkPolicy)
-apiVersion: v1
-kind: Pod
-metadata:
-  name: api-worker-8
-  namespace: app-215
-  labels:
-    app: api-worker
-    # No db-access label - will be blocked
-spec:
-  containers:
-    - name: worker
-      image: alpine:3.19
-      command: ["/bin/sh", "-c", "apk add --no-cache netcat-openbsd >/dev/null 2>&1; sleep 3600"]
-      resources:
-        limits:
-          memory: "64Mi"
-          cpu: "100m"
+          cpu: "50m"
 ---
 apiVersion: v1
 kind: Pod
 metadata:
-  name: api-worker-9
+  name: api-worker-97
   namespace: app-215
   labels:
     app: api-worker
-    # No db-access label - will be blocked
 spec:
   containers:
     - name: worker
@@ -220,16 +236,15 @@ spec:
       resources:
         limits:
           memory: "64Mi"
-          cpu: "100m"
+          cpu: "50m"
 ---
 apiVersion: v1
 kind: Pod
 metadata:
-  name: api-worker-10
+  name: api-worker-98
   namespace: app-215
   labels:
     app: api-worker
-    # No db-access label - will be blocked
 spec:
   containers:
     - name: worker
@@ -238,4 +253,21 @@ spec:
       resources:
         limits:
           memory: "64Mi"
-          cpu: "100m"
+          cpu: "50m"
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: api-worker-99
+  namespace: app-215
+  labels:
+    app: api-worker
+spec:
+  containers:
+    - name: worker
+      image: alpine:3.19
+      command: ["/bin/sh", "-c", "apk add --no-cache netcat-openbsd >/dev/null 2>&1; sleep 3600"]
+      resources:
+        limits:
+          memory: "64Mi"
+          cpu: "50m"
