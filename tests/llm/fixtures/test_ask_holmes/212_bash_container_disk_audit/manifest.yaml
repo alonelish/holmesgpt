@@ -17,12 +17,12 @@ spec:
 
           # Create 90 small files (1KB each)
           for i in $(seq 1 90); do
-            dd if=/dev/urandom of=/var/data/small_$i.dat bs=1K count=1 2>/dev/null
+            dd if=/dev/zero of=/var/data/small_$i.dat bs=1K count=1 2>/dev/null
           done
 
-          # Create 10 large files (15MB each)
+          # Create 10 large files (15MB each) - use /dev/zero for speed
           for i in $(seq 91 100); do
-            dd if=/dev/urandom of=/var/data/large_$i.dat bs=1M count=15 2>/dev/null
+            dd if=/dev/zero of=/var/data/large_$i.dat bs=1M count=15 2>/dev/null
           done
 
           echo "Files created successfully"
