@@ -15,167 +15,6 @@
 // Identifier for the persistent automated eval comment (hidden HTML comment)
 const AUTO_EVAL_COMMENT_IDENTIFIER = '<!-- holmes-auto-eval-results -->';
 
-// Marker to delimit end of history run content (avoids issues with nested <details> tags)
-const HISTORY_RUN_END_MARKER = '<!-- END_HISTORY_RUN -->';
-
-/**
- * Parse run history from an existing comment body
- * @param {string} body - Existing comment body
- * @returns {Array<{summary: string, content: string}>} Array of previous runs
- */
-function parseRunHistory(body) {
-  const runs = [];
-
-  // Match collapsed previous runs using our unique end marker to handle nested <details> tags
-  // The marker ensures we capture the full content even if it contains its own <details> sections
-  const historyRegex = /<details>\s*<summary>📜\s*(.+?)<\/summary>\s*([\s\S]*?)<!-- END_HISTORY_RUN -->\s*<\/details>/g;
-  let match;
-  while ((match = historyRegex.exec(body)) !== null) {
-    runs.push({
-      summary: match[1].trim(),
-      content: match[2].trim()
-    });
-  }
-
-  return runs;
-}
-
-/**
- * Extract the current (uncollapsed) run content from comment body
- * With the new structure, history is at the top, so current run comes after the "---" separator
- * Only extracts completed runs (not in-progress) to avoid saving incomplete results
- * @param {string} body - Existing comment body
- * @returns {{summary: string, content: string}|null} Current run info or null if not a completed run
- */
-function extractCurrentRun(body) {
-  // Remove the identifier comment
-  let cleanBody = body.replace(AUTO_EVAL_COMMENT_IDENTIFIER, '').trim();
-
-  // Skip past the "Previous Runs" section if present (new structure has history at top)
-  const previousRunsHeader = '## 📂 Previous Runs';
-  if (cleanBody.startsWith(previousRunsHeader)) {
-    // Find the separator that ends the history section
-    const separatorIndex = cleanBody.indexOf('\n---\n');
-    if (separatorIndex !== -1) {
-      cleanBody = cleanBody.substring(separatorIndex + 5).trim(); // Skip past "---\n"
-    }
-  }
-
-  // Find the header line (## ✅ Results... or ## ⏳ HolmesGPT evals running...)
-  const headerMatch = cleanBody.match(/^(## [^\n]+)/);
-  if (!headerMatch) return null;
-
-  const header = headerMatch[1];
-
-  // Only save completed runs to history (not in-progress runs)
-  // Completed runs have "Results" in the title
-  if (!header.includes('Results')) {
-    return null;
-  }
-
-  // Find where footer starts - look for any footer section (Legend, Re-run, or Valid markers)
-  const footerMarkers = [
-    '<details>\n<summary>📖 <b>Legend</b>',
-    '<details>\n<summary>🔄 <b>Re-run evals manually</b>',
-    '<details>\n<summary>🏷️ <b>Valid markers</b>',
-    '\n---\n**Commands:**'
-  ];
-
-  // Find the earliest footer marker
-  let endPos = cleanBody.length;
-  for (const marker of footerMarkers) {
-    const pos = cleanBody.indexOf(marker);
-    if (pos !== -1 && pos < endPos) {
-      endPos = pos;
-    }
-  }
-
-  // Extract trigger info for the summary (search in the current run section)
-  const currentSection = cleanBody.substring(0, endPos);
-  const triggerMatch = currentSection.match(/Automatically triggered by ([^\n]+)/);
-  const trigger = triggerMatch ? triggerMatch[1] : '';
-
-  // Extract workflow run URL for linking
-  const runUrlMatch = currentSection.match(/\[View workflow logs\]\(([^)]+)\)/);
-  const runUrl = runUrlMatch ? runUrlMatch[1] : '';
-
-  // Build a descriptive summary with trigger info
-  let summary = 'Previous Run';
-  if (trigger) {
-    // Extract commit and branch info from trigger like "commit abc1234 on branch `feature`"
-    const commitMatch = trigger.match(/commit ([a-f0-9]+)/);
-    const commit = commitMatch ? commitMatch[1] : '';
-    summary = commit ? `Run @ ${commit}` : `Run: ${trigger.substring(0, 50)}`;
-  }
-  if (runUrl) {
-    // Extract run ID from URL for reference
-    const runIdMatch = runUrl.match(/runs\/(\d+)/);
-    if (runIdMatch) {
-      summary += ` (#${runIdMatch[1]})`;
-    }
-  }
-
-  // Build content for when this run becomes collapsed
-  const content = cleanBody.substring(0, endPos).trim();
-
-  return {
-    summary: summary,
-    content: content
-  };
-}
-
-// GitHub comment body size limit (64KB), with buffer for safety
-const MAX_COMMENT_SIZE = 60000;
-
-/**
- * Build comment body with run history support for automated runs
- * Previous runs appear at the top in a collapsible section, followed by current run
- * Automatically truncates history if approaching GitHub's 64KB comment limit
- * @param {string} currentContent - Current run's full content (before footer)
- * @param {Array<{summary: string, content: string}>} previousRuns - Previous runs to collapse
- * @param {string} footer - Footer content (legend, rerun instructions)
- * @param {number} maxHistory - Maximum number of historical runs to keep (default 5)
- * @returns {string} Complete comment body with identifier
- */
-function buildAutoCommentWithHistory(currentContent, previousRuns, footer, maxHistory = 5) {
-  let body = AUTO_EVAL_COMMENT_IDENTIFIER + '\n';
-
-  // Build previous runs section first (at top)
-  const runsToShow = previousRuns.slice(0, maxHistory);
-  let historySection = '';
-  let addedCount = 0;
-
-  if (runsToShow.length > 0) {
-    historySection = '## 📂 Previous Runs\n\n';
-
-    for (const run of runsToShow) {
-      // Use END_HISTORY_RUN marker to properly delimit content (handles nested <details> tags in reports)
-      const historyEntry = `<details>\n<summary>📜 ${run.summary}</summary>\n\n${run.content}\n\n${HISTORY_RUN_END_MARKER}\n</details>\n\n`;
-
-      // Check if adding this entry would exceed the limit
-      const projectedSize = body.length + historySection.length + historyEntry.length + currentContent.length + footer.length;
-      if (projectedSize > MAX_COMMENT_SIZE) {
-        // Add truncation notice instead
-        const remaining = runsToShow.length - addedCount;
-        historySection += `<details>\n<summary>⚠️ ${remaining} older run${remaining > 1 ? 's' : ''} truncated</summary>\n\n_Older runs were omitted to stay under GitHub's 64KB comment size limit._\n</details>\n\n`;
-        break;
-      }
-
-      historySection += historyEntry;
-      addedCount++;
-    }
-
-    historySection += '---\n\n';
-  }
-
-  // Assemble: identifier + history + current + footer
-  body += historySection;
-  body += currentContent;
-  body += footer;
-
-  return body;
-}
-
 /**
  * Build params object from raw step outputs
  * Handles all type conversions and defaults in one place
@@ -204,17 +43,6 @@ function buildParams(raw) {
 }
 
 /**
- * Render a progress checklist
- * @param {Array<[boolean, string]>} steps - Array of [completed, text] tuples
- * @returns {string} Markdown checklist
- */
-function renderProgress(steps) {
-  return steps.map(([done, text]) =>
-    done ? `- [x] ${text}` : `- [ ] ${text}`
-  ).join('\n');
-}
-
-/**
  * Render parameters table for manual runs
  * @param {Object} p - Parameters object
  * @param {Object} context - GitHub context object (optional, for rerun link)
@@ -239,28 +67,43 @@ function renderParamsTable(p, context = null) {
 }
 
 /**
- * Build comment body based on state
+ * Build comment body for running state
  * @param {Object} p - Parameters object
- * @param {Array<[boolean, string]>} progressSteps - Progress steps (null to hide)
- * @param {Object} extras - Extra options (icon, title, testPreview, context)
+ * @param {Object} extras - Extra options (context)
  * @returns {string} Markdown body
  */
-function buildBody(p, progressSteps, extras = {}) {
-  let body = p.isManual
-    ? `## ${extras.icon || '🚀'} ${extras.title || 'Manual Eval Running...'}\n\n` +
-      renderParamsTable(p, extras.context)
-    : `## ${extras.icon || '⏳'} ${extras.title || 'HolmesGPT evals running...'}\n\n` +
-      `Automatically triggered by ${p.trigger}\n\n` +
-      `[View workflow logs](${p.runUrl})\n`;
+function buildRunningBody(p, extras = {}) {
+  let body = AUTO_EVAL_COMMENT_IDENTIFIER + '\n';
 
-  // Only show progress if steps provided (null = hide for completed runs)
-  if (progressSteps) {
-    body += `\n**Progress:**\n${renderProgress(progressSteps)}\n`;
+  if (p.isManual) {
+    body += `## 🚀 Manual Eval Running...\n\n` + renderParamsTable(p, extras.context);
+  } else {
+    body += `## ⏳ HolmesGPT evals running...\n\n` +
+      `Automatically triggered by ${p.trigger}. [View workflow logs](${p.runUrl})\n`;
   }
 
-  if (extras.testPreview) {
-    body += `\n<details>\n<summary>📋 Evals to run</summary>\n\n\`\`\`\n${extras.testPreview}\n\`\`\`\n</details>\n`;
+  return body;
+}
+
+/**
+ * Build comment body for completed state (results)
+ * @param {Object} p - Parameters object
+ * @param {string} resultsContent - The eval results markdown
+ * @param {string} footer - Footer content
+ * @returns {string} Markdown body
+ */
+function buildResultsBody(p, resultsContent, footer) {
+  let body = AUTO_EVAL_COMMENT_IDENTIFIER + '\n';
+
+  if (p.isManual) {
+    body += `## ✅ Manual Eval Complete\n\n` + renderParamsTable(p) + '\n';
+  } else {
+    body += `## ✅ Results of HolmesGPT evals\n\n` +
+      `Automatically triggered by ${p.trigger}. [View workflow logs](${p.runUrl})\n\n`;
   }
+
+  body += resultsContent;
+  body += footer;
 
   return body;
 }
@@ -348,11 +191,8 @@ function buildRerunFooter(p, context, options = {}) {
 module.exports = {
   AUTO_EVAL_COMMENT_IDENTIFIER,
   buildParams,
-  renderProgress,
   renderParamsTable,
-  buildBody,
-  buildRerunFooter,
-  parseRunHistory,
-  extractCurrentRun,
-  buildAutoCommentWithHistory
+  buildRunningBody,
+  buildResultsBody,
+  buildRerunFooter
 };
