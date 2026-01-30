@@ -1,17 +1,17 @@
-user_prompt: "Check disk usage inside all cache-worker pods in namespace app-214. Which pods have /tmp usage over 50MB? List the offending pods."
+user_prompt: "Write a bash script with a for-loop to check disk usage inside all cache-worker pods in namespace app-214. The script should iterate over all pods and report which have /tmp usage over 50MB."
 
 include_tool_calls: true
 
 expected_output:
-  - "Must call bash tool with kubectl exec"
-  - "Must iterate over multiple pods"
+  - "The bash command must contain a for-loop (e.g., 'for pod in' or 'for i in')"
+  - "Must NOT make separate kubectl exec calls for each pod - must use a single bash script"
   - "Must identify cache-worker-8, cache-worker-9, and cache-worker-10 as having high disk usage"
-  - "Pods cache-worker-1 through cache-worker-7 should be reported as normal"
 
 description: |
-  Tests that Holmes can use bash to iterate kubectl exec across multiple pods.
+  TDD test: This test should FAIL until the bash toolset supports loop constructs.
+  The bash toolset currently blocks for/while loops, so Holmes cannot write the required script.
   10 pods are deployed: 7 have small /tmp usage, 3 have >50MB in /tmp.
-  Holmes must write a bash loop to check each pod since no toolset can inspect container filesystems.
+  This test validates that we need to add loop support to the bash toolset.
 
 tags:
   - kubernetes

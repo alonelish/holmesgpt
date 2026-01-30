@@ -1,18 +1,17 @@
-user_prompt: "Verify that all api-worker pods in namespace app-215 can reach the database service on port 5432. Report which pods have connectivity issues."
+user_prompt: "Write a bash script with a for-loop to test database connectivity from all api-worker pods in namespace app-215. The script should iterate over pods and use nc to check if each can reach the database service on port 5432."
 
 include_tool_calls: true
 
 expected_output:
-  - "Must call bash tool with kubectl exec"
-  - "Must test connectivity from multiple pods"
+  - "The bash command must contain a for-loop (e.g., 'for pod in' or 'for i in')"
+  - "Must NOT make separate kubectl exec calls for each pod - must use a single bash script"
   - "Must identify api-worker-8, api-worker-9, and api-worker-10 as having connectivity issues"
-  - "Pods api-worker-1 through api-worker-7 should successfully connect"
 
 description: |
-  Tests that Holmes can use bash to run kubectl exec with nc/wget to test network connectivity.
-  10 worker pods are deployed along with a database service.
-  NetworkPolicy blocks 3 pods (api-worker-8,9,10) from reaching the database.
-  Holmes must iterate over pods and test connectivity since no toolset does in-pod network testing.
+  TDD test: This test should FAIL until the bash toolset supports loop constructs.
+  The bash toolset currently blocks for/while loops, so Holmes cannot write the required script.
+  10 worker pods + database are deployed. NetworkPolicy blocks 3 pods from the database.
+  This test validates that we need to add loop support to the bash toolset.
 
 tags:
   - kubernetes
