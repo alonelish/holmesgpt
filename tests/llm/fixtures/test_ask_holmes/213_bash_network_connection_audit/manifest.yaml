@@ -18,7 +18,8 @@ spec:
 
           # Create 50 TCP listeners on ports 8001-8050
           for port in $(seq 8001 8050); do
-            nc -l -k -p $port &
+            # Use while loop to keep listener alive after connection
+            while true; do nc -l -p $port; done &
           done
 
           echo "Created 50 TCP listeners"
@@ -28,7 +29,8 @@ spec:
 
           # Create connections to each listener (these will be ESTABLISHED)
           for port in $(seq 8001 8050); do
-            (echo "keepalive" | nc -q -1 127.0.0.1 $port &)
+            # Keep connection open by sleeping after connect
+            (sleep 3600 | nc 127.0.0.1 $port) &
           done
 
           echo "Created 50 client connections"

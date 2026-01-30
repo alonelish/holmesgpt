@@ -4,12 +4,12 @@ include_tool_calls: true
 
 expected_output:
   - "Must call bash tool with kubectl exec"
-  - "Must identify the memory-hog process or processes consuming significant memory"
+  - "Must identify Python processes as consuming the most memory"
   - "Must report processes sorted by memory usage or identify top consumers"
 
 description: |
   Tests that Holmes can use bash to run kubectl exec and inspect processes inside a container.
-  The pod runs 100 sleep processes, but 5 of them allocate significant memory via /dev/shm.
+  The pod runs 95 sleep processes plus 5 Python processes that allocate ~20MB each.
   Holmes must use bash with 'kubectl exec' since no existing toolset can inspect in-container processes.
 
 tags:
@@ -47,7 +47,15 @@ before_test: |
     kubectl exec -n app-211 data-cruncher -- ps aux
     exit 1
   fi
-  echo "Setup complete - container has $PROC_COUNT processes"
+
+  # Verify Python processes are running
+  PYTHON_COUNT=$(kubectl exec -n app-211 data-cruncher -- ps aux 2>/dev/null | grep -c "python3" || echo "0")
+  echo "Python process count: $PYTHON_COUNT"
+  if [ "$PYTHON_COUNT" -lt 5 ]; then
+    echo "Not enough Python processes running"
+    exit 1
+  fi
+  echo "Setup complete - container has $PROC_COUNT processes including $PYTHON_COUNT Python processes"
 
 after_test: |
   kubectl delete namespace app-211 --ignore-not-found
