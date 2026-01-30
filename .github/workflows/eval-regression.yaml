@@ -477,10 +477,19 @@ jobs:
             const {
               AUTO_EVAL_COMMENT_IDENTIFIER,
               buildParams,
-              buildRunningBody
+              renderParamsTable
             } = require('./.trusted/.github/scripts/eval-comment-helpers.js');
 
             const p = buildParams(JSON.parse(${{ toJSON(steps.eval-params.outputs.base_params) }}));
+
+            // Build simple running body inline (new helpers not in master yet)
+            let body = AUTO_EVAL_COMMENT_IDENTIFIER + '\n';
+            if (p.isManual) {
+              body += `## 🚀 Manual Eval Running...\n\n` + renderParamsTable(p, context);
+            } else {
+              body += `## ⏳ HolmesGPT evals running...\n\n` +
+                `Automatically triggered by ${p.trigger}. [View workflow logs](${p.runUrl})\n`;
+            }
 
             // For automated runs (not /eval or workflow_dispatch), use persistent comment
             if (!p.isManual) {
@@ -503,8 +512,6 @@ jobs:
                 if (response.data.length < 100) break;
                 page++;
               }
-
-              const body = buildRunningBody(p, { context });
 
               if (existingComment) {
                 await github.rest.issues.updateComment({
@@ -529,7 +536,7 @@ jobs:
                 owner: context.repo.owner,
                 repo: context.repo.repo,
                 issue_number: p.prNumber,
-                body: buildRunningBody(p, { context })
+                body: body
               });
               core.setOutput('comment_id', comment.data.id.toString());
             }
@@ -667,7 +674,10 @@ jobs:
             const fs = require('fs');
             // SECURITY: Load helpers from trusted checkout (base branch) to prevent code injection from PRs
             const {
-              buildParams, buildResultsBody, buildRerunFooter
+              AUTO_EVAL_COMMENT_IDENTIFIER,
+              buildParams,
+              renderParamsTable,
+              buildRerunFooter
             } = require('./.trusted/.github/scripts/eval-comment-helpers.js');
 
             const p = buildParams({
@@ -680,7 +690,17 @@ jobs:
             const report = fs.existsSync('code/evals_report.md') ? fs.readFileSync('code/evals_report.md', 'utf8') : '';
             const reportContent = report || '⚠️ No eval report was generated.\n\n';
             const footer = buildRerunFooter(p, context, { includeLegend: true });
-            const body = buildResultsBody(p, reportContent, footer);
+
+            // Build results body inline (new helpers not in master yet)
+            let body = AUTO_EVAL_COMMENT_IDENTIFIER + '\n';
+            if (p.isManual) {
+              body += `## ✅ Manual Eval Complete\n\n` + renderParamsTable(p) + '\n';
+            } else {
+              body += `## ✅ Results of HolmesGPT evals\n\n` +
+                `Automatically triggered by ${p.trigger}. [View workflow logs](${p.runUrl})\n\n`;
+            }
+            body += reportContent;
+            body += footer;
 
             if (p.commentId) {
               // Update existing comment
