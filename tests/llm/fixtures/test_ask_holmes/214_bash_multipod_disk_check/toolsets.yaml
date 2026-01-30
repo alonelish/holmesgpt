@@ -7,7 +7,6 @@ toolsets:
       allow:
         - "kubectl exec"
         - "kubectl get"
-        - "for"
       deny: []
   kubernetes/core:
     enabled: true
