@@ -138,6 +138,9 @@ markers = [
     "elasticsearch: Tests for Elasticsearch/OpenSearch toolset functionality",
     "integration: Integration tests requiring external services (e.g., running server, real APIs)",
     "confluence: Tests for Confluence page fetching toolset",
+    "overconfident-language: Tests for detecting overconfident diagnostic language like 'definitive root cause' or 'smoking gun'",
+    "impossible-diagnosis: Scenarios where root cause is outside observable scope - Holmes should acknowledge uncertainty",
+    "ambiguous-diagnosis: Scenarios with multiple plausible root causes - Holmes should present alternatives",
     # REGRESSION TEST SELECTION CRITERIA:
     # - Must pass 30+ iterations reliably with Sonnet-4.5 model
     # - No external API dependencies (Loki OK, NewRelic/DataDog excluded)
