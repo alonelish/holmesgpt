@@ -209,7 +209,7 @@ def generate_markdown_report(
         markdown += f"❌ **{total_regressions} regression(s)** — {total_passed}/{total_tests} tests passed\n\n"
 
     # Generate detailed table (wrapped in collapsible details)
-    markdown += "<details>\n<summary>Details</summary>\n\n"
+    markdown += "<details>\n<summary><b>Details</b></summary>\n\n"
     markdown += "| Status | Test case | Time | Turns | Tools | Cost |\n"
     markdown += "| --- | --- | --- | --- | --- | --- |\n"
 

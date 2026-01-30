@@ -136,12 +136,12 @@ function buildRerunFooter(p, context, options = {}) {
     '| `iterations` | Number of runs, max 10 |\n' +
     '| `branch` | Run evals on a different branch (for cross-branch comparison) |\n\n' +
     '**Quick re-run:** Use `/rerun` to re-run the most recent `/eval` on this PR with the same parameters.\n\n' +
-    `**Option 2: [Trigger via GitHub Actions UI](${workflowUrl})** → "Run workflow"\n</details>\n` +
+    '**List available tests:** Use `/list` to see valid eval names for the filter option.\n\n' +
+    `**Option 2: [Trigger via GitHub Actions UI](${workflowUrl})** → "Run workflow"\n\n` +
+    `**Option 3: GitHub CLI**\n\`\`\`\n${ghCommand}\n\`\`\`\n</details>\n` +
     '\n<details>\n<summary>🏷️ <b>Valid markers</b></summary>\n\n' +
     markersFormatted +
-    '\n</details>\n' +
-    '\n---\n**Commands:** `/eval` · `/rerun` · `/list`\n\n' +
-    '**CLI:** `' + ghCommand + '`\n';
+    '\n</details>\n';
 
   return footer;
 }
