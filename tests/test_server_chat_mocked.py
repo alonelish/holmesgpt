@@ -248,7 +248,7 @@ class TestStreamingIntermediateEvents:
     @patch("litellm.completion")
     @patch("holmes.core.supabase_dal.SupabaseDal._SupabaseDal__load_robusta_config")
     @patch("holmes.core.supabase_dal.SupabaseDal.get_global_instructions_for_account")
-    def test_streaming_emits_ai_message_with_reasoning(
+    def test_streaming_completes_with_expected_content(
         self,
         mock_get_global_instructions,
         mock_load_robusta_config,
@@ -257,10 +257,10 @@ class TestStreamingIntermediateEvents:
         mock_client,
     ):
         """
-        Test that AI_MESSAGE events include reasoning content when present.
+        Test that streaming completes successfully and ANSWER_END contains expected content.
 
-        Some models (like Claude with extended thinking) provide reasoning
-        that should be captured in the AI_MESSAGE event.
+        Verifies that when the LLM returns a response (with or without reasoning),
+        the streaming flow completes and the final answer is included in ANSWER_END.
         """
         mock_load_robusta_config.return_value = None
         mock_get_global_instructions.return_value = []
