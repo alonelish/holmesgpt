@@ -93,19 +93,24 @@ before_test: |
   echo "⏳ Waiting for logs to be queryable in Coralogix..."
   QUERY_URL="https://ng-api-http.eu2.coralogix.com/api/v1/dataprime/query"
 
+  # Calculate time range for query (1 hour ago to now)
+  START_DATE=$(date -u -d '1 hour ago' '+%Y-%m-%dT%H:%M:%SZ' 2>/dev/null || date -u -v-1H '+%Y-%m-%dT%H:%M:%SZ')
+  END_DATE=$(date -u '+%Y-%m-%dT%H:%M:%SZ')
+  echo "   Query time range: $START_DATE to $END_DATE"
+
   LOGS_READY=false
   for i in {1..60}; do
     # Use || true to prevent set -e from exiting on curl failure
     # Use -k to skip SSL verification (for sandbox environments with TLS interception)
-    # Use simple lucene search - avoid filter with unverified labels (per Coralogix best practices)
+    # Use simple lucene search with explicit time range
     RESULT=$(curl -sk -X POST "$QUERY_URL" \
       -H "Authorization: Bearer ${CORALOGIX_API_KEY}" \
       -H "Content-Type: application/json" \
-      -d "{\"query\": \"source logs | lucene '$APP_NAME AND $ERROR_CODE_1' | limit 1\", \"metadata\": {\"syntax\": \"QUERY_SYNTAX_DATAPRIME\"}}" 2>/dev/null || true)
+      -d "{\"query\": \"source logs | lucene '$APP_NAME AND $ERROR_CODE_1' | limit 1\", \"metadata\": {\"syntax\": \"QUERY_SYNTAX_DATAPRIME\", \"startDate\": \"$START_DATE\", \"endDate\": \"$END_DATE\"}}" 2>/dev/null || true)
 
-    # Debug: print first response
-    if [ "$i" -eq 1 ]; then
-      echo "   Debug first query response: $RESULT"
+    # Debug: print response periodically
+    if [ "$i" -eq 1 ] || [ "$((i % 10))" -eq 0 ]; then
+      echo "   Debug query response (attempt $i): $RESULT"
     fi
 
     if echo "$RESULT" | grep -q "$ERROR_CODE_1"; then
@@ -129,7 +134,7 @@ before_test: |
     VERIFY=$(curl -sk -X POST "$QUERY_URL" \
       -H "Authorization: Bearer ${CORALOGIX_API_KEY}" \
       -H "Content-Type: application/json" \
-      -d "{\"query\": \"source logs | lucene '$APP_NAME AND $CODE' | limit 1\", \"metadata\": {\"syntax\": \"QUERY_SYNTAX_DATAPRIME\"}}" 2>/dev/null || true)
+      -d "{\"query\": \"source logs | lucene '$APP_NAME AND $CODE' | limit 1\", \"metadata\": {\"syntax\": \"QUERY_SYNTAX_DATAPRIME\", \"startDate\": \"$START_DATE\", \"endDate\": \"$END_DATE\"}}" 2>/dev/null || true)
 
     if ! echo "$VERIFY" | grep -q "$CODE"; then
       echo "❌ Could not find error code $CODE"
