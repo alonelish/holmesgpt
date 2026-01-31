@@ -473,11 +473,14 @@ class TestErrorHandling:
         """
         Test that authentication errors return HTTP 401.
         """
-        from holmes.core.supabase_dal import AuthenticationError
+        from litellm.exceptions import AuthenticationError
 
         mock_load_robusta_config.return_value = None
-        mock_get_global_instructions.side_effect = AuthenticationError(
-            "Invalid API key"
+        mock_get_global_instructions.return_value = []
+        mock_litellm_completion.side_effect = AuthenticationError(
+            message="Invalid API key",
+            llm_provider="openai",
+            model="gpt-4.1",
         )
 
         payload = {
