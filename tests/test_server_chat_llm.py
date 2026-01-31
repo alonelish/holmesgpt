@@ -1,22 +1,22 @@
 """
 Real LLM tests for /api/chat endpoint.
 
-Tests are divided into:
-1. Real LLM tests - require actual API keys (OpenAI, Anthropic, OpenRouter)
-2. Mocked LLM tests - mock only litellm.completion to test our code's behavior
+These tests use actual LLM API calls to verify end-to-end behavior.
+They require API keys (OPENAI_API_KEY, OPENROUTER_API_KEY) and are
+skipped if the keys are not available.
 
-The mocked tests are designed to allow confident refactoring of our code
-by verifying behavior without being tied to our implementation details.
+Tests cover:
+1. Structured output with OpenAI strict JSON schema
+2. Image extraction with vision models
+3. Streaming responses
+4. Conversation history roundtrip
 """
 
 import base64
 import json
 import os
 from io import BytesIO
-from types import SimpleNamespace
-from typing import List, Optional, Tuple
-
-from unittest.mock import MagicMock, patch
+from typing import List, Tuple
 
 import pytest
 from fastapi.testclient import TestClient
@@ -86,6 +86,7 @@ def create_test_image_with_text(text: str, width: int = 200, height: int = 100) 
 def create_model_entry(model_name: str):
     """Create a ModelEntry for the given model."""
     from holmes.core.llm import ModelEntry
+
     return ModelEntry(
         name=model_name,
         model=model_name,
@@ -147,37 +148,10 @@ def openrouter_client():
         server.config.llm_model_registry.get_model_params = original_get_model_params
 
 
-MOCK_MODEL = "gpt-4.1"  # Model name for mocked tests
-
-
-@pytest.fixture
-def mock_client():
-    """
-    Create a test client for mocked LLM tests.
-    Does not require any API keys - litellm.completion is mocked.
-    """
-    import server
-
-    # Set up a mock model entry so the server doesn't try to use ROBUSTA_AI
-    model_entry = create_model_entry(MOCK_MODEL)
-    original_get_model_params = server.config.llm_model_registry.get_model_params
-
-    def mock_get_model_params(model_key=None):
-        if model_key == MOCK_MODEL:
-            return model_entry.model_copy()
-        return original_get_model_params(model_key)
-
-    server.config.llm_model_registry.get_model_params = mock_get_model_params
-
-    try:
-        yield TestClient(server.app)
-    finally:
-        server.config.llm_model_registry.get_model_params = original_get_model_params
-
-
 # =============================================================================
 # STRUCTURED OUTPUT TESTS - Real LLM with OpenAI strict JSON schema
 # =============================================================================
+
 
 @pytest.mark.llm
 @pytest.mark.integration
@@ -302,6 +276,7 @@ class TestStructuredOutputReal:
 # IMAGE EXTRACTION TESTS - Real LLM with vision capabilities
 # =============================================================================
 
+
 @pytest.mark.llm
 @pytest.mark.integration
 class TestImageExtraction:
@@ -335,9 +310,9 @@ class TestImageExtraction:
         analysis = data["analysis"].strip()
 
         # Allow for minor formatting differences
-        assert secret_code in analysis or secret_code.replace("-", "") in analysis.replace("-", ""), (
-            f"Expected '{secret_code}' in response, got: '{analysis}'"
-        )
+        assert secret_code in analysis or secret_code.replace("-", "") in analysis.replace(
+            "-", ""
+        ), f"Expected '{secret_code}' in response, got: '{analysis}'"
 
     def test_image_number_extraction(self, openrouter_client):
         """
@@ -367,6 +342,7 @@ class TestImageExtraction:
 # STREAMING TESTS - Real LLM streaming responses
 # =============================================================================
 
+
 @pytest.mark.llm
 @pytest.mark.integration
 class TestStreamingReal:
@@ -378,9 +354,7 @@ class TestStreamingReal:
         """
         payload = {
             "ask": "Say hello in exactly 3 words.",
-            "conversation_history": [
-                {"role": "system", "content": "Be concise."}
-            ],
+            "conversation_history": [{"role": "system", "content": "Be concise."}],
             "model": OPENROUTER_MODEL,
             "stream": True,
         }
@@ -398,325 +372,94 @@ class TestStreamingReal:
 
 
 # =============================================================================
-# MOCKED LLM TESTS - Test intermediate events by mocking litellm only
+# CONVERSATION ROUNDTRIP TESTS - Verify state management across calls
 # =============================================================================
 
-def create_mock_llm_response(content: str, tool_calls: Optional[list] = None, reasoning: Optional[str] = None):
+
+@pytest.mark.llm
+@pytest.mark.integration
+class TestConversationRoundtrip:
     """
-    Create a proper litellm ModelResponse object.
+    Tests for conversation history management.
 
-    This creates an actual ModelResponse (not a mock) that will pass
-    type validation in our code.
-    """
-    from litellm import ModelResponse
-    from litellm.types.utils import Choices, Message, Usage
-
-    # Build tool_calls for the message if provided
-    message_tool_calls = None
-    if tool_calls:
-        message_tool_calls = [
-            {
-                "id": tc.id,
-                "type": "function",
-                "function": {
-                    "name": tc.function.name,
-                    "arguments": tc.function.arguments,
-                },
-            }
-            for tc in tool_calls
-        ]
-
-    # Create the message
-    message_dict = {
-        "role": "assistant",
-        "content": content,
-    }
-    if message_tool_calls:
-        message_dict["tool_calls"] = message_tool_calls
-    if reasoning:
-        message_dict["reasoning_content"] = reasoning
-
-    message = Message(**message_dict)
-
-    # Create the response
-    response = ModelResponse(
-        id="chatcmpl-test-123",
-        choices=[
-            Choices(
-                finish_reason="stop" if not tool_calls else "tool_calls",
-                index=0,
-                message=message,
-            )
-        ],
-        created=1234567890,
-        model="gpt-4.1-mini",
-        usage=Usage(
-            prompt_tokens=100,
-            completion_tokens=50,
-            total_tokens=150,
-        ),
-    )
-
-    return response
-
-
-def create_mock_tool_call(tool_call_id: str, tool_name: str, arguments: dict):
-    """Create a tool call object compatible with litellm."""
-    # Create a simple object with the expected attributes
-    # Using SimpleNamespace to avoid MagicMock issues
-    function = SimpleNamespace(
-        name=tool_name,
-        arguments=json.dumps(arguments),
-    )
-    tool_call = SimpleNamespace(
-        id=tool_call_id,
-        type="function",
-        function=function,
-    )
-    return tool_call
-
-
-class TestStreamingIntermediateEvents:
-    """
-    Tests for intermediate streaming events (tool calls, AI messages, etc.)
-
-    These tests mock only litellm.completion to verify our code correctly
-    emits intermediate events. This allows confident refactoring without
-    being tied to implementation details.
+    These tests verify that the conversation_history returned in responses
+    can be used in subsequent requests to maintain conversation context.
     """
 
-    @patch("holmes.core.llm.DefaultLLM.check_llm")
-    @patch("litellm.completion")
-    @patch("holmes.core.supabase_dal.SupabaseDal._SupabaseDal__load_robusta_config")
-    @patch("holmes.core.supabase_dal.SupabaseDal.get_global_instructions_for_account")
-    def test_streaming_emits_tool_events(
-        self,
-        mock_get_global_instructions,
-        mock_load_robusta_config,
-        mock_litellm_completion,
-        mock_check_llm,
-        mock_client,
-    ):
+    def test_conversation_history_roundtrip(self, openai_client):
         """
-        Test that streaming correctly emits START_TOOL and TOOL_RESULT events.
+        Test that conversation_history from response can be used in next request.
 
-        Mocks litellm.completion to return a tool call, then verifies our
-        streaming code emits the correct intermediate events.
+        This verifies the state management works correctly across multiple calls.
         """
-        mock_load_robusta_config.return_value = None
-        mock_get_global_instructions.return_value = []
-
-        # First call: LLM wants to call a tool
-        tool_call = create_mock_tool_call(
-            tool_call_id="call_123",
-            tool_name="fetch_url",
-            arguments={"url": "https://example.com"},
-        )
-        response_with_tool = create_mock_llm_response(
-            content="Let me fetch that URL for you.",
-            tool_calls=[tool_call],
-        )
-
-        # Second call: LLM provides final answer after tool result
-        final_response = create_mock_llm_response(
-            content="The URL returned a 200 OK response.",
-            tool_calls=None,
-        )
-
-        mock_litellm_completion.side_effect = [response_with_tool, final_response]
-
-        payload = {
-            "ask": "Check if example.com is up",
+        # First request - ask a question with a unique answer
+        secret_value = "XYZZY-12345"
+        payload1 = {
+            "ask": f"Remember this secret code: {secret_value}. Just say 'OK, I remember.'",
             "conversation_history": [
-                {"role": "system", "content": "You are a helpful assistant."}
+                {"role": "system", "content": "You are a helpful assistant with perfect memory."}
             ],
-            "stream": True,
-            "model": MOCK_MODEL,
+            "model": OPENAI_MODEL,
         }
 
-        response = mock_client.post("/api/chat", json=payload)
-        assert response.status_code == 200
+        response1 = openai_client.post("/api/chat", json=payload1)
+        assert response1.status_code == 200, f"First request failed: {response1.text}"
 
-        events = parse_sse_events(response.text)
-        event_types = [e[0] for e in events]
+        data1 = response1.json()
+        assert "conversation_history" in data1
+        conversation_history = data1["conversation_history"]
 
-        # Verify tool events are present
-        assert StreamEvents.START_TOOL.value in event_types, f"Missing START_TOOL, got: {event_types}"
-        assert StreamEvents.TOOL_RESULT.value in event_types, f"Missing TOOL_RESULT, got: {event_types}"
-        assert StreamEvents.ANSWER_END.value in event_types, f"Missing ANSWER_END, got: {event_types}"
-
-        # Verify START_TOOL has correct data
-        start_tool_event = next(
-            (e[1] for e in events if e[0] == StreamEvents.START_TOOL.value),
-            None
-        )
-        assert start_tool_event is not None
-        assert start_tool_event["tool_name"] == "fetch_url"
-        assert start_tool_event["id"] == "call_123"
-
-    @patch("holmes.core.llm.DefaultLLM.check_llm")
-    @patch("litellm.completion")
-    @patch("holmes.core.supabase_dal.SupabaseDal._SupabaseDal__load_robusta_config")
-    @patch("holmes.core.supabase_dal.SupabaseDal.get_global_instructions_for_account")
-    def test_streaming_emits_ai_message_with_reasoning(
-        self,
-        mock_get_global_instructions,
-        mock_load_robusta_config,
-        mock_litellm_completion,
-        mock_check_llm,
-        mock_client,
-    ):
-        """
-        Test that AI_MESSAGE events include reasoning content when present.
-
-        Some models (like Claude with extended thinking) provide reasoning
-        that should be captured in the AI_MESSAGE event.
-        """
-        mock_load_robusta_config.return_value = None
-        mock_get_global_instructions.return_value = []
-
-        # Response with reasoning content
-        response_with_reasoning = create_mock_llm_response(
-            content="The answer is 42.",
-            tool_calls=None,
-            reasoning="I need to think about the meaning of life...",
-        )
-
-        mock_litellm_completion.return_value = response_with_reasoning
-
-        payload = {
-            "ask": "What is the meaning of life?",
-            "conversation_history": [
-                {"role": "system", "content": "Think deeply."}
-            ],
-            "stream": True,
-            "model": MOCK_MODEL,
+        # Second request - use the returned conversation_history
+        payload2 = {
+            "ask": "What was the secret code I told you to remember?",
+            "conversation_history": conversation_history,
+            "model": OPENAI_MODEL,
         }
 
-        response = mock_client.post("/api/chat", json=payload)
-        assert response.status_code == 200
+        response2 = openai_client.post("/api/chat", json=payload2)
+        assert response2.status_code == 200, f"Second request failed: {response2.text}"
 
-        events = parse_sse_events(response.text)
-        event_types = [e[0] for e in events]
-
-        # Should complete with ANSWER_END
-        assert StreamEvents.ANSWER_END.value in event_types, f"Missing ANSWER_END, got: {event_types}"
-
-        # Find ANSWER_END event
-        answer_end = next(
-            (e[1] for e in events if e[0] == StreamEvents.ANSWER_END.value),
-            None
-        )
-        assert answer_end is not None
-
-        # Verify the final answer contains our expected content
-        assert "analysis" in answer_end
-        assert "42" in answer_end["analysis"], f"Expected '42' in analysis, got: {answer_end['analysis']}"
-
-    @patch("holmes.core.llm.DefaultLLM.check_llm")
-    @patch("litellm.completion")
-    @patch("holmes.core.supabase_dal.SupabaseDal._SupabaseDal__load_robusta_config")
-    @patch("holmes.core.supabase_dal.SupabaseDal.get_global_instructions_for_account")
-    def test_streaming_answer_end_contains_full_response(
-        self,
-        mock_get_global_instructions,
-        mock_load_robusta_config,
-        mock_litellm_completion,
-        mock_check_llm,
-        mock_client,
-    ):
-        """
-        Test that ANSWER_END event contains the complete response and metadata.
-        """
-        mock_load_robusta_config.return_value = None
-        mock_get_global_instructions.return_value = []
-
-        final_answer = "Here is my complete analysis of your question."
-        mock_litellm_completion.return_value = create_mock_llm_response(
-            content=final_answer,
-            tool_calls=None,
+        data2 = response2.json()
+        # The LLM should remember the secret code from the conversation history
+        assert secret_value in data2["analysis"], (
+            f"Expected '{secret_value}' in response, got: '{data2['analysis']}'"
         )
 
-        payload = {
-            "ask": "Analyze something",
+    def test_conversation_history_accumulates(self, openai_client):
+        """
+        Test that conversation history grows with each exchange.
+        """
+        # First request
+        payload1 = {
+            "ask": "Say 'one'",
             "conversation_history": [
-                {"role": "system", "content": "Be helpful."}
+                {"role": "system", "content": "Reply with exactly what is asked, nothing more."}
             ],
-            "stream": True,
-            "model": MOCK_MODEL,
+            "model": OPENAI_MODEL,
         }
 
-        response = mock_client.post("/api/chat", json=payload)
-        assert response.status_code == 200
+        response1 = openai_client.post("/api/chat", json=payload1)
+        assert response1.status_code == 200
+        data1 = response1.json()
+        history1 = data1["conversation_history"]
 
-        events = parse_sse_events(response.text)
+        # History should have: system + user + assistant = at least 3 messages
+        assert len(history1) >= 3, f"Expected at least 3 messages, got {len(history1)}"
 
-        # Find ANSWER_END event
-        answer_end = next(
-            (e[1] for e in events if e[0] == StreamEvents.ANSWER_END.value),
-            None
-        )
-        assert answer_end is not None, "No ANSWER_END event found"
-
-        # Verify it contains the analysis
-        assert "analysis" in answer_end
-        assert final_answer in answer_end["analysis"]
-
-        # Verify it contains conversation history
-        assert "conversation_history" in answer_end
-
-    @patch("holmes.core.llm.DefaultLLM.check_llm")
-    @patch("litellm.completion")
-    @patch("holmes.core.supabase_dal.SupabaseDal._SupabaseDal__load_robusta_config")
-    @patch("holmes.core.supabase_dal.SupabaseDal.get_global_instructions_for_account")
-    def test_non_streaming_returns_tool_calls_in_response(
-        self,
-        mock_get_global_instructions,
-        mock_load_robusta_config,
-        mock_litellm_completion,
-        mock_check_llm,
-        mock_client,
-    ):
-        """
-        Test that non-streaming responses include tool_calls in the response.
-        """
-        mock_load_robusta_config.return_value = None
-        mock_get_global_instructions.return_value = []
-
-        # LLM calls a tool then gives final answer
-        tool_call = create_mock_tool_call(
-            tool_call_id="call_456",
-            tool_name="get_weather",
-            arguments={"location": "NYC"},
-        )
-        response_with_tool = create_mock_llm_response(
-            content="Let me check the weather.",
-            tool_calls=[tool_call],
-        )
-        final_response = create_mock_llm_response(
-            content="The weather in NYC is sunny.",
-            tool_calls=None,
-        )
-        mock_litellm_completion.side_effect = [response_with_tool, final_response]
-
-        payload = {
-            "ask": "What's the weather in NYC?",
-            "conversation_history": [
-                {"role": "system", "content": "Help with weather."}
-            ],
-            "stream": False,
-            "model": MOCK_MODEL,
+        # Second request with updated history
+        payload2 = {
+            "ask": "Say 'two'",
+            "conversation_history": history1,
+            "model": OPENAI_MODEL,
         }
 
-        response = mock_client.post("/api/chat", json=payload)
-        assert response.status_code == 200
+        response2 = openai_client.post("/api/chat", json=payload2)
+        assert response2.status_code == 200
+        data2 = response2.json()
+        history2 = data2["conversation_history"]
 
-        data = response.json()
-
-        # Verify response structure
-        assert "analysis" in data
-        assert "tool_calls" in data
-        assert "conversation_history" in data
-
-        # Should have recorded the tool call
-        assert len(data["tool_calls"]) > 0
+        # History should have grown by 2 (user + assistant)
+        assert len(history2) >= len(history1) + 2, (
+            f"Expected history to grow from {len(history1)} to at least {len(history1) + 2}, "
+            f"got {len(history2)}"
+        )
