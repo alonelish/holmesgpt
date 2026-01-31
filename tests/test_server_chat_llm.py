@@ -13,7 +13,9 @@ import base64
 import json
 import os
 from io import BytesIO
-from typing import Optional
+from types import SimpleNamespace
+from typing import List, Optional, Tuple
+
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -24,6 +26,26 @@ from holmes.utils.stream import StreamEvents
 # Models for different test scenarios
 OPENAI_MODEL = "gpt-4.1-mini"  # For structured output tests (supports strict JSON schema)
 OPENROUTER_MODEL = "openrouter/anthropic/claude-haiku-4.5"  # For image tests
+
+
+def parse_sse_events(response_text: str) -> List[Tuple[str, dict]]:
+    """
+    Parse SSE events from response text.
+
+    Returns a list of (event_type, data) tuples.
+    """
+    events = []
+    current_event = None
+    for line in response_text.split("\n"):
+        if line.startswith("event: "):
+            current_event = line[7:]
+        elif line.startswith("data: ") and current_event:
+            try:
+                data = json.loads(line[6:])
+                events.append((current_event, data))
+            except json.JSONDecodeError:
+                pass
+    return events
 
 
 def create_test_image_with_text(text: str, width: int = 200, height: int = 100) -> str:
@@ -422,8 +444,6 @@ def create_mock_llm_response(content: str, tool_calls: Optional[list] = None, re
 
 def create_mock_tool_call(tool_call_id: str, tool_name: str, arguments: dict):
     """Create a tool call object compatible with litellm."""
-    from types import SimpleNamespace
-
     # Create a simple object with the expected attributes
     # Using SimpleNamespace to avoid MagicMock issues
     function = SimpleNamespace(
@@ -496,19 +516,7 @@ class TestStreamingIntermediateEvents:
         response = mock_client.post("/api/chat", json=payload)
         assert response.status_code == 200
 
-        # Parse SSE events
-        events = []
-        current_event = None
-        for line in response.text.split("\n"):
-            if line.startswith("event: "):
-                current_event = line[7:]
-            elif line.startswith("data: ") and current_event:
-                try:
-                    data = json.loads(line[6:])
-                    events.append((current_event, data))
-                except json.JSONDecodeError:
-                    pass
-
+        events = parse_sse_events(response.text)
         event_types = [e[0] for e in events]
 
         # Verify tool events are present
@@ -564,24 +572,22 @@ class TestStreamingIntermediateEvents:
         response = mock_client.post("/api/chat", json=payload)
         assert response.status_code == 200
 
-        # Parse SSE events
-        events = []
-        current_event = None
-        for line in response.text.split("\n"):
-            if line.startswith("event: "):
-                current_event = line[7:]
-            elif line.startswith("data: ") and current_event:
-                try:
-                    data = json.loads(line[6:])
-                    events.append((current_event, data))
-                except json.JSONDecodeError:
-                    pass
+        events = parse_sse_events(response.text)
+        event_types = [e[0] for e in events]
 
-        # Find AI_MESSAGE event
-        ai_message_events = [e[1] for e in events if e[0] == StreamEvents.AI_MESSAGE.value]
+        # Should complete with ANSWER_END
+        assert StreamEvents.ANSWER_END.value in event_types, f"Missing ANSWER_END, got: {event_types}"
 
-        # Should have at least one AI_MESSAGE event
-        assert len(ai_message_events) >= 1 or StreamEvents.ANSWER_END.value in [e[0] for e in events]
+        # Find ANSWER_END event
+        answer_end = next(
+            (e[1] for e in events if e[0] == StreamEvents.ANSWER_END.value),
+            None
+        )
+        assert answer_end is not None
+
+        # Verify the final answer contains our expected content
+        assert "analysis" in answer_end
+        assert "42" in answer_end["analysis"], f"Expected '42' in analysis, got: {answer_end['analysis']}"
 
     @patch("litellm.completion")
     @patch("holmes.core.supabase_dal.SupabaseDal._SupabaseDal__load_robusta_config")
@@ -616,18 +622,7 @@ class TestStreamingIntermediateEvents:
         response = mock_client.post("/api/chat", json=payload)
         assert response.status_code == 200
 
-        # Parse SSE events
-        events = []
-        current_event = None
-        for line in response.text.split("\n"):
-            if line.startswith("event: "):
-                current_event = line[7:]
-            elif line.startswith("data: ") and current_event:
-                try:
-                    data = json.loads(line[6:])
-                    events.append((current_event, data))
-                except json.JSONDecodeError:
-                    pass
+        events = parse_sse_events(response.text)
 
         # Find ANSWER_END event
         answer_end = next(
