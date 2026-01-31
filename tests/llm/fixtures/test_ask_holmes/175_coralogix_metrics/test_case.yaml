@@ -68,6 +68,11 @@ before_test: |
       -H "Authorization: Bearer ${CORALOGIX_API_KEY}" \
       --data-urlencode "query=${METRIC_PREFIX}_http_requests_total" 2>/dev/null || true)
 
+    # Debug: print first response
+    if [ "$i" -eq 1 ]; then
+      echo "   Debug first query response: $RESULT"
+    fi
+
     if echo "$RESULT" | grep -q "${METRIC_PREFIX}_http_requests_total"; then
       echo "✅ Metrics are queryable after $((i * 5)) seconds"
       METRICS_READY=true

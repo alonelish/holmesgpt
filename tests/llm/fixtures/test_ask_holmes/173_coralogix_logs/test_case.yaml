@@ -74,9 +74,16 @@ before_test: |
     -H "Content-Type: application/json" \
     -d "$LOG_ENTRIES" 2>&1)
 
-  # Check for errors in response (Coralogix returns {"message":"OK"} on success)
+  # Check response - Coralogix returns empty response on success
+  # Print response for debugging
+  echo "   Ingestion response: $RESPONSE"
+
   if echo "$RESPONSE" | grep -q "Dropped"; then
     echo "❌ Logs were dropped by Coralogix: $RESPONSE"
+    exit 1
+  fi
+  if echo "$RESPONSE" | grep -qi "error\|unauthorized\|forbidden"; then
+    echo "❌ Ingestion failed: $RESPONSE"
     exit 1
   fi
 
@@ -90,11 +97,16 @@ before_test: |
   for i in {1..60}; do
     # Use || true to prevent set -e from exiting on curl failure
     # Use -k to skip SSL verification (for sandbox environments with TLS interception)
-    # Use filter for applicationname (metadata field) and lucene for text search
+    # Use simple lucene search - avoid filter with unverified labels (per Coralogix best practices)
     RESULT=$(curl -sk -X POST "$QUERY_URL" \
       -H "Authorization: Bearer ${CORALOGIX_API_KEY}" \
       -H "Content-Type: application/json" \
-      -d "{\"query\": \"source logs | filter \$l.applicationname == '$APP_NAME' | lucene '$ERROR_CODE_1' | limit 1\", \"metadata\": {\"syntax\": \"QUERY_SYNTAX_DATAPRIME\"}}" 2>/dev/null || true)
+      -d "{\"query\": \"source logs | lucene '$APP_NAME AND $ERROR_CODE_1' | limit 1\", \"metadata\": {\"syntax\": \"QUERY_SYNTAX_DATAPRIME\"}}" 2>/dev/null || true)
+
+    # Debug: print first response
+    if [ "$i" -eq 1 ]; then
+      echo "   Debug first query response: $RESULT"
+    fi
 
     if echo "$RESULT" | grep -q "$ERROR_CODE_1"; then
       echo "✅ Logs are queryable after $((i * 5)) seconds"
@@ -117,10 +129,11 @@ before_test: |
     VERIFY=$(curl -sk -X POST "$QUERY_URL" \
       -H "Authorization: Bearer ${CORALOGIX_API_KEY}" \
       -H "Content-Type: application/json" \
-      -d "{\"query\": \"source logs | filter \$l.applicationname == '$APP_NAME' | lucene '$CODE' | limit 1\", \"metadata\": {\"syntax\": \"QUERY_SYNTAX_DATAPRIME\"}}" 2>/dev/null || true)
+      -d "{\"query\": \"source logs | lucene '$APP_NAME AND $CODE' | limit 1\", \"metadata\": {\"syntax\": \"QUERY_SYNTAX_DATAPRIME\"}}" 2>/dev/null || true)
 
     if ! echo "$VERIFY" | grep -q "$CODE"; then
       echo "❌ Could not find error code $CODE"
+      echo "   Query result: $VERIFY"
       exit 1
     fi
     echo "   ✓ Found $CODE"
