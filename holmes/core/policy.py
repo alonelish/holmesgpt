@@ -2,48 +2,40 @@
 Policy-based filtering for tool calls using Python expressions.
 
 This module provides a policy engine that evaluates Python expressions
-to allow or deny tool calls based on tool name, parameters, and context.
+to deny tool calls based on tool name, parameters, and context.
+
+Default behavior is ALLOW everything. Users opt-in to restrictions
+by adding deny rules.
 
 Example policy configuration:
 
     policy:
-      default: deny  # or "allow" - what happens when no rule matches
-
-      rules:
-        - name: deny-system-namespaces
-          effect: deny
+      deny:
+        - name: system-namespaces
           match: ["kubectl_*"]
           when: 'params.get("namespace") in ["kube-system", "kube-public"]'
-          message: "System namespaces are denied"
+          message: "System namespaces are restricted"
 
-        - name: allow-team-namespaces
-          effect: allow
-          match: ["kubectl_*", "kubernetes/*"]
-          when: 'params.get("namespace", "").startswith("team-a-") or params.get("namespace") == "default"'
+        - name: secrets
+          match: ["kubectl_*"]
+          when: 'params.get("kind") == "secret"'
+          message: "Secret access is restricted"
 
-        - name: allow-prometheus-readonly
-          effect: allow
-          match: ["prometheus_*"]
-          when: "True"  # Always allow prometheus tools
+        - name: dangerous-tools
+          match: ["bash/*", "kubectl_exec"]
+          # no 'when' = always deny when tool matches
 """
 
 import fnmatch
 import logging
 import re
 from dataclasses import dataclass
-from enum import Enum
-from typing import Any, Dict, List, Literal, Optional
+from typing import Any, Dict, List, Optional
 
 from pydantic import BaseModel, ConfigDict
 from simpleeval import EvalWithCompoundTypes, NameNotDefined
 
 logger = logging.getLogger(__name__)
-
-
-class PolicyEffect(str, Enum):
-    """The effect of a policy rule when its condition matches."""
-    ALLOW = "allow"
-    DENY = "deny"
 
 
 @dataclass
@@ -58,36 +50,35 @@ class PolicyResult:
         return self.allowed
 
 
-class PolicyRule(BaseModel):
-    """A single policy rule with match patterns and expression."""
+class DenyRule(BaseModel):
+    """A deny rule that blocks tool calls when conditions match."""
 
     model_config = ConfigDict(extra="forbid")
 
     name: str
-    effect: PolicyEffect  # "allow" or "deny" - what happens when 'when' is True
     match: List[str] = ["*"]  # Tool name patterns (fnmatch), e.g., ["kubectl_*"]
-    when: str  # Python expression - if True, apply the effect
-    message: Optional[str] = None  # Custom message (used for deny)
+    when: Optional[str] = None  # Python expression - if True (or omitted), deny
+    message: Optional[str] = None  # Custom denial message
     vars: Dict[str, Any] = {}  # Additional variables available in expression
 
 
 class PolicyConfig(BaseModel):
-    """Policy configuration with rules."""
+    """Policy configuration with deny rules."""
 
     model_config = ConfigDict(extra="forbid")
 
     enabled: bool = True
 
-    # Default behavior when no rule matches: "allow" or "deny"
-    default: Literal["allow", "deny"] = "allow"
-
-    # Rules evaluated in order - first matching rule wins
-    rules: List[PolicyRule] = []
+    # Deny rules - if any matches, tool call is denied
+    # Default (no rules) = allow everything
+    deny: List[DenyRule] = []
 
 
 class PolicyEnforcer:
     """
     Evaluates policy rules against tool calls using simpleeval.
+
+    Default behavior is ALLOW. Deny rules opt-in to restrictions.
 
     The evaluator provides a sandboxed Python expression environment with:
     - `tool`: The tool name being called
@@ -151,8 +142,7 @@ class PolicyEnforcer:
         """
         Check if a tool call is allowed by policy.
 
-        Rules are evaluated in order. First rule where 'when' evaluates to True
-        determines the outcome based on its 'effect' (allow/deny).
+        Default is ALLOW. If any deny rule matches, the call is denied.
 
         Args:
             tool_name: Name of the tool being called
@@ -167,10 +157,20 @@ class PolicyEnforcer:
 
         context = context or {}
 
-        for rule in self.config.rules:
+        for rule in self.config.deny:
             # Check if rule applies to this tool
             if not self._matches_tool(tool_name, rule.match):
                 continue
+
+            # If no 'when' expression, deny immediately when tool matches
+            if rule.when is None:
+                message = rule.message or f"Denied by policy rule '{rule.name}'"
+                logger.info(
+                    f"Policy denied tool '{tool_name}': {message}"
+                )
+                return PolicyResult(
+                    allowed=False, rule_name=rule.name, message=message
+                )
 
             # Build evaluation context
             names = {
@@ -186,20 +186,13 @@ class PolicyEnforcer:
                 condition_met = self._evaluator.eval(rule.when)
 
                 if condition_met:
-                    # Condition matched - apply the effect
-                    if rule.effect == PolicyEffect.DENY:
-                        message = rule.message or f"Denied by policy rule '{rule.name}'"
-                        logger.info(
-                            f"Policy denied tool '{tool_name}' with params {params}: {message}"
-                        )
-                        return PolicyResult(
-                            allowed=False, rule_name=rule.name, message=message
-                        )
-                    else:  # PolicyEffect.ALLOW
-                        logger.debug(
-                            f"Policy allowed tool '{tool_name}' by rule '{rule.name}'"
-                        )
-                        return PolicyResult(allowed=True, rule_name=rule.name)
+                    message = rule.message or f"Denied by policy rule '{rule.name}'"
+                    logger.info(
+                        f"Policy denied tool '{tool_name}' with params {params}: {message}"
+                    )
+                    return PolicyResult(
+                        allowed=False, rule_name=rule.name, message=message
+                    )
 
             except NameNotDefined as e:
                 logger.warning(
@@ -220,15 +213,7 @@ class PolicyEnforcer:
                     message=f"Policy evaluation error: {e}",
                 )
 
-        # No rule matched - use default behavior
-        if self.config.default == "deny":
-            logger.info(
-                f"Policy denied tool '{tool_name}' (no matching rule, default=deny)"
-            )
-            return PolicyResult(
-                allowed=False, message="No matching policy rule (default: deny)"
-            )
-
+        # No deny rule matched - allow
         return PolicyResult(allowed=True)
 
     def _matches_tool(self, tool_name: str, patterns: List[str]) -> bool:

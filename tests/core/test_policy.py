@@ -1,11 +1,10 @@
 """Tests for the policy enforcement module."""
 
 from holmes.core.policy import (
+    DenyRule,
     PolicyConfig,
-    PolicyEffect,
     PolicyEnforcer,
     PolicyResult,
-    PolicyRule,
 )
 
 
@@ -33,30 +32,21 @@ class TestPolicyEnforcer:
         result = enforcer.check("any_tool", {"any": "param"})
         assert result.allowed
 
-    def test_empty_policy_with_default_allow(self):
-        config = PolicyConfig(enabled=True, default="allow")
+    def test_empty_policy_allows_everything(self):
+        config = PolicyConfig(enabled=True, deny=[])
         enforcer = PolicyEnforcer(config)
 
         result = enforcer.check("kubectl_get", {"namespace": "kube-system"})
         assert result.allowed
 
-    def test_empty_policy_with_default_deny(self):
-        config = PolicyConfig(enabled=True, default="deny")
-        enforcer = PolicyEnforcer(config)
-
-        result = enforcer.check("kubectl_get", {"namespace": "anything"})
-        assert not result.allowed
-
-    def test_deny_rule_blocks_when_condition_true(self):
+    def test_deny_rule_with_when_condition(self):
         config = PolicyConfig(
-            enabled=True,
-            rules=[
-                PolicyRule(
-                    name="deny-system-namespaces",
-                    effect=PolicyEffect.DENY,
+            deny=[
+                DenyRule(
+                    name="block-system-namespaces",
                     match=["kubectl_*"],
                     when='params.get("namespace") in ["kube-system", "kube-public"]',
-                    message="System namespaces are denied",
+                    message="System namespaces are restricted",
                 )
             ],
         )
@@ -65,202 +55,165 @@ class TestPolicyEnforcer:
         # Should be denied
         result = enforcer.check("kubectl_get", {"namespace": "kube-system"})
         assert not result.allowed
-        assert "denied" in result.message.lower()
+        assert "restricted" in result.message.lower()
 
-        # Should be allowed (no matching rule, default=allow)
+        # Should be allowed (condition not met)
         result = enforcer.check("kubectl_get", {"namespace": "default"})
         assert result.allowed
 
-    def test_allow_rule_permits_when_condition_true(self):
+    def test_deny_rule_without_when_blocks_tool(self):
         config = PolicyConfig(
-            enabled=True,
-            default="deny",  # Deny by default
-            rules=[
-                PolicyRule(
-                    name="allow-team-namespaces",
-                    effect=PolicyEffect.ALLOW,
-                    match=["kubectl_*"],
-                    when='params.get("namespace", "").startswith("team-a-")',
+            deny=[
+                DenyRule(
+                    name="block-dangerous-tools",
+                    match=["bash/*", "kubectl_exec"],
+                    # no 'when' = always deny
+                    message="Dangerous tool blocked",
                 )
             ],
         )
         enforcer = PolicyEnforcer(config)
 
-        # Should be allowed by rule
-        result = enforcer.check("kubectl_get", {"namespace": "team-a-prod"})
-        assert result.allowed
-
-        # Should be denied (no matching rule, default=deny)
-        result = enforcer.check("kubectl_get", {"namespace": "other-ns"})
+        # Should be denied (matches pattern)
+        result = enforcer.check("bash/run_command", {})
         assert not result.allowed
 
-    def test_first_matching_rule_wins(self):
+        result = enforcer.check("kubectl_exec", {})
+        assert not result.allowed
+
+        # Should be allowed (doesn't match)
+        result = enforcer.check("kubectl_get", {})
+        assert result.allowed
+
+    def test_first_matching_deny_wins(self):
         config = PolicyConfig(
-            enabled=True,
-            rules=[
-                PolicyRule(
-                    name="deny-secrets",
-                    effect=PolicyEffect.DENY,
+            deny=[
+                DenyRule(
+                    name="block-secrets",
                     match=["kubectl_*"],
                     when='params.get("kind") == "secret"',
-                    message="Secrets are denied",
+                    message="Secrets blocked",
                 ),
-                PolicyRule(
-                    name="allow-all-kubectl",
-                    effect=PolicyEffect.ALLOW,
+                DenyRule(
+                    name="block-system-ns",
                     match=["kubectl_*"],
-                    when="True",
+                    when='params.get("namespace") == "kube-system"',
+                    message="System namespace blocked",
                 ),
             ],
         )
         enforcer = PolicyEnforcer(config)
 
-        # First rule matches - denied
-        result = enforcer.check("kubectl_get", {"kind": "secret"})
+        # First rule matches
+        result = enforcer.check("kubectl_get", {"kind": "secret", "namespace": "default"})
         assert not result.allowed
-        assert result.rule_name == "deny-secrets"
+        assert result.rule_name == "block-secrets"
 
-        # Second rule matches - allowed
-        result = enforcer.check("kubectl_get", {"kind": "pod"})
+        # Second rule matches
+        result = enforcer.check("kubectl_get", {"kind": "pod", "namespace": "kube-system"})
+        assert not result.allowed
+        assert result.rule_name == "block-system-ns"
+
+        # Neither matches
+        result = enforcer.check("kubectl_get", {"kind": "pod", "namespace": "default"})
         assert result.allowed
-        assert result.rule_name == "allow-all-kubectl"
 
-    def test_rule_match_patterns(self):
+    def test_match_patterns(self):
         config = PolicyConfig(
-            enabled=True,
-            default="deny",
-            rules=[
-                PolicyRule(
-                    name="allow-kubectl",
-                    effect=PolicyEffect.ALLOW,
+            deny=[
+                DenyRule(
+                    name="block-k8s-tools",
                     match=["kubectl_*", "kubernetes/*"],
-                    when="True",
+                    when='params.get("namespace") == "blocked"',
                 )
             ],
         )
         enforcer = PolicyEnforcer(config)
 
         # Matches kubectl_*
-        result = enforcer.check("kubectl_get", {})
-        assert result.allowed
+        result = enforcer.check("kubectl_get", {"namespace": "blocked"})
+        assert not result.allowed
 
         # Matches kubernetes/*
-        result = enforcer.check("kubernetes/get_pods", {})
-        assert result.allowed
-
-        # Doesn't match - denied by default
-        result = enforcer.check("prometheus_query", {})
+        result = enforcer.check("kubernetes/get_pods", {"namespace": "blocked"})
         assert not result.allowed
+
+        # Doesn't match pattern - allowed even with blocked namespace
+        result = enforcer.check("prometheus_query", {"namespace": "blocked"})
+        assert result.allowed
 
     def test_helper_functions(self):
         config = PolicyConfig(
-            enabled=True,
-            default="deny",
-            rules=[
-                PolicyRule(
-                    name="allow-with-helpers",
-                    effect=PolicyEffect.ALLOW,
+            deny=[
+                DenyRule(
+                    name="block-with-helpers",
                     match=["*"],
-                    when='startswith(params.get("namespace", ""), "team-") and not contains(params.get("namespace", ""), "secret") and endswith(params.get("name", ""), "-pod")',
+                    when='startswith(params.get("namespace", ""), "prod-") and contains(params.get("name", ""), "secret")',
                 )
             ],
         )
         enforcer = PolicyEnforcer(config)
 
-        # All conditions pass
-        result = enforcer.check("test", {"namespace": "team-a", "name": "my-pod"})
+        # Both conditions met - denied
+        result = enforcer.check("test", {"namespace": "prod-us", "name": "my-secret-config"})
+        assert not result.allowed
+
+        # Only first condition met - allowed
+        result = enforcer.check("test", {"namespace": "prod-us", "name": "my-config"})
         assert result.allowed
 
-        # startswith fails
-        result = enforcer.check("test", {"namespace": "other", "name": "my-pod"})
-        assert not result.allowed
-
-        # contains "secret" fails
-        result = enforcer.check("test", {"namespace": "team-secret", "name": "my-pod"})
-        assert not result.allowed
-
-        # endswith fails
-        result = enforcer.check("test", {"namespace": "team-a", "name": "my-svc"})
-        assert not result.allowed
+        # Only second condition met - allowed
+        result = enforcer.check("test", {"namespace": "staging", "name": "my-secret-config"})
+        assert result.allowed
 
     def test_match_function_glob(self):
         config = PolicyConfig(
-            enabled=True,
-            default="deny",
-            rules=[
-                PolicyRule(
-                    name="allow-pattern",
-                    effect=PolicyEffect.ALLOW,
+            deny=[
+                DenyRule(
+                    name="block-pattern",
                     match=["*"],
-                    when='match("team-*-prod", params.get("namespace", ""))',
+                    when='match("*-prod", params.get("namespace", ""))',
                 )
             ],
         )
         enforcer = PolicyEnforcer(config)
 
         result = enforcer.check("test", {"namespace": "team-a-prod"})
-        assert result.allowed
-
-        result = enforcer.check("test", {"namespace": "team-b-staging"})
         assert not result.allowed
+
+        result = enforcer.check("test", {"namespace": "team-a-staging"})
+        assert result.allowed
 
     def test_regex_function(self):
         config = PolicyConfig(
-            enabled=True,
-            default="deny",
-            rules=[
-                PolicyRule(
-                    name="allow-regex",
-                    effect=PolicyEffect.ALLOW,
+            deny=[
+                DenyRule(
+                    name="block-regex",
                     match=["*"],
-                    when=r'regex(r"^team-[a-z]+-\d+$", params.get("namespace", ""))',
+                    when=r'regex(r"^prod-[0-9]+$", params.get("namespace", ""))',
                 )
             ],
         )
         enforcer = PolicyEnforcer(config)
 
-        result = enforcer.check("test", {"namespace": "team-alpha-123"})
-        assert result.allowed
-
-        result = enforcer.check("test", {"namespace": "team-alpha-prod"})
+        result = enforcer.check("test", {"namespace": "prod-123"})
         assert not result.allowed
+
+        result = enforcer.check("test", {"namespace": "prod-abc"})
+        assert result.allowed
 
     def test_context_available_in_expression(self):
         config = PolicyConfig(
-            enabled=True,
-            default="deny",
-            rules=[
-                PolicyRule(
-                    name="allow-admin-prod",
-                    effect=PolicyEffect.ALLOW,
+            deny=[
+                DenyRule(
+                    name="block-non-admin-prod",
                     match=["kubectl_*"],
-                    when='params.get("namespace", "").startswith("prod-") and context.get("role") == "admin"',
-                ),
-                PolicyRule(
-                    name="allow-non-prod",
-                    effect=PolicyEffect.ALLOW,
-                    match=["kubectl_*"],
-                    when='not params.get("namespace", "").startswith("prod-")',
-                ),
+                    when='params.get("namespace", "").startswith("prod-") and context.get("role") != "admin"',
+                    message="Non-admins cannot access production",
+                )
             ],
         )
         enforcer = PolicyEnforcer(config)
-
-        # Non-admin accessing non-prod - allowed
-        result = enforcer.check(
-            "kubectl_get",
-            {"namespace": "staging"},
-            context={"role": "developer"},
-        )
-        assert result.allowed
-
-        # Admin accessing prod - allowed
-        result = enforcer.check(
-            "kubectl_get",
-            {"namespace": "prod-us"},
-            context={"role": "admin"},
-        )
-        assert result.allowed
 
         # Non-admin accessing prod - denied
         result = enforcer.check(
@@ -270,35 +223,50 @@ class TestPolicyEnforcer:
         )
         assert not result.allowed
 
+        # Admin accessing prod - allowed
+        result = enforcer.check(
+            "kubectl_get",
+            {"namespace": "prod-us"},
+            context={"role": "admin"},
+        )
+        assert result.allowed
+
+        # Non-admin accessing non-prod - allowed
+        result = enforcer.check(
+            "kubectl_get",
+            {"namespace": "staging"},
+            context={"role": "developer"},
+        )
+        assert result.allowed
+
     def test_vars_in_rule(self):
         config = PolicyConfig(
-            enabled=True,
-            default="deny",
-            rules=[
-                PolicyRule(
-                    name="allow-approved-namespaces",
-                    effect=PolicyEffect.ALLOW,
+            deny=[
+                DenyRule(
+                    name="block-sensitive-kinds",
                     match=["kubectl_*"],
-                    when='params.get("namespace") in approved_namespaces',
-                    vars={"approved_namespaces": ["team-a-prod", "team-a-staging"]},
+                    when='params.get("kind", "").lower() in sensitive_kinds',
+                    vars={"sensitive_kinds": ["secret", "configmap", "serviceaccount"]},
+                    message="Sensitive resource blocked",
                 )
             ],
         )
         enforcer = PolicyEnforcer(config)
 
-        result = enforcer.check("kubectl_get", {"namespace": "team-a-prod"})
-        assert result.allowed
-
-        result = enforcer.check("kubectl_get", {"namespace": "team-b-prod"})
+        result = enforcer.check("kubectl_get", {"kind": "secret"})
         assert not result.allowed
+
+        result = enforcer.check("kubectl_get", {"kind": "Secret"})  # case insensitive
+        assert not result.allowed
+
+        result = enforcer.check("kubectl_get", {"kind": "pod"})
+        assert result.allowed
 
     def test_expression_error_denies_by_default(self):
         config = PolicyConfig(
-            enabled=True,
-            rules=[
-                PolicyRule(
+            deny=[
+                DenyRule(
                     name="bad-rule",
-                    effect=PolicyEffect.ALLOW,
                     match=["*"],
                     when="undefined_variable == True",
                 )
@@ -318,27 +286,23 @@ class TestPolicyConfigFromDict:
     def test_full_config(self):
         config_dict = {
             "enabled": True,
-            "default": "deny",
-            "rules": [
+            "deny": [
                 {
-                    "name": "deny-system-namespaces",
-                    "effect": "deny",
+                    "name": "block-system-namespaces",
                     "match": ["kubectl_*"],
                     "when": 'params.get("namespace") in ["kube-system", "kube-public"]',
-                    "message": "System namespaces are denied",
+                    "message": "System namespaces are restricted",
                 },
                 {
-                    "name": "allow-team-namespaces",
-                    "effect": "allow",
-                    "match": ["kubectl_*"],
-                    "when": 'params.get("namespace", "").startswith("team-a-") or params.get("namespace") == "default"',
-                },
-                {
-                    "name": "deny-secrets",
-                    "effect": "deny",
+                    "name": "block-secrets",
                     "match": ["kubectl_*"],
                     "when": 'params.get("kind") == "secret"',
-                    "message": "Secrets access denied",
+                    "message": "Secrets are restricted",
+                },
+                {
+                    "name": "block-bash",
+                    "match": ["bash/*"],
+                    # no 'when' - always block
                 },
             ],
         }
@@ -346,59 +310,199 @@ class TestPolicyConfigFromDict:
         config = PolicyConfig(**config_dict)
         enforcer = PolicyEnforcer(config)
 
-        # Test system namespace denied
+        # System namespace blocked
         result = enforcer.check("kubectl_get", {"namespace": "kube-system"})
         assert not result.allowed
 
-        # Test team namespace allowed
-        result = enforcer.check("kubectl_get", {"namespace": "team-a-prod"})
-        assert result.allowed
-
-        # Test default namespace allowed
-        result = enforcer.check("kubectl_get", {"namespace": "default"})
-        assert result.allowed
-
-        # Test other namespace denied (no match, default=deny)
-        result = enforcer.check("kubectl_get", {"namespace": "other-ns"})
+        # Secrets blocked
+        result = enforcer.check("kubectl_get", {"namespace": "default", "kind": "secret"})
         assert not result.allowed
 
-        # Test secrets denied
-        result = enforcer.check("kubectl_get", {"namespace": "team-a-prod", "kind": "secret"})
+        # Bash blocked
+        result = enforcer.check("bash/run", {})
         assert not result.allowed
+
+        # Normal access allowed
+        result = enforcer.check("kubectl_get", {"namespace": "default", "kind": "pod"})
+        assert result.allowed
 
 
 class TestRealWorldScenarios:
     """Tests for realistic policy scenarios."""
 
-    def test_multi_tenant_namespace_isolation(self):
-        """Each team can only access their namespaces."""
+    def test_namespace_restrictions(self):
+        """Restrict access to system and sensitive namespaces."""
         config = PolicyConfig(
-            enabled=True,
-            default="deny",
-            rules=[
-                PolicyRule(
-                    name="allow-own-namespaces",
-                    effect=PolicyEffect.ALLOW,
+            deny=[
+                DenyRule(
+                    name="system-namespaces",
                     match=["kubectl_*", "kubernetes/*"],
-                    when='params.get("namespace", "").startswith(context.get("team", "") + "-")',
+                    when='params.get("namespace") in ["kube-system", "kube-public", "kube-node-lease"]',
+                    message="System namespaces are restricted",
                 ),
-                PolicyRule(
-                    name="allow-shared-namespaces",
-                    effect=PolicyEffect.ALLOW,
+                DenyRule(
+                    name="istio-namespaces",
                     match=["kubectl_*", "kubernetes/*"],
-                    when='params.get("namespace") in ["shared", "monitoring"]',
-                ),
-                PolicyRule(
-                    name="allow-no-namespace",
-                    effect=PolicyEffect.ALLOW,
-                    match=["kubectl_*", "kubernetes/*"],
-                    when='params.get("namespace") is None',
+                    when='params.get("namespace", "").startswith("istio-")',
+                    message="Istio namespaces are restricted",
                 ),
             ],
         )
         enforcer = PolicyEnforcer(config)
 
-        # Team A accessing team-a namespace
+        # System namespace - denied
+        result = enforcer.check("kubectl_get", {"namespace": "kube-system"})
+        assert not result.allowed
+
+        # Istio namespace - denied
+        result = enforcer.check("kubectl_get", {"namespace": "istio-system"})
+        assert not result.allowed
+
+        # App namespace - allowed
+        result = enforcer.check("kubectl_get", {"namespace": "my-app"})
+        assert result.allowed
+
+    def test_sensitive_resources(self):
+        """Block access to sensitive Kubernetes resources."""
+        config = PolicyConfig(
+            deny=[
+                DenyRule(
+                    name="sensitive-resources",
+                    match=["kubectl_*"],
+                    when='params.get("kind", "").lower() in sensitive_kinds',
+                    vars={
+                        "sensitive_kinds": [
+                            "secret",
+                            "serviceaccount",
+                            "clusterrole",
+                            "clusterrolebinding",
+                            "role",
+                            "rolebinding",
+                        ]
+                    },
+                    message="Access to sensitive resource types is restricted",
+                )
+            ],
+        )
+        enforcer = PolicyEnforcer(config)
+
+        # Sensitive resources - denied
+        result = enforcer.check("kubectl_get", {"kind": "secret"})
+        assert not result.allowed
+
+        result = enforcer.check("kubectl_get", {"kind": "ClusterRole"})
+        assert not result.allowed
+
+        # Normal resources - allowed
+        result = enforcer.check("kubectl_get", {"kind": "pod"})
+        assert result.allowed
+
+        result = enforcer.check("kubectl_get", {"kind": "deployment"})
+        assert result.allowed
+
+    def test_dangerous_tools(self):
+        """Block dangerous tools entirely."""
+        config = PolicyConfig(
+            deny=[
+                DenyRule(
+                    name="block-bash",
+                    match=["bash/*"],
+                    message="Bash commands are disabled",
+                ),
+                DenyRule(
+                    name="block-write-operations",
+                    match=["kubectl_exec", "kubectl_delete", "kubectl_apply", "kubectl_patch"],
+                    message="Write operations are disabled",
+                ),
+            ],
+        )
+        enforcer = PolicyEnforcer(config)
+
+        # Bash - denied
+        result = enforcer.check("bash/run_command", {"command": "ls"})
+        assert not result.allowed
+
+        # Write operations - denied
+        result = enforcer.check("kubectl_exec", {"namespace": "default"})
+        assert not result.allowed
+
+        result = enforcer.check("kubectl_delete", {"namespace": "default"})
+        assert not result.allowed
+
+        # Read operations - allowed
+        result = enforcer.check("kubectl_get", {"namespace": "default"})
+        assert result.allowed
+
+        result = enforcer.check("kubectl_describe", {"namespace": "default"})
+        assert result.allowed
+
+    def test_production_restrictions(self):
+        """Extra restrictions for production namespaces."""
+        config = PolicyConfig(
+            deny=[
+                DenyRule(
+                    name="no-exec-in-prod",
+                    match=["kubectl_exec"],
+                    when='params.get("namespace", "").startswith("prod-")',
+                    message="kubectl exec is disabled in production",
+                ),
+                DenyRule(
+                    name="no-logs-in-prod-for-non-admin",
+                    match=["kubectl_logs"],
+                    when='params.get("namespace", "").startswith("prod-") and context.get("role") != "admin"',
+                    message="Only admins can view logs in production",
+                ),
+            ],
+        )
+        enforcer = PolicyEnforcer(config)
+
+        # Exec in prod - always denied
+        result = enforcer.check(
+            "kubectl_exec",
+            {"namespace": "prod-us"},
+            context={"role": "admin"},
+        )
+        assert not result.allowed
+
+        # Logs in prod as non-admin - denied
+        result = enforcer.check(
+            "kubectl_logs",
+            {"namespace": "prod-us"},
+            context={"role": "developer"},
+        )
+        assert not result.allowed
+
+        # Logs in prod as admin - allowed
+        result = enforcer.check(
+            "kubectl_logs",
+            {"namespace": "prod-us"},
+            context={"role": "admin"},
+        )
+        assert result.allowed
+
+        # Exec in non-prod - allowed
+        result = enforcer.check(
+            "kubectl_exec",
+            {"namespace": "staging"},
+            context={"role": "developer"},
+        )
+        assert result.allowed
+
+    def test_multi_tenant_isolation(self):
+        """Teams can only access their own namespaces."""
+        config = PolicyConfig(
+            deny=[
+                DenyRule(
+                    name="tenant-isolation",
+                    match=["kubectl_*", "kubernetes/*"],
+                    when='params.get("namespace") is not None and not params.get("namespace", "").startswith(context.get("team", "") + "-") and params.get("namespace") not in ["shared", "monitoring"]',
+                    message="You can only access your team's namespaces",
+                ),
+            ],
+        )
+        enforcer = PolicyEnforcer(config)
+
+        # Team A accessing team-a namespace - allowed
         result = enforcer.check(
             "kubectl_get",
             {"namespace": "team-a-prod"},
@@ -406,7 +510,7 @@ class TestRealWorldScenarios:
         )
         assert result.allowed
 
-        # Team A accessing shared namespace
+        # Team A accessing shared namespace - allowed
         result = enforcer.check(
             "kubectl_get",
             {"namespace": "shared"},
@@ -421,142 +525,3 @@ class TestRealWorldScenarios:
             context={"team": "team-a"},
         )
         assert not result.allowed
-
-    def test_readonly_production(self):
-        """Production namespaces are read-only for non-admins."""
-        config = PolicyConfig(
-            enabled=True,
-            default="allow",  # Allow by default for read operations
-            rules=[
-                PolicyRule(
-                    name="deny-write-prod-non-admin",
-                    effect=PolicyEffect.DENY,
-                    match=["kubectl_exec", "kubectl_delete", "kubectl_apply"],
-                    when='params.get("namespace", "").startswith("prod-") and context.get("role") != "admin"',
-                    message="Write operations not allowed in production",
-                ),
-            ],
-        )
-        enforcer = PolicyEnforcer(config)
-
-        # Read operations always allowed (no matching rule)
-        result = enforcer.check(
-            "kubectl_get",
-            {"namespace": "prod-us"},
-            context={"role": "developer"},
-        )
-        assert result.allowed
-
-        # Write in staging allowed (condition doesn't match)
-        result = enforcer.check(
-            "kubectl_exec",
-            {"namespace": "staging"},
-            context={"role": "developer"},
-        )
-        assert result.allowed
-
-        # Write in prod by developer - denied
-        result = enforcer.check(
-            "kubectl_exec",
-            {"namespace": "prod-us"},
-            context={"role": "developer"},
-        )
-        assert not result.allowed
-
-        # Write in prod by admin - allowed (condition doesn't match)
-        result = enforcer.check(
-            "kubectl_exec",
-            {"namespace": "prod-us"},
-            context={"role": "admin"},
-        )
-        assert result.allowed
-
-    def test_deny_sensitive_resources(self):
-        """Block access to sensitive Kubernetes resources."""
-        config = PolicyConfig(
-            enabled=True,
-            default="allow",
-            rules=[
-                PolicyRule(
-                    name="deny-sensitive-resources",
-                    effect=PolicyEffect.DENY,
-                    match=["kubectl_*"],
-                    when='params.get("kind", "").lower() in sensitive_kinds',
-                    vars={
-                        "sensitive_kinds": [
-                            "secret",
-                            "serviceaccount",
-                            "clusterrole",
-                            "clusterrolebinding",
-                        ]
-                    },
-                    message="Access to sensitive resource types is denied",
-                )
-            ],
-        )
-        enforcer = PolicyEnforcer(config)
-
-        # Regular resources allowed
-        result = enforcer.check("kubectl_get", {"kind": "pod"})
-        assert result.allowed
-
-        result = enforcer.check("kubectl_get", {"kind": "deployment"})
-        assert result.allowed
-
-        # Sensitive resources denied
-        result = enforcer.check("kubectl_get", {"kind": "secret"})
-        assert not result.allowed
-
-        result = enforcer.check("kubectl_get", {"kind": "Secret"})  # Case insensitive
-        assert not result.allowed
-
-        result = enforcer.check("kubectl_get", {"kind": "clusterrole"})
-        assert not result.allowed
-
-    def test_combined_allow_deny_rules(self):
-        """Test typical setup with both allow and deny rules."""
-        config = PolicyConfig(
-            enabled=True,
-            default="deny",  # Deny everything not explicitly allowed
-            rules=[
-                # First: deny dangerous operations
-                PolicyRule(
-                    name="deny-secrets",
-                    effect=PolicyEffect.DENY,
-                    match=["kubectl_*"],
-                    when='params.get("kind") == "secret"',
-                    message="Secret access is denied",
-                ),
-                # Then: allow team namespaces
-                PolicyRule(
-                    name="allow-team-a",
-                    effect=PolicyEffect.ALLOW,
-                    match=["kubectl_*"],
-                    when='params.get("namespace", "").startswith("team-a-")',
-                ),
-                # Allow monitoring tools for everyone
-                PolicyRule(
-                    name="allow-prometheus",
-                    effect=PolicyEffect.ALLOW,
-                    match=["prometheus_*"],
-                    when="True",
-                ),
-            ],
-        )
-        enforcer = PolicyEnforcer(config)
-
-        # Team namespace access - allowed
-        result = enforcer.check("kubectl_get", {"namespace": "team-a-prod", "kind": "pod"})
-        assert result.allowed
-
-        # Secrets in team namespace - denied (first rule wins)
-        result = enforcer.check("kubectl_get", {"namespace": "team-a-prod", "kind": "secret"})
-        assert not result.allowed
-
-        # Other namespace - denied (no matching allow rule)
-        result = enforcer.check("kubectl_get", {"namespace": "team-b-prod", "kind": "pod"})
-        assert not result.allowed
-
-        # Prometheus - allowed for everyone
-        result = enforcer.check("prometheus_query", {"query": "up"})
-        assert result.allowed
