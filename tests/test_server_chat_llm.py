@@ -153,7 +153,6 @@ def openrouter_client():
 # =============================================================================
 
 
-@pytest.mark.llm
 @pytest.mark.integration
 class TestStructuredOutputReal:
     """
@@ -277,7 +276,6 @@ class TestStructuredOutputReal:
 # =============================================================================
 
 
-@pytest.mark.llm
 @pytest.mark.integration
 class TestImageExtraction:
     """
@@ -343,7 +341,6 @@ class TestImageExtraction:
 # =============================================================================
 
 
-@pytest.mark.llm
 @pytest.mark.integration
 class TestStreamingReal:
     """Tests for streaming responses with real LLM."""
@@ -376,7 +373,6 @@ class TestStreamingReal:
 # =============================================================================
 
 
-@pytest.mark.llm
 @pytest.mark.integration
 class TestConversationRoundtrip:
     """
