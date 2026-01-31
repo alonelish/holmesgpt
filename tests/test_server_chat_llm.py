@@ -147,14 +147,32 @@ def openrouter_client():
         server.config.llm_model_registry.get_model_params = original_get_model_params
 
 
+MOCK_MODEL = "gpt-4.1"  # Model name for mocked tests
+
+
 @pytest.fixture
 def mock_client():
     """
     Create a test client for mocked LLM tests.
-    Does not require any API keys.
+    Does not require any API keys - litellm.completion is mocked.
     """
     import server
-    return TestClient(server.app)
+
+    # Set up a mock model entry so the server doesn't try to use ROBUSTA_AI
+    model_entry = create_model_entry(MOCK_MODEL)
+    original_get_model_params = server.config.llm_model_registry.get_model_params
+
+    def mock_get_model_params(model_key=None):
+        if model_key == MOCK_MODEL:
+            return model_entry.model_copy()
+        return original_get_model_params(model_key)
+
+    server.config.llm_model_registry.get_model_params = mock_get_model_params
+
+    try:
+        yield TestClient(server.app)
+    finally:
+        server.config.llm_model_registry.get_model_params = original_get_model_params
 
 
 # =============================================================================
@@ -511,6 +529,7 @@ class TestStreamingIntermediateEvents:
                 {"role": "system", "content": "You are a helpful assistant."}
             ],
             "stream": True,
+            "model": MOCK_MODEL,
         }
 
         response = mock_client.post("/api/chat", json=payload)
@@ -567,6 +586,7 @@ class TestStreamingIntermediateEvents:
                 {"role": "system", "content": "Think deeply."}
             ],
             "stream": True,
+            "model": MOCK_MODEL,
         }
 
         response = mock_client.post("/api/chat", json=payload)
@@ -617,6 +637,7 @@ class TestStreamingIntermediateEvents:
                 {"role": "system", "content": "Be helpful."}
             ],
             "stream": True,
+            "model": MOCK_MODEL,
         }
 
         response = mock_client.post("/api/chat", json=payload)
@@ -676,6 +697,7 @@ class TestStreamingIntermediateEvents:
                 {"role": "system", "content": "Help with weather."}
             ],
             "stream": False,
+            "model": MOCK_MODEL,
         }
 
         response = mock_client.post("/api/chat", json=payload)
