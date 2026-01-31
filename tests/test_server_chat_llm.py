@@ -485,6 +485,7 @@ class TestStreamingIntermediateEvents:
     being tied to implementation details.
     """
 
+    @patch("holmes.core.llm.DefaultLLM.check_llm")
     @patch("litellm.completion")
     @patch("holmes.core.supabase_dal.SupabaseDal._SupabaseDal__load_robusta_config")
     @patch("holmes.core.supabase_dal.SupabaseDal.get_global_instructions_for_account")
@@ -493,6 +494,7 @@ class TestStreamingIntermediateEvents:
         mock_get_global_instructions,
         mock_load_robusta_config,
         mock_litellm_completion,
+        mock_check_llm,
         mock_client,
     ):
         """
@@ -552,6 +554,7 @@ class TestStreamingIntermediateEvents:
         assert start_tool_event["tool_name"] == "fetch_url"
         assert start_tool_event["id"] == "call_123"
 
+    @patch("holmes.core.llm.DefaultLLM.check_llm")
     @patch("litellm.completion")
     @patch("holmes.core.supabase_dal.SupabaseDal._SupabaseDal__load_robusta_config")
     @patch("holmes.core.supabase_dal.SupabaseDal.get_global_instructions_for_account")
@@ -560,6 +563,7 @@ class TestStreamingIntermediateEvents:
         mock_get_global_instructions,
         mock_load_robusta_config,
         mock_litellm_completion,
+        mock_check_llm,
         mock_client,
     ):
         """
@@ -609,6 +613,7 @@ class TestStreamingIntermediateEvents:
         assert "analysis" in answer_end
         assert "42" in answer_end["analysis"], f"Expected '42' in analysis, got: {answer_end['analysis']}"
 
+    @patch("holmes.core.llm.DefaultLLM.check_llm")
     @patch("litellm.completion")
     @patch("holmes.core.supabase_dal.SupabaseDal._SupabaseDal__load_robusta_config")
     @patch("holmes.core.supabase_dal.SupabaseDal.get_global_instructions_for_account")
@@ -617,6 +622,7 @@ class TestStreamingIntermediateEvents:
         mock_get_global_instructions,
         mock_load_robusta_config,
         mock_litellm_completion,
+        mock_check_llm,
         mock_client,
     ):
         """
@@ -659,6 +665,7 @@ class TestStreamingIntermediateEvents:
         # Verify it contains conversation history
         assert "conversation_history" in answer_end
 
+    @patch("holmes.core.llm.DefaultLLM.check_llm")
     @patch("litellm.completion")
     @patch("holmes.core.supabase_dal.SupabaseDal._SupabaseDal__load_robusta_config")
     @patch("holmes.core.supabase_dal.SupabaseDal.get_global_instructions_for_account")
@@ -667,6 +674,7 @@ class TestStreamingIntermediateEvents:
         mock_get_global_instructions,
         mock_load_robusta_config,
         mock_litellm_completion,
+        mock_check_llm,
         mock_client,
     ):
         """
