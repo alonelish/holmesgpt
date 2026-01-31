@@ -482,7 +482,7 @@ jobs:
 
             const p = buildParams(JSON.parse(${{ toJSON(steps.eval-params.outputs.base_params) }}));
 
-            // Build simple running body inline (new helpers not in master yet)
+            // Build running body
             let body = AUTO_EVAL_COMMENT_IDENTIFIER + '\n';
             if (p.isManual) {
               body += `## 🚀 Manual Eval Running...\n\n` + renderParamsTable(p, context);
@@ -691,7 +691,7 @@ jobs:
             const reportContent = report || '⚠️ No eval report was generated.\n\n';
             const footer = buildRerunFooter(p, context, { includeLegend: true });
 
-            // Build results body inline (new helpers not in master yet)
+            // Build results body
             let body = AUTO_EVAL_COMMENT_IDENTIFIER + '\n';
             if (p.isManual) {
               body += `## ✅ Manual Eval Complete\n\n` + renderParamsTable(p) + '\n';
