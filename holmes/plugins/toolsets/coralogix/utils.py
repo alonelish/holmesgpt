@@ -1,20 +1,9 @@
 import json
 import logging
 from datetime import datetime
-from typing import Any, Dict, List, NamedTuple, Optional
+from typing import Any, Dict, List, Optional
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
-
-
-class FlattenedLog(NamedTuple):
-    timestamp: str
-    log_message: str
-
-
-class CoralogixQueryResult(BaseModel):
-    logs: List[FlattenedLog]
-    http_status: Optional[int]
-    error: Optional[str]
 
 
 class CoralogixLabelsConfig(BaseModel):

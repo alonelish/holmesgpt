@@ -88,11 +88,11 @@ def send_metrics(domain: str, api_key: str, app_name: str, subsystem: str,
 
     print("Generating metric data points...")
     for _ in range(50):
-        endpoint = random.choice(endpoints)
+        api_endpoint = random.choice(endpoints)
         status = random.choice(status_codes)
         latency = random.uniform(0.01, 2.0)
 
-        attributes = {"endpoint": endpoint, "status_code": status, "app": app_name}
+        attributes = {"endpoint": api_endpoint, "status_code": status, "app": app_name}
 
         request_counter.add(1, attributes)
         latency_histogram.record(latency, attributes)

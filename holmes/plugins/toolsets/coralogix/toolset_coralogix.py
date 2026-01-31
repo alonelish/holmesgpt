@@ -207,7 +207,7 @@ class CoralogixToolset(Toolset):
                 jinja_template=f"file://{os.path.abspath(template_path)}"
             )
 
-    def get_example_config(self):
+    def get_example_config(self) -> dict[str, Any]:
         example_config = CoralogixConfig(
             api_key="<your-api-key>",
             domain="eu2.coralogix.com",

@@ -22,7 +22,7 @@ from holmes.plugins.toolsets.coralogix.utils import (
 def coralogix_config():
     return CoralogixConfig(
         api_key="dummy_api_key",
-        team_hostname="my-team",
+        team_slug="my-team",
         domain="eu2.coralogix.com",
     )
 

@@ -58,7 +58,8 @@ cx_query_url() {
 cx_send_logs() {
   local log_entries="$1"
 
-  local ingress_url=$(cx_ingress_url)
+  local ingress_url
+  ingress_url=$(cx_ingress_url)
 
   local response
   # Use -k to skip SSL verification (for sandbox environments with TLS interception)
@@ -86,7 +87,8 @@ cx_query() {
   local start_date="${2:-$(date -u -d '1 hour ago' '+%Y-%m-%dT%H:%M:%SZ' 2>/dev/null || date -u -v-1H '+%Y-%m-%dT%H:%M:%SZ')}"
   local end_date="${3:-$(date -u '+%Y-%m-%dT%H:%M:%SZ')}"
 
-  local query_url=$(cx_query_url)
+  local query_url
+  query_url=$(cx_query_url)
 
   # Use -k to skip SSL verification (for sandbox environments with TLS interception)
   curl -sk -X POST "$query_url" \
@@ -105,7 +107,8 @@ cx_wait_for_logs() {
   echo "⏳ Waiting for logs containing '$search_term' to be queryable..."
 
   for i in $(seq 1 $max_attempts); do
-    local result=$(cx_query "source logs | lucene '$search_term' | limit 1")
+    local result
+    result=$(cx_query "source logs | lucene '$search_term' | limit 1")
 
     if echo "$result" | grep -q "$search_term"; then
       echo "✅ Logs are queryable after $((i * sleep_interval)) seconds"
@@ -123,7 +126,8 @@ cx_wait_for_logs() {
 # Generate a unique verification code for anti-hallucination testing
 # Usage: VERIFY_CODE=$(cx_generate_verify_code)
 cx_generate_verify_code() {
-  local code=$(cat /dev/urandom | tr -dc 'A-Z0-9' | fold -w 8 | head -n 1)
+  local code
+  code=$(tr -dc 'A-Z0-9' < /dev/urandom | fold -w 8 | head -n 1) || code="FALLBACK$(date +%s)"
   echo "HOLMES-CX-${code}"
 }
 

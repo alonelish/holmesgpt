@@ -43,15 +43,6 @@ before_test: |
   ERROR_CODE_2="ERR-4058"
   ERROR_CODE_3="ERR-9463"
 
-  # Get timestamps (Coralogix expects milliseconds since epoch)
-  NOW=$(date +%s)
-  TS1=$(( (NOW - 300) * 1000 ))
-  TS2=$(( (NOW - 240) * 1000 ))
-  TS3=$(( (NOW - 180) * 1000 ))
-  TS4=$(( (NOW - 120) * 1000 ))
-  TS5=$(( (NOW - 60) * 1000 ))
-  TS6=$(( NOW * 1000 ))
-
   echo "⏳ Sending logs to Coralogix..."
 
   # Build log entries JSON - Coralogix /singles API expects an ARRAY of entries
