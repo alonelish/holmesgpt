@@ -62,14 +62,21 @@ cx_send_logs() {
   ingress_url=$(cx_ingress_url)
 
   local response
-  # Use -k to skip SSL verification (for sandbox environments with TLS interception)
-  response=$(curl -sk -X POST "${ingress_url}/logs/v1/singles" \
+  local curl_exit_code
+  # Use -f to fail on HTTP errors, -k to skip SSL verification
+  # Note: -f suppresses body on error, so we capture exit code separately
+  response=$(curl -sfk -X POST "${ingress_url}/logs/v1/singles" \
     -H "Authorization: Bearer ${CORALOGIX_SEND_API_KEY}" \
     -H "Content-Type: application/json" \
-    -d "$log_entries" 2>&1)
+    -d "$log_entries" 2>&1) || curl_exit_code=$?
 
-  # Check for errors - Coralogix returns {"message":"OK"} on success
-  # but may include "Dropped" if entries were rejected
+  # Check for curl/HTTP failure
+  if [ -n "$curl_exit_code" ] && [ "$curl_exit_code" -ne 0 ]; then
+    echo "❌ HTTP request failed (curl exit code: $curl_exit_code)"
+    return 1
+  fi
+
+  # Check for dropped entries (Coralogix may accept request but drop some logs)
   if echo "$response" | grep -q "Dropped"; then
     echo "❌ Logs were dropped by Coralogix: $response"
     return 1
