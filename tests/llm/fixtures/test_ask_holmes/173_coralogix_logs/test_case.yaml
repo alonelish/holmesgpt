@@ -93,11 +93,17 @@ before_test: |
   for i in {1..60}; do
     # Use || true to prevent set -e from exiting on curl failure
     # Use -k to skip SSL verification (for sandbox environments with TLS interception)
-    # Use simple lucene search with explicit time range
+    # Use filter for applicationname (label field) + lucene for text search
+    # Build JSON with jq for proper escaping of $l.applicationname
+    JSON_PAYLOAD=$(jq -n \
+      --arg query "source logs | filter \$l.applicationname == '$APP_NAME' | lucene '$ERROR_CODE_1' | limit 1" \
+      --arg start "$START_DATE" \
+      --arg end "$END_DATE" \
+      '{query: $query, metadata: {syntax: "QUERY_SYNTAX_DATAPRIME", startDate: $start, endDate: $end}}')
     RESULT=$(curl -sk -X POST "$QUERY_URL" \
       -H "Authorization: Bearer ${CORALOGIX_API_KEY}" \
       -H "Content-Type: application/json" \
-      -d "{\"query\": \"source logs | lucene '$APP_NAME AND $ERROR_CODE_1' | limit 1\", \"metadata\": {\"syntax\": \"QUERY_SYNTAX_DATAPRIME\", \"startDate\": \"$START_DATE\", \"endDate\": \"$END_DATE\"}}" 2>/dev/null || true)
+      -d "$JSON_PAYLOAD" 2>/dev/null || true)
 
     # Debug: print response periodically
     if [ "$i" -eq 1 ] || [ "$((i % 10))" -eq 0 ]; then
@@ -122,10 +128,15 @@ before_test: |
   # Verify all 3 error codes are queryable
   echo "🔍 Verifying all error codes are queryable..."
   for CODE in $ERROR_CODE_1 $ERROR_CODE_2 $ERROR_CODE_3; do
+    JSON_PAYLOAD=$(jq -n \
+      --arg query "source logs | filter \$l.applicationname == '$APP_NAME' | lucene '$CODE' | limit 1" \
+      --arg start "$START_DATE" \
+      --arg end "$END_DATE" \
+      '{query: $query, metadata: {syntax: "QUERY_SYNTAX_DATAPRIME", startDate: $start, endDate: $end}}')
     VERIFY=$(curl -sk -X POST "$QUERY_URL" \
       -H "Authorization: Bearer ${CORALOGIX_API_KEY}" \
       -H "Content-Type: application/json" \
-      -d "{\"query\": \"source logs | lucene '$APP_NAME AND $CODE' | limit 1\", \"metadata\": {\"syntax\": \"QUERY_SYNTAX_DATAPRIME\", \"startDate\": \"$START_DATE\", \"endDate\": \"$END_DATE\"}}" 2>/dev/null || true)
+      -d "$JSON_PAYLOAD" 2>/dev/null || true)
 
     if ! echo "$VERIFY" | grep -q "$CODE"; then
       echo "❌ Could not find error code $CODE"
