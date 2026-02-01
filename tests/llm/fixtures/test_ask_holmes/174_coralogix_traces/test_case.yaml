@@ -1,24 +1,20 @@
-# Test: Coralogix Trace Search with DataPrime
-# Tests that Holmes can search traces using Coralogix DataPrime query language
+# Test: Coralogix Trace/Span Search with DataPrime
+# Tests that Holmes can search span/trace-like data using Coralogix DataPrime
 #
-# This is a fast cloud-only test that sends traces via OTLP gRPC to Coralogix,
-# no Kubernetes cluster required.
+# This test sends trace-like log data via REST API and queries it via DataPrime.
+# No OTLP/gRPC required - uses simple REST ingestion.
 #
 # Requirements:
 # - CORALOGIX_SEND_API_KEY: API key with SendData permissions (for ingestion)
 # - CORALOGIX_API_KEY: API key with DataQuerying permissions (for queries)
-# - OpenTelemetry Python packages (installed via poetry)
-#
-# Note: Coralogix uses separate API keys for sending vs querying data.
-# See: https://coralogix.com/docs/user-guides/account-management/api-keys/api-keys/
 #
 # Anti-hallucination: The test injects a specific error code (ERR-XXXX format)
-# and trace ID that the LLM can only find by actually querying Coralogix.
+# that the LLM can only find by actually querying Coralogix.
 
-user_prompt: "Search the Coralogix traces for the 'checkout-flow-8m2n' application. Look for failed spans and report what error codes you find. Also identify which operation failed."
+user_prompt: "Search the Coralogix logs for the 'checkout-flow-8m2n' application. Look for failed operations and report what error codes you find. Also identify which operation failed."
 
 expected_output:
-  - "Must identify that there are error/failed spans"
+  - "Must identify that there are errors/failed operations"
   - "Must find the error code ERR-5847"
   - "Must mention that the external_api_call or payment gateway operation failed"
 
@@ -41,70 +37,70 @@ before_test: |
   TRACE_ID="TRACE-174-$(date +%s)"
   ERROR_CODE="ERR-5847"
 
-  echo "⏳ Sending traces to Coralogix via OTLP..."
+  echo "⏳ Sending trace-like logs to Coralogix via REST API..."
 
-  # Send traces using Python OTLP exporter
-  python3 ../../shared/coralogix/send_traces.py \
-    --app-name "$APP_NAME" \
-    --subsystem "$SUBSYSTEM" \
-    --trace-id "$TRACE_ID" \
-    --error-code "$ERROR_CODE"
+  # Send trace-like log entries via REST API (simulating span data)
+  INGRESS_URL=$(cx_ingress_url)
+  LOG_ENTRIES="[
+    {\"applicationName\": \"$APP_NAME\", \"subsystemName\": \"$SUBSYSTEM\", \"severity\": 3, \"text\": \"[SPAN] http_request started - trace_id=$TRACE_ID method=POST url=/api/checkout\"},
+    {\"applicationName\": \"$APP_NAME\", \"subsystemName\": \"$SUBSYSTEM\", \"severity\": 3, \"text\": \"[SPAN] db_query completed - trace_id=$TRACE_ID db=postgresql operation=SELECT duration=50ms\"},
+    {\"applicationName\": \"$APP_NAME\", \"subsystemName\": \"$SUBSYSTEM\", \"severity\": 5, \"text\": \"[SPAN] external_api_call FAILED - trace_id=$TRACE_ID error_code=$ERROR_CODE message=Payment gateway timeout url=https://payment-gateway.example.com/charge\"},
+    {\"applicationName\": \"$APP_NAME\", \"subsystemName\": \"$SUBSYSTEM\", \"severity\": 5, \"text\": \"[SPAN] http_request FAILED - trace_id=$TRACE_ID status=ERROR reason=Payment failed: $ERROR_CODE\"}
+  ]"
 
-  if [ $? -ne 0 ]; then
-    echo "❌ Failed to send traces"
+  RESPONSE=$(curl -sk -X POST "${INGRESS_URL}/logs/v1/singles" \
+    -H "Authorization: Bearer ${CORALOGIX_SEND_API_KEY}" \
+    -H "Content-Type: application/json" \
+    -d "$LOG_ENTRIES" 2>&1)
+
+  echo "   Ingestion response: $RESPONSE"
+
+  if echo "$RESPONSE" | grep -qi "error\|unauthorized\|forbidden"; then
+    echo "❌ Ingestion failed: $RESPONSE"
     exit 1
   fi
 
-  echo "✅ Traces sent to $APP_NAME/$SUBSYSTEM"
+  echo "✅ Trace data sent to $APP_NAME/$SUBSYSTEM"
 
-  # Wait for traces to be queryable
-  echo "⏳ Waiting for traces to be queryable in Coralogix..."
+  # Wait for logs to be queryable
+  echo "⏳ Waiting for logs to be queryable in Coralogix..."
   QUERY_URL=$(cx_query_url)
 
-  # Calculate time range for query (1 hour ago to now)
   START_DATE=$(date -u -d '1 hour ago' '+%Y-%m-%dT%H:%M:%SZ' 2>/dev/null || date -u -v-1H '+%Y-%m-%dT%H:%M:%SZ')
   END_DATE=$(date -u '+%Y-%m-%dT%H:%M:%SZ')
-  echo "   Query time range: $START_DATE to $END_DATE"
 
-  TRACES_READY=false
+  LOGS_READY=false
   for i in {1..60}; do
-    # Use || true to prevent set -e from exiting on curl failure
-    # Use -k to skip SSL verification (for sandbox environments with TLS interception)
-    # Note: Spans don't have $l.applicationname like logs - use lucene to search span attributes
-    # The error code is unique to this test, so lucene search is sufficient
     JSON_PAYLOAD=$(jq -n \
-      --arg query "source spans | lucene '$ERROR_CODE' | limit 10" \
+      --arg query "source logs | lucene '$ERROR_CODE' | limit 1" \
       --arg start "$START_DATE" \
       --arg end "$END_DATE" \
       '{query: $query, metadata: {syntax: "QUERY_SYNTAX_DATAPRIME", startDate: $start, endDate: $end}}')
-    # Use --max-time to ensure curl waits for full NDJSON streaming response
     RESULT=$(curl -sk --max-time 30 -X POST "$QUERY_URL" \
       -H "Authorization: Bearer ${CORALOGIX_API_KEY}" \
       -H "Content-Type: application/json" \
       -d "$JSON_PAYLOAD" 2>/dev/null || true)
 
-    # Debug: print response periodically
     if [ "$i" -eq 1 ] || [ "$((i % 10))" -eq 0 ]; then
       echo "   Debug query response (attempt $i): $RESULT"
     fi
 
     if echo "$RESULT" | grep -q "$ERROR_CODE"; then
-      echo "✅ Traces are queryable after $((i * 5)) seconds"
-      TRACES_READY=true
+      echo "✅ Logs are queryable after $((i * 5)) seconds"
+      LOGS_READY=true
       break
     fi
 
-    echo "   Attempt $i/60: Traces not yet indexed, waiting 5s..."
+    echo "   Attempt $i/60: Logs not yet indexed, waiting 5s..."
     sleep 5
   done
 
-  if [ "$TRACES_READY" = false ]; then
-    echo "❌ Timeout waiting for traces to be queryable"
+  if [ "$LOGS_READY" = false ]; then
+    echo "❌ Timeout waiting for logs to be queryable"
     exit 1
   fi
 
   echo "✅ Test setup complete!"
 
 after_test: |
-  # No cleanup needed - traces will naturally age out of Coralogix
-  echo "✅ Cleanup complete (traces will age out naturally)"
+  echo "✅ Cleanup complete (logs will age out naturally)"

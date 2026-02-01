@@ -91,12 +91,9 @@ before_test: |
 
   LOGS_READY=false
   for i in {1..60}; do
-    # Use || true to prevent set -e from exiting on curl failure
-    # Use -k to skip SSL verification (for sandbox environments with TLS interception)
-    # Use filter for applicationname (label field) + lucene for text search
-    # Build JSON with jq for proper escaping of $l.applicationname
+    # Simple lucene search for the error code (unique to this test)
     JSON_PAYLOAD=$(jq -n \
-      --arg query "source logs | filter \$l.applicationname == '$APP_NAME' | lucene '$ERROR_CODE_1' | limit 1" \
+      --arg query "source logs | lucene '$ERROR_CODE_1' | limit 1" \
       --arg start "$START_DATE" \
       --arg end "$END_DATE" \
       '{query: $query, metadata: {syntax: "QUERY_SYNTAX_DATAPRIME", startDate: $start, endDate: $end}}')
@@ -130,7 +127,7 @@ before_test: |
   echo "🔍 Verifying all error codes are queryable..."
   for CODE in $ERROR_CODE_1 $ERROR_CODE_2 $ERROR_CODE_3; do
     JSON_PAYLOAD=$(jq -n \
-      --arg query "source logs | filter \$l.applicationname == '$APP_NAME' | lucene '$CODE' | limit 1" \
+      --arg query "source logs | lucene '$CODE' | limit 1" \
       --arg start "$START_DATE" \
       --arg end "$END_DATE" \
       '{query: $query, metadata: {syntax: "QUERY_SYNTAX_DATAPRIME", startDate: $start, endDate: $end}}')

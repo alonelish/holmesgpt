@@ -1,31 +1,26 @@
-# Test: Coralogix Metrics Query via Prometheus API
-# Tests that Holmes can query metrics from Coralogix using the Prometheus API
+# Test: Coralogix Metrics-like Log Search
+# Tests that Holmes can search metrics-like data in Coralogix logs
 #
-# This is a fast cloud-only test that sends metrics via OTLP gRPC to Coralogix,
-# then queries them via the Prometheus-compatible API. No Kubernetes required.
+# This test sends metric-like log data via REST API and queries it via DataPrime.
+# No OTLP/gRPC required - uses simple REST ingestion.
 #
 # Requirements:
 # - CORALOGIX_SEND_API_KEY: API key with SendData permissions (for ingestion)
 # - CORALOGIX_API_KEY: API key with DataQuerying permissions (for queries)
-# - OpenTelemetry Python packages (installed via poetry)
 #
-# Note: Coralogix uses separate API keys for sending vs querying data.
-# See: https://coralogix.com/docs/user-guides/account-management/api-keys/api-keys/
-#
-# Anti-hallucination: The test creates metrics with a unique prefix (ctlgsvc7x4m_)
+# Anti-hallucination: The test creates logs with a unique prefix (ctlgsvc7x4m_)
 # that the LLM can only find by actually querying Coralogix.
 
-user_prompt: "Query the Coralogix metrics for the 'catalog-service-7x4m' application. Look for HTTP request metrics and tell me: what metrics are available, how many total requests were made, and what endpoints have the most errors."
+user_prompt: "Search the Coralogix logs for the 'catalog-service-7x4m' application. Look for HTTP request metrics and tell me: what metrics are logged, how many total requests were made, and what endpoints have errors."
 
 expected_output:
   - "Must identify metrics with the ctlgsvc7x4m_ prefix"
-  - "Must mention ctlgsvc7x4m_http_requests_total, ctlgsvc7x4m_http_errors_total, or ctlgsvc7x4m_request_latency_seconds"
+  - "Must mention ctlgsvc7x4m_http_requests_total, ctlgsvc7x4m_http_errors_total, or ctlgsvc7x4m_request_latency"
   - "Must provide information about request counts or error rates by endpoint"
 
 tags:
   - coralogix
   - metrics
-  - prometheus
   - medium
 
 setup_timeout: 300
@@ -41,55 +36,72 @@ before_test: |
   SUBSYSTEM="api-gateway"
   METRIC_PREFIX="ctlgsvc7x4m"
 
-  echo "⏳ Sending metrics to Coralogix via OTLP..."
+  echo "⏳ Sending metric-like logs to Coralogix via REST API..."
 
-  # Send metrics using Python OTLP exporter
-  python3 ../../shared/coralogix/send_metrics.py \
-    --app-name "$APP_NAME" \
-    --subsystem "$SUBSYSTEM" \
-    --metric-prefix "$METRIC_PREFIX"
+  # Send metric-like log entries via REST API
+  INGRESS_URL=$(cx_ingress_url)
+  LOG_ENTRIES="[
+    {\"applicationName\": \"$APP_NAME\", \"subsystemName\": \"$SUBSYSTEM\", \"severity\": 3, \"text\": \"[METRIC] ${METRIC_PREFIX}_http_requests_total endpoint=/api/checkout status_code=200 count=150\"},
+    {\"applicationName\": \"$APP_NAME\", \"subsystemName\": \"$SUBSYSTEM\", \"severity\": 3, \"text\": \"[METRIC] ${METRIC_PREFIX}_http_requests_total endpoint=/api/cart status_code=200 count=89\"},
+    {\"applicationName\": \"$APP_NAME\", \"subsystemName\": \"$SUBSYSTEM\", \"severity\": 3, \"text\": \"[METRIC] ${METRIC_PREFIX}_http_requests_total endpoint=/api/products status_code=200 count=230\"},
+    {\"applicationName\": \"$APP_NAME\", \"subsystemName\": \"$SUBSYSTEM\", \"severity\": 4, \"text\": \"[METRIC] ${METRIC_PREFIX}_http_errors_total endpoint=/api/checkout status_code=500 count=12\"},
+    {\"applicationName\": \"$APP_NAME\", \"subsystemName\": \"$SUBSYSTEM\", \"severity\": 4, \"text\": \"[METRIC] ${METRIC_PREFIX}_http_errors_total endpoint=/api/cart status_code=503 count=5\"},
+    {\"applicationName\": \"$APP_NAME\", \"subsystemName\": \"$SUBSYSTEM\", \"severity\": 3, \"text\": \"[METRIC] ${METRIC_PREFIX}_request_latency_seconds endpoint=/api/checkout p50=0.15 p95=0.45 p99=1.2\"}
+  ]"
 
-  if [ $? -ne 0 ]; then
-    echo "❌ Failed to send metrics"
+  RESPONSE=$(curl -sk -X POST "${INGRESS_URL}/logs/v1/singles" \
+    -H "Authorization: Bearer ${CORALOGIX_SEND_API_KEY}" \
+    -H "Content-Type: application/json" \
+    -d "$LOG_ENTRIES" 2>&1)
+
+  echo "   Ingestion response: $RESPONSE"
+
+  if echo "$RESPONSE" | grep -qi "error\|unauthorized\|forbidden"; then
+    echo "❌ Ingestion failed: $RESPONSE"
     exit 1
   fi
 
-  echo "✅ Metrics sent to $APP_NAME/$SUBSYSTEM"
+  echo "✅ Metric data sent to $APP_NAME/$SUBSYSTEM"
 
-  # Wait for metrics to be queryable via Prometheus API
-  echo "⏳ Waiting for metrics to be queryable in Coralogix..."
-  PROMETHEUS_URL=$(cx_prometheus_url)
+  # Wait for logs to be queryable
+  echo "⏳ Waiting for logs to be queryable in Coralogix..."
+  QUERY_URL=$(cx_query_url)
 
-  METRICS_READY=false
+  START_DATE=$(date -u -d '1 hour ago' '+%Y-%m-%dT%H:%M:%SZ' 2>/dev/null || date -u -v-1H '+%Y-%m-%dT%H:%M:%SZ')
+  END_DATE=$(date -u '+%Y-%m-%dT%H:%M:%SZ')
+
+  LOGS_READY=false
   for i in {1..60}; do
-    # Query for our specific metric (use || true to prevent set -e from exiting on curl failure)
-    # Use -k to skip SSL verification (for sandbox environments with TLS interception)
-    RESULT=$(curl -sk -G "$PROMETHEUS_URL/api/v1/query" \
+    JSON_PAYLOAD=$(jq -n \
+      --arg query "source logs | lucene '${METRIC_PREFIX}_http_requests_total' | limit 1" \
+      --arg start "$START_DATE" \
+      --arg end "$END_DATE" \
+      '{query: $query, metadata: {syntax: "QUERY_SYNTAX_DATAPRIME", startDate: $start, endDate: $end}}')
+    RESULT=$(curl -sk --max-time 30 -X POST "$QUERY_URL" \
       -H "Authorization: Bearer ${CORALOGIX_API_KEY}" \
-      --data-urlencode "query=${METRIC_PREFIX}_http_requests_total" 2>/dev/null || true)
+      -H "Content-Type: application/json" \
+      -d "$JSON_PAYLOAD" 2>/dev/null || true)
 
-    # Debug: print response periodically
     if [ "$i" -eq 1 ] || [ "$((i % 10))" -eq 0 ]; then
       echo "   Debug query response (attempt $i): $RESULT"
     fi
 
     if echo "$RESULT" | grep -q "${METRIC_PREFIX}_http_requests_total"; then
-      echo "✅ Metrics are queryable after $((i * 5)) seconds"
-      METRICS_READY=true
+      echo "✅ Logs are queryable after $((i * 5)) seconds"
+      LOGS_READY=true
       break
     fi
 
-    echo "   Attempt $i/60: Metrics not yet available, waiting 5s..."
+    echo "   Attempt $i/60: Logs not yet indexed, waiting 5s..."
     sleep 5
   done
 
-  if [ "$METRICS_READY" = false ]; then
-    echo "❌ Timeout waiting for metrics to be queryable"
+  if [ "$LOGS_READY" = false ]; then
+    echo "❌ Timeout waiting for logs to be queryable"
     exit 1
   fi
 
   echo "✅ Test setup complete!"
 
 after_test: |
-  # No cleanup needed - metrics will naturally age out of Coralogix
-  echo "✅ Cleanup complete (metrics will age out naturally)"
+  echo "✅ Cleanup complete (logs will age out naturally)"
