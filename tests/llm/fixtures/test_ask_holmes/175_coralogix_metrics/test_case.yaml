@@ -12,14 +12,14 @@
 # Note: Coralogix uses separate API keys for sending vs querying data.
 # See: https://coralogix.com/docs/user-guides/account-management/api-keys/api-keys/
 #
-# Anti-hallucination: The test creates metrics with a unique prefix (eval175_)
+# Anti-hallucination: The test creates metrics with a unique prefix (ctlgsvc7x4m_)
 # that the LLM can only find by actually querying Coralogix.
 
-user_prompt: "Query the Coralogix metrics for the 'holmes-eval-175' application. Look for HTTP request metrics with prefix 'eval175_' and tell me: what metrics are available, how many total requests were made, and what endpoints have the most errors."
+user_prompt: "Query the Coralogix metrics for the 'catalog-service-7x4m' application. Look for HTTP request metrics and tell me: what metrics are available, how many total requests were made, and what endpoints have the most errors."
 
 expected_output:
-  - "Must identify metrics with the eval175_ prefix"
-  - "Must mention eval175_http_requests_total, eval175_http_errors_total, or eval175_request_latency_seconds"
+  - "Must identify metrics with the ctlgsvc7x4m_ prefix"
+  - "Must mention ctlgsvc7x4m_http_requests_total, ctlgsvc7x4m_http_errors_total, or ctlgsvc7x4m_request_latency_seconds"
   - "Must provide information about request counts or error rates by endpoint"
 
 tags:
@@ -31,15 +31,15 @@ tags:
 setup_timeout: 300
 
 before_test: |
+  set -e
   source ../../shared/coralogix/coralogix_test_utils.sh
   cx_setup
-  set -e
 
   echo "🚀 Setting up Coralogix metrics test 175"
 
-  APP_NAME="holmes-eval-175"
+  APP_NAME="catalog-service-7x4m"
   SUBSYSTEM="api-gateway"
-  METRIC_PREFIX="eval175"
+  METRIC_PREFIX="ctlgsvc7x4m"
 
   echo "⏳ Sending metrics to Coralogix via OTLP..."
 
@@ -58,7 +58,7 @@ before_test: |
 
   # Wait for metrics to be queryable via Prometheus API
   echo "⏳ Waiting for metrics to be queryable in Coralogix..."
-  PROMETHEUS_URL="https://ng-api-http.eu2.coralogix.com/metrics"
+  PROMETHEUS_URL=$(cx_prometheus_url)
 
   METRICS_READY=false
   for i in {1..60}; do

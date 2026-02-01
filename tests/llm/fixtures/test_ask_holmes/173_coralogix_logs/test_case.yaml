@@ -14,12 +14,12 @@
 # Anti-hallucination: The test injects 3 specific error codes (ERR-XXXX format).
 # The LLM cannot know these codes without actually querying Coralogix.
 
-user_prompt: "Search the Coralogix logs for the 'holmes-eval-173' application. Find ERROR level messages and report what error codes (format ERR-XXXX) appear in the logs."
+user_prompt: "Search the Coralogix logs for the 'order-service-3k9p' application. Find ERROR level messages and report what error codes (format ERR-XXXX) appear in the logs."
 
 expected_output:
-  - "Must identify that there are ERROR level logs"
-  - "Must find and list the 3 specific error codes: ERR-7291, ERR-4058, and ERR-9463"
-  - "The response should mention the services or error messages associated with these codes"
+  - "Must find error code ERR-7291 associated with database connection timeout"
+  - "Must find error code ERR-4058 associated with payment validation failure"
+  - "Must find error code ERR-9463 associated with stock sync or inventory API failure"
 
 tags:
   - coralogix
@@ -29,13 +29,13 @@ tags:
 setup_timeout: 300
 
 before_test: |
+  set -e
   source ../../shared/coralogix/coralogix_test_utils.sh
   cx_setup
-  set -e
 
   echo "🚀 Setting up Coralogix logs test 173"
 
-  APP_NAME="holmes-eval-173"
+  APP_NAME="order-service-3k9p"
   SUBSYSTEM="payment-api"
 
   # Define the specific error codes for anti-hallucination testing
@@ -58,7 +58,7 @@ before_test: |
   ]"
 
   # Send logs via REST API
-  INGRESS_URL="https://ingress.eu2.coralogix.com"
+  INGRESS_URL=$(cx_ingress_url)
 
   RESPONSE=$(curl -sk -X POST "${INGRESS_URL}/logs/v1/singles" \
     -H "Authorization: Bearer ${CORALOGIX_SEND_API_KEY}" \
@@ -82,7 +82,7 @@ before_test: |
 
   # Wait for logs to be queryable (Coralogix has some ingestion delay)
   echo "⏳ Waiting for logs to be queryable in Coralogix..."
-  QUERY_URL="https://ng-api-http.eu2.coralogix.com/api/v1/dataprime/query"
+  QUERY_URL=$(cx_query_url)
 
   # Calculate time range for query (1 hour ago to now)
   START_DATE=$(date -u -d '1 hour ago' '+%Y-%m-%dT%H:%M:%SZ' 2>/dev/null || date -u -v-1H '+%Y-%m-%dT%H:%M:%SZ')

@@ -15,7 +15,7 @@
 # Anti-hallucination: The test injects a specific error code (ERR-XXXX format)
 # and trace ID that the LLM can only find by actually querying Coralogix.
 
-user_prompt: "Search the Coralogix traces for the 'holmes-eval-174' application. Look for failed spans and report what error codes you find. Also identify which operation failed."
+user_prompt: "Search the Coralogix traces for the 'checkout-flow-8m2n' application. Look for failed spans and report what error codes you find. Also identify which operation failed."
 
 expected_output:
   - "Must identify that there are error/failed spans"
@@ -30,13 +30,13 @@ tags:
 setup_timeout: 300
 
 before_test: |
+  set -e
   source ../../shared/coralogix/coralogix_test_utils.sh
   cx_setup
-  set -e
 
   echo "🚀 Setting up Coralogix traces test 174"
 
-  APP_NAME="holmes-eval-174"
+  APP_NAME="checkout-flow-8m2n"
   SUBSYSTEM="checkout-service"
   TRACE_ID="TRACE-174-$(date +%s)"
   ERROR_CODE="ERR-5847"
@@ -59,7 +59,7 @@ before_test: |
 
   # Wait for traces to be queryable
   echo "⏳ Waiting for traces to be queryable in Coralogix..."
-  QUERY_URL="https://ng-api-http.eu2.coralogix.com/api/v1/dataprime/query"
+  QUERY_URL=$(cx_query_url)
 
   # Calculate time range for query (1 hour ago to now)
   START_DATE=$(date -u -d '1 hour ago' '+%Y-%m-%dT%H:%M:%SZ' 2>/dev/null || date -u -v-1H '+%Y-%m-%dT%H:%M:%SZ')
