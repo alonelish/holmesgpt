@@ -9,3 +9,11 @@ toolsets:
       prometheus_url: "https://ng-api-http.eu2.coralogix.com/metrics"
       headers:
         Authorization: "Bearer {{env.CORALOGIX_API_KEY}}"
+
+  # Disable toolsets that require local infrastructure (cloud-only test)
+  kubernetes/core:
+    enabled: false
+  kubernetes/logs:
+    enabled: false
+  helm/core:
+    enabled: false

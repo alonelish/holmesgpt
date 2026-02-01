@@ -100,7 +100,8 @@ before_test: |
       --arg start "$START_DATE" \
       --arg end "$END_DATE" \
       '{query: $query, metadata: {syntax: "QUERY_SYNTAX_DATAPRIME", startDate: $start, endDate: $end}}')
-    RESULT=$(curl -sk -X POST "$QUERY_URL" \
+    # Use --max-time to ensure curl waits for full NDJSON streaming response
+    RESULT=$(curl -sk --max-time 30 -X POST "$QUERY_URL" \
       -H "Authorization: Bearer ${CORALOGIX_API_KEY}" \
       -H "Content-Type: application/json" \
       -d "$JSON_PAYLOAD" 2>/dev/null || true)
@@ -133,7 +134,7 @@ before_test: |
       --arg start "$START_DATE" \
       --arg end "$END_DATE" \
       '{query: $query, metadata: {syntax: "QUERY_SYNTAX_DATAPRIME", startDate: $start, endDate: $end}}')
-    VERIFY=$(curl -sk -X POST "$QUERY_URL" \
+    VERIFY=$(curl -sk --max-time 30 -X POST "$QUERY_URL" \
       -H "Authorization: Bearer ${CORALOGIX_API_KEY}" \
       -H "Content-Type: application/json" \
       -d "$JSON_PAYLOAD" 2>/dev/null || true)
