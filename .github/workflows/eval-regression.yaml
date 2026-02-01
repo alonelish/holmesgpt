@@ -689,14 +689,14 @@ jobs:
             });
             const report = fs.existsSync('code/evals_report.md') ? fs.readFileSync('code/evals_report.md', 'utf8') : '';
             const reportContent = report || '⚠️ No eval report was generated.\n\n';
-            const footer = buildRerunFooter(p, context, { includeLegend: true });
+            const footer = buildRerunFooter(p, context);
 
             // Build results body
             let body = AUTO_EVAL_COMMENT_IDENTIFIER + '\n';
             if (p.isManual) {
               body += `## ✅ Manual Eval Complete\n\n` + renderParamsTable(p) + '\n';
             } else {
-              body += `## ✅ Results of HolmesGPT evals\n\n` +
+              body += `## Results of HolmesGPT evals\n\n` +
                 `Automatically triggered by ${p.trigger}. [View workflow logs](${p.runUrl})\n\n`;
             }
             body += reportContent;

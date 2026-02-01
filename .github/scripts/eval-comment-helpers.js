@@ -84,11 +84,9 @@ function formatAsCodes(items) {
  * Build re-run instructions footer for automatic runs
  * @param {Object} p - Parameters object with validMarkers
  * @param {Object} context - GitHub context object
- * @param {Object} options - Options (includeLegend: boolean)
  * @returns {string} Markdown footer
  */
-function buildRerunFooter(p, context, options = {}) {
-  const { includeLegend = false } = options;
+function buildRerunFooter(p, context) {
   const repoFullName = `${context.repo.owner}/${context.repo.repo}`;
   const baseWorkflowUrl = `https://github.com/${repoFullName}/actions/workflows/eval-regression.yaml`;
   const workflowUrl = p.displayBranch ? `${baseWorkflowUrl}?ref=${encodeURIComponent(p.displayBranch)}` : baseWorkflowUrl;
@@ -101,23 +99,7 @@ function buildRerunFooter(p, context, options = {}) {
     ? `gh workflow run eval-regression.yaml --repo ${repoFullName} --ref ${p.displayBranch} -f markers=regression -f filter=`
     : `gh workflow run eval-regression.yaml --repo ${repoFullName} -f markers=regression -f filter=`;
 
-  let footer = '';
-
-  // Only show legend when results are displayed
-  if (includeLegend) {
-    footer += '\n<details>\n<summary><b>Legend</b></summary>\n\n' +
-      '| Icon | Meaning |\n|------|--------|\n' +
-      '| ✅ | The test was successful |\n' +
-      '| ➖ | The test was skipped |\n' +
-      '| ⚠️ | The test failed but is known to be flaky or known to fail |\n' +
-      '| 🚧 | The test had a setup failure (not a code regression) |\n' +
-      '| 🔧 | The test failed due to mock data issues (not a code regression) |\n' +
-      '| 🚫 | The test was throttled by API rate limits/overload |\n' +
-      '| ❌ | The test failed and should be fixed before merging the PR |\n' +
-      '</details>\n';
-  }
-
-  footer += '\n<details>\n<summary><b>Re-run evals</b></summary>\n\n' +
+  let footer = '\n<details>\n<summary><b>Re-run evals</b></summary>\n\n' +
     '> ⚠️ `/eval` comments run using the **workflow from master**. To test workflow changes, use the CLI or Actions UI.\n\n' +
     '**Option 1: Comment on this PR** with `/eval`:\n\n' +
     '```\n/eval\nmarkers: regression\n```\n\n' +

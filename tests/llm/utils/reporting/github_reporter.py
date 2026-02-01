@@ -279,6 +279,16 @@ def generate_markdown_report(
     total_cost_str = f"${total_cost:.4f}" if total_cost > 0 else "—"
     markdown += f"| | **Total** | **{avg_time_str}** avg | **{avg_turns_str}** avg | **{avg_tools_str}** avg | **{total_cost_str}** |\n"
 
+    # Add legend inside details
+    markdown += "\n**Legend:** "
+    markdown += "✅ passed · "
+    markdown += "➖ skipped · "
+    markdown += "⚠️ flaky/known fail · "
+    markdown += "🚧 setup failure · "
+    markdown += "🔧 mock data issue · "
+    markdown += "🚫 rate limited · "
+    markdown += "❌ regression\n"
+
     markdown += "\n</details>\n"
 
     # Add historical comparison as its own section
