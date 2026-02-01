@@ -70,10 +70,10 @@ before_test: |
   for i in {1..60}; do
     # Use || true to prevent set -e from exiting on curl failure
     # Use -k to skip SSL verification (for sandbox environments with TLS interception)
-    # Use filter for applicationname (label field) + lucene for text search
-    # Build JSON with jq for proper escaping of $l.applicationname
+    # Note: Spans don't have $l.applicationname like logs - use lucene to search span attributes
+    # The error code is unique to this test, so lucene search is sufficient
     JSON_PAYLOAD=$(jq -n \
-      --arg query "source spans | filter \$l.applicationname == '$APP_NAME' | lucene '$ERROR_CODE' | limit 1" \
+      --arg query "source spans | lucene '$ERROR_CODE' | limit 10" \
       --arg start "$START_DATE" \
       --arg end "$END_DATE" \
       '{query: $query, metadata: {syntax: "QUERY_SYNTAX_DATAPRIME", startDate: $start, endDate: $end}}')

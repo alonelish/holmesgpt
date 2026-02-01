@@ -44,13 +44,14 @@ def send_metrics(domain: str, api_key: str, app_name: str, subsystem: str,
     })
 
     # Configure OTLP exporter for Coralogix
+    # Note: gRPC metadata keys must be lowercase
     endpoint = f"ingress.{domain}:443"
     exporter = OTLPMetricExporter(
         endpoint=endpoint,
         headers={
-            "Authorization": f"Bearer {api_key}",
-            "CX-Application-Name": app_name,
-            "CX-Subsystem-Name": subsystem,
+            "authorization": f"Bearer {api_key}",
+            "cx-application-name": app_name,
+            "cx-subsystem-name": subsystem,
         },
     )
 
