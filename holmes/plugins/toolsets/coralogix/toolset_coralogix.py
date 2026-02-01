@@ -207,15 +207,6 @@ class CoralogixToolset(Toolset):
                 jinja_template=f"file://{os.path.abspath(template_path)}"
             )
 
-    def get_example_config(self) -> dict[str, Any]:
-        example_config = CoralogixConfig(
-            api_key="<your-api-key>",
-            domain="eu2.coralogix.com",
-            # Optional: set team_slug to enable clickable UI permalink URLs
-            team_slug="my-team",
-        )
-        return example_config.model_dump()
-
     def prerequisites_callable(self, config: dict[str, Any]) -> Tuple[bool, str]:
         if not config:
             return False, TOOLSET_CONFIG_MISSING_ERROR
