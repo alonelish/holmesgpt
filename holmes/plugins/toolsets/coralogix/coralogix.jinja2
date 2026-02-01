@@ -3,12 +3,20 @@ Coralogix DataPrime (tool: coralogix_execute_dataprime_query) queries logs/trace
 Rules:
 - Always set explicit time ranges: start_date/end_date
 - Include `limit` on every query (start with limit 100 and adjust accordingly)
-- Use `source logs | lucene 'text'` for log searches; prefer lucene over filter
-- Start broad, then narrow down
-- Never assume labels: start with plain text (e.g., `source logs | lucene 'app-173'`); only use label equality after seeing the exact field path in results
 - Traces: use `source spans`
 - Never query archive tier; only query frequent search data
 
-Example of a bad query: `source logs | filter $l.k8s.namespace_name == 'my_namespace'` (uses filter, unverified labels, no limit)
+Query Syntax - CRITICAL distinction between filter and lucene:
+- `lucene 'text'` searches only the TEXT BODY of logs (message content)
+- `filter $l.field == 'value'` filters by LABEL FIELDS (metadata like applicationname, subsystemname)
+- Application name is ALWAYS a label: use `filter $l.applicationname == 'app-name'`
+- To search for text AND filter by app: `source logs | filter $l.applicationname == 'my-app' | lucene 'error' | limit 100`
+- To search text only: `source logs | lucene 'error text' | limit 100`
 
-To discover custom labels: run `source logs | limit 1` or `source spans | limit 1`
+Common label fields: $l.applicationname, $l.subsystemname, $l.severity
+To discover all available labels: run `source logs | limit 1` and examine the labels array in results
+
+Example queries:
+- Find ERROR logs for an app: `source logs | filter $l.applicationname == 'my-app' | filter $m.severity == 5 | limit 100`
+- Search text across all apps: `source logs | lucene 'database timeout' | limit 100`
+- Combine app filter with text search: `source logs | filter $l.applicationname == 'payment-api' | lucene 'ERR-' | limit 100`
