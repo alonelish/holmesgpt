@@ -23,7 +23,7 @@ tags:
   - medium
   - fast
 
-setup_timeout: 300
+setup_timeout: 600
 
 before_test: |
   set -e

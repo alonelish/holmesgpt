@@ -27,7 +27,7 @@ tags:
   - medium
   - fast
 
-setup_timeout: 300
+setup_timeout: 600
 
 before_test: |
   set -e
@@ -91,7 +91,7 @@ before_test: |
   echo "   Query time range: $START_DATE to $END_DATE"
 
   LOGS_READY=false
-  for i in {1..60}; do
+  for i in {1..120}; do
     # Simple lucene search for the error code (unique to this test)
     JSON_PAYLOAD=$(jq -n \
       --arg query "source logs | lucene '$ERROR_CODE_1' | limit 1" \
@@ -99,14 +99,15 @@ before_test: |
       --arg end "$END_DATE" \
       '{query: $query, metadata: {syntax: "QUERY_SYNTAX_DATAPRIME", startDate: $start, endDate: $end}}')
     # Use --max-time to ensure curl waits for full NDJSON streaming response
-    RESULT=$(curl -sk --max-time 30 -X POST "$QUERY_URL" \
+    # Increased timeout to 60s for slower responses
+    RESULT=$(curl -sk --max-time 60 -X POST "$QUERY_URL" \
       -H "Authorization: Bearer ${CORALOGIX_API_KEY}" \
       -H "Content-Type: application/json" \
       -d "$JSON_PAYLOAD" 2>/dev/null || true)
 
-    # Debug: print response periodically
+    # Debug: print full response periodically (first 500 chars)
     if [ "$i" -eq 1 ] || [ "$((i % 10))" -eq 0 ]; then
-      echo "   Debug query response (attempt $i): $RESULT"
+      echo "   Debug query response (attempt $i, ${#RESULT} bytes): ${RESULT:0:500}"
     fi
 
     if echo "$RESULT" | grep -q "$ERROR_CODE_1"; then
@@ -115,7 +116,7 @@ before_test: |
       break
     fi
 
-    echo "   Attempt $i/60: Logs not yet indexed, waiting 5s..."
+    echo "   Attempt $i/120: Logs not yet indexed, waiting 5s..."
     sleep 5
   done
 
