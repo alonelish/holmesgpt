@@ -1,14 +1,19 @@
 # Coralogix metrics toolset configuration for test 175
-# Uses the Prometheus-compatible API for querying metrics
-# Cloud-only test - no Kubernetes required
+# Uses Prometheus RemoteWrite to send, Prometheus-compatible API to query
+#
+# Coralogix exposes a PromQL-compatible query endpoint:
+# https://api.<domain>/metrics/api/v1/query
+#
+# See: https://coralogix.com/docs/user-guides/data-query/metrics-api/
 
 toolsets:
   prometheus/metrics:
     enabled: true
     config:
-      prometheus_url: "https://ng-api-http.eu2.coralogix.com/metrics"
+      prometheus_url: "https://api.eu2.coralogix.com/metrics"
       headers:
         Authorization: "Bearer {{env.CORALOGIX_API_KEY}}"
+      verify_ssl: false
 
   # Disable toolsets that require local infrastructure (cloud-only test)
   kubernetes/core:

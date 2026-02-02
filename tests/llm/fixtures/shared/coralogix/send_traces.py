@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Send test traces to Coralogix via OTLP gRPC.
+Send test traces to Coralogix via OTLP HTTP.
 
 Usage:
     python send_traces.py --domain eu2.coralogix.com --api-key <key> \
@@ -10,6 +10,7 @@ Usage:
 Environment variables (alternative to CLI args):
     Domain defaults to eu2.coralogix.com
     CORALOGIX_SEND_API_KEY - API key with SendData permissions (for ingestion)
+    SSL_VERIFY - Set to 'false' to disable SSL verification
 
 Note: Coralogix uses separate API keys for sending vs querying data.
 See: https://coralogix.com/docs/user-guides/account-management/api-keys/api-keys/
@@ -23,18 +24,26 @@ import time
 
 def send_traces(domain: str, api_key: str, app_name: str, subsystem: str,
                 trace_id: str, error_code: str) -> bool:
-    """Send test traces to Coralogix via OTLP gRPC."""
+    """Send test traces to Coralogix via OTLP HTTP."""
     try:
         from opentelemetry import trace
-        from opentelemetry.exporter.otlp.proto.grpc.trace_exporter import OTLPSpanExporter
+        from opentelemetry.exporter.otlp.proto.http.trace_exporter import OTLPSpanExporter
         from opentelemetry.sdk.resources import Resource
         from opentelemetry.sdk.trace import TracerProvider
         from opentelemetry.sdk.trace.export import BatchSpanProcessor
         from opentelemetry.trace import Status, StatusCode
     except ImportError:
         print("ERROR: OpenTelemetry packages not installed. Run:")
-        print("  pip install opentelemetry-api opentelemetry-sdk opentelemetry-exporter-otlp-proto-grpc")
+        print("  pip install opentelemetry-api opentelemetry-sdk opentelemetry-exporter-otlp-proto-http")
         return False
+
+    # Check SSL verification setting
+    ssl_verify = os.environ.get("SSL_VERIFY", "true").lower() not in ("false", "0", "no")
+    if not ssl_verify:
+        import urllib3
+        urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+        os.environ["OTEL_EXPORTER_OTLP_INSECURE"] = "true"
+        print("   Note: SSL verification disabled")
 
     # Configure resource with Coralogix-specific attributes
     resource = Resource.create({
@@ -43,15 +52,14 @@ def send_traces(domain: str, api_key: str, app_name: str, subsystem: str,
         "cx.subsystem.name": subsystem,
     })
 
-    # Configure OTLP exporter for Coralogix
-    # Note: gRPC metadata keys must be lowercase
-    endpoint = f"ingress.{domain}:443"
+    # Configure OTLP HTTP exporter for Coralogix
+    endpoint = f"https://ingress.{domain}/v1/traces"
     exporter = OTLPSpanExporter(
         endpoint=endpoint,
         headers={
-            "authorization": f"Bearer {api_key}",
-            "cx-application-name": app_name,
-            "cx-subsystem-name": subsystem,
+            "Authorization": f"Bearer {api_key}",
+            "CX-Application-Name": app_name,
+            "CX-Subsystem-Name": subsystem,
         },
     )
 
