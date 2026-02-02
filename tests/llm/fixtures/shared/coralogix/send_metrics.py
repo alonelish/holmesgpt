@@ -17,14 +17,16 @@ See: https://coralogix.com/docs/user-guides/account-management/api-keys/api-keys
 
 import argparse
 import os
+import struct
 import sys
 import time
-import struct
-import snappy
+
 import requests
+import snappy
+import urllib3
 
 
-def encode_varint(value):
+def encode_varint(value: int) -> bytes:
     """Encode an integer as a varint."""
     bits = value & 0x7f
     value >>= 7
@@ -37,35 +39,35 @@ def encode_varint(value):
     return result
 
 
-def encode_string(field_num, s):
+def encode_string(field_num: int, s: str) -> bytes:
     """Encode a string field in protobuf format."""
     encoded = s.encode('utf-8')
     return bytes([field_num << 3 | 2]) + encode_varint(len(encoded)) + encoded
 
 
-def encode_double(field_num, value):
+def encode_double(field_num: int, value: float) -> bytes:
     """Encode a double field in protobuf format."""
     return bytes([field_num << 3 | 1]) + struct.pack('<d', value)
 
 
-def encode_int64(field_num, value):
+def encode_int64(field_num: int, value: int) -> bytes:
     """Encode an int64 field in protobuf format."""
     return bytes([field_num << 3 | 0]) + encode_varint(value)
 
 
-def encode_label(name, value):
+def encode_label(name: str, value: str) -> bytes:
     """Encode a Label message: name=1, value=2."""
     content = encode_string(1, name) + encode_string(2, value)
     return bytes([1 << 3 | 2]) + encode_varint(len(content)) + content  # field 1 = labels
 
 
-def encode_sample(value, timestamp_ms):
+def encode_sample(value: float, timestamp_ms: int) -> bytes:
     """Encode a Sample message: value=1 (double), timestamp=2 (int64)."""
     content = encode_double(1, value) + encode_int64(2, timestamp_ms)
     return bytes([2 << 3 | 2]) + encode_varint(len(content)) + content  # field 2 = samples
 
 
-def encode_timeseries(labels, samples):
+def encode_timeseries(labels: list[tuple[str, str]], samples: list[tuple[float, int]]) -> bytes:
     """Encode a TimeSeries message."""
     content = b""
     for name, value in labels:
@@ -76,8 +78,11 @@ def encode_timeseries(labels, samples):
 
 
 def send_metrics(domain: str, api_key: str, app_name: str, subsystem: str,
-                 metric_prefix: str) -> bool:
+                 metric_prefix: str, verify_ssl: bool = False) -> bool:
     """Send test metrics to Coralogix via Prometheus RemoteWrite."""
+
+    if not verify_ssl:
+        urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
     endpoint = f"https://ingress.{domain}/prometheus/v1"
     timestamp_ms = int(time.time() * 1000)
@@ -140,7 +145,7 @@ def send_metrics(domain: str, api_key: str, app_name: str, subsystem: str,
     }
 
     try:
-        response = requests.post(endpoint, data=compressed, headers=headers, verify=False, timeout=30)
+        response = requests.post(endpoint, data=compressed, headers=headers, verify=verify_ssl, timeout=30)
         response.raise_for_status()
         print(f"✅ Metrics sent successfully with prefix={metric_prefix}")
         return True
@@ -151,7 +156,7 @@ def send_metrics(domain: str, api_key: str, app_name: str, subsystem: str,
         return False
 
 
-def main():
+def main() -> None:
     parser = argparse.ArgumentParser(description="Send test metrics to Coralogix")
     parser.add_argument("--domain", default=os.environ.get("CORALOGIX_DOMAIN", "eu2.coralogix.com"),
                         help="Coralogix domain (e.g., eu2.coralogix.com)")
@@ -167,9 +172,8 @@ def main():
         print("ERROR: --api-key or CORALOGIX_SEND_API_KEY required")
         sys.exit(1)
 
-    # Suppress SSL warnings
-    import urllib3
-    urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+    # Check SSL verification setting from environment
+    verify_ssl = os.environ.get("SSL_VERIFY", "true").lower() not in ("false", "0", "no")
 
     success = send_metrics(
         domain=args.domain,
@@ -177,6 +181,7 @@ def main():
         app_name=args.app_name,
         subsystem=args.subsystem,
         metric_prefix=args.metric_prefix,
+        verify_ssl=verify_ssl,
     )
 
     sys.exit(0 if success else 1)
