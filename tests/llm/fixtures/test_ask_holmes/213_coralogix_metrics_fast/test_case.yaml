@@ -9,14 +9,14 @@
 # - CORALOGIX_SEND_API_KEY: API key with SendData permissions (for ingestion)
 # - CORALOGIX_API_KEY: API key with DataQuerying permissions (for queries)
 #
-# Anti-hallucination: The test creates metrics with a unique prefix (eval175_)
+# Anti-hallucination: The test creates metrics with a unique prefix (eval213_)
 # that the LLM can only find by actually querying the Prometheus API.
 
-user_prompt: "Query the Prometheus metrics to find HTTP request metrics with the 'eval175_' prefix. Tell me which endpoints have errors and report the error counts."
+user_prompt: "Query the Prometheus metrics to find HTTP request metrics with the 'eval213_' prefix. Tell me which endpoints have errors and report the error counts."
 
 expected_output:
-  - "Must identify metrics with the eval175_ prefix"
-  - "Must mention eval175_http_errors_total or similar error metric"
+  - "Must identify metrics with the eval213_ prefix"
+  - "Must mention eval213_http_errors_total or similar error metric"
   - "Must identify endpoints /api/checkout and /api/cart have errors"
   - "Must report error count values like 12 (status 500) or 5 (status 503)"
 
@@ -24,6 +24,7 @@ tags:
   - coralogix
   - metrics
   - medium
+  - fast
 
 setup_timeout: 300
 
@@ -32,11 +33,11 @@ before_test: |
   source ../../shared/coralogix/coralogix_test_utils.sh
   cx_setup
 
-  echo "🚀 Setting up Coralogix metrics test 175"
+  echo "🚀 Setting up Coralogix metrics test 213"
 
-  APP_NAME="holmes-eval-175"
+  APP_NAME="holmes-eval-213"
   SUBSYSTEM="metrics-test"
-  METRIC_PREFIX="eval175"
+  METRIC_PREFIX="eval213"
 
   echo "⏳ Sending metrics to Coralogix via Prometheus RemoteWrite..."
 

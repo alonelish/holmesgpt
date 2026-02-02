@@ -21,6 +21,7 @@ tags:
   - coralogix
   - traces
   - medium
+  - fast
 
 setup_timeout: 300
 
@@ -29,7 +30,7 @@ before_test: |
   source ../../shared/coralogix/coralogix_test_utils.sh
   cx_setup
 
-  echo "🚀 Setting up Coralogix traces test 174"
+  echo "🚀 Setting up Coralogix traces test 212"
 
   APP_NAME="checkout-flow-8m2n"
   SUBSYSTEM="checkout-service"

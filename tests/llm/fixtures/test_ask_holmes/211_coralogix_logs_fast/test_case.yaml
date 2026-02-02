@@ -25,6 +25,7 @@ tags:
   - coralogix
   - logs
   - medium
+  - fast
 
 setup_timeout: 300
 
@@ -33,7 +34,7 @@ before_test: |
   source ../../shared/coralogix/coralogix_test_utils.sh
   cx_setup
 
-  echo "🚀 Setting up Coralogix logs test 173"
+  echo "🚀 Setting up Coralogix logs test 211"
 
   APP_NAME="order-service-3k9p"
   SUBSYSTEM="payment-api"

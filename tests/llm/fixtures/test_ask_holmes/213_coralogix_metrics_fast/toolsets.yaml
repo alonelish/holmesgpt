@@ -1,4 +1,4 @@
-# Coralogix metrics toolset configuration for test 175
+# Coralogix metrics toolset configuration for test 213
 # Uses Prometheus RemoteWrite to send, Prometheus-compatible API to query
 #
 # Coralogix exposes a PromQL-compatible query endpoint:
