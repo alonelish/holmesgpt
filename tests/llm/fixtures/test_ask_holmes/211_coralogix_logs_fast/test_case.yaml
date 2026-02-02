@@ -11,10 +11,10 @@
 # Note: Coralogix uses separate API keys for sending vs querying data.
 # See: https://coralogix.com/docs/user-guides/account-management/api-keys/api-keys/
 #
-# Anti-hallucination: The test injects 3 specific error codes (ERR-XXXX format).
-# The LLM cannot know these codes without actually querying Coralogix.
+# Anti-hallucination: Uses unique EVAL_RUN_ID in application name to prevent
+# tests from succeeding on cached data from previous runs.
 
-user_prompt: "Search the Coralogix logs for the 'order-service-3k9p' application. Find ERROR level messages and report what error codes (format ERR-XXXX) appear in the logs."
+user_prompt: "Search the Coralogix logs for the 'order-service-{{ env.EVAL_RUN_ID }}' application. Find ERROR level messages and report what error codes (format ERR-XXXX) appear in the logs."
 
 expected_output:
   - "Must find error code ERR-7291 associated with database connection timeout"
@@ -34,9 +34,11 @@ before_test: |
   source ../../shared/coralogix/coralogix_test_utils.sh
   cx_setup
 
-  echo "🚀 Setting up Coralogix logs test 211"
+  echo "🚀 Setting up Coralogix logs test 211 (run_id: ${EVAL_RUN_ID})"
 
-  APP_NAME="order-service-3k9p"
+  # Use EVAL_RUN_ID in app name to ensure uniqueness per test run
+  # This prevents tests from succeeding on cached data from previous runs
+  APP_NAME="order-service-${EVAL_RUN_ID}"
   SUBSYSTEM="payment-api"
 
   # Define the specific error codes for anti-hallucination testing
@@ -44,7 +46,7 @@ before_test: |
   ERROR_CODE_2="ERR-4058"
   ERROR_CODE_3="ERR-9463"
 
-  echo "⏳ Sending logs to Coralogix..."
+  echo "⏳ Sending logs to Coralogix for app: $APP_NAME..."
 
   # Build log entries JSON - Coralogix /singles API expects an ARRAY of entries
   # Each entry must include applicationName and subsystemName
@@ -61,25 +63,29 @@ before_test: |
   # Send logs via REST API
   INGRESS_URL=$(cx_ingress_url)
 
-  RESPONSE=$(curl -sk -X POST "${INGRESS_URL}/logs/v1/singles" \
+  # Check HTTP status code to validate write succeeded
+  HTTP_CODE=$(curl -sk -o /tmp/cx_response.txt -w "%{http_code}" -X POST "${INGRESS_URL}/logs/v1/singles" \
     -H "Authorization: Bearer ${CORALOGIX_SEND_API_KEY}" \
     -H "Content-Type: application/json" \
-    -d "$LOG_ENTRIES" 2>&1)
+    -d "$LOG_ENTRIES")
+  RESPONSE=$(cat /tmp/cx_response.txt 2>/dev/null || echo "")
 
-  # Check response - Coralogix returns empty response on success
-  # Print response for debugging
+  echo "   Ingestion HTTP status: $HTTP_CODE"
   echo "   Ingestion response: $RESPONSE"
+
+  # Validate write succeeded - must get HTTP 200
+  if [ "$HTTP_CODE" != "200" ]; then
+    echo "❌ Ingestion failed with HTTP $HTTP_CODE"
+    echo "   This usually means CORALOGIX_SEND_API_KEY is invalid or has wrong permissions"
+    exit 1
+  fi
 
   if echo "$RESPONSE" | grep -q "Dropped"; then
     echo "❌ Logs were dropped by Coralogix: $RESPONSE"
     exit 1
   fi
-  if echo "$RESPONSE" | grep -qi "error\|unauthorized\|forbidden"; then
-    echo "❌ Ingestion failed: $RESPONSE"
-    exit 1
-  fi
 
-  echo "✅ Logs sent to $APP_NAME/$SUBSYSTEM"
+  echo "✅ Logs sent to $APP_NAME/$SUBSYSTEM (HTTP 200)"
 
   # Wait for logs to be queryable (Coralogix has some ingestion delay)
   echo "⏳ Waiting for logs to be queryable in Coralogix..."
@@ -92,20 +98,19 @@ before_test: |
 
   LOGS_READY=false
   for i in {1..120}; do
-    # Simple lucene search for the error code (unique to this test)
+    # Search for the error code (unique to this test run via app name in logs)
+    # Using simple lucene query since DataPrime filter syntax varies by Coralogix version
     JSON_PAYLOAD=$(jq -n \
       --arg query "source logs | lucene '$ERROR_CODE_1' | limit 1" \
       --arg start "$START_DATE" \
       --arg end "$END_DATE" \
       '{query: $query, metadata: {syntax: "QUERY_SYNTAX_DATAPRIME", startDate: $start, endDate: $end}}')
-    # Use --max-time to ensure curl waits for full NDJSON streaming response
-    # Increased timeout to 60s for slower responses
     RESULT=$(curl -sk --max-time 60 -X POST "$QUERY_URL" \
       -H "Authorization: Bearer ${CORALOGIX_API_KEY}" \
       -H "Content-Type: application/json" \
       -d "$JSON_PAYLOAD" 2>/dev/null || true)
 
-    # Debug: print full response periodically (first 500 chars)
+    # Debug: print full response periodically
     if [ "$i" -eq 1 ] || [ "$((i % 10))" -eq 0 ]; then
       echo "   Debug query response (attempt $i, ${#RESULT} bytes): ${RESULT:0:500}"
     fi
@@ -122,6 +127,10 @@ before_test: |
 
   if [ "$LOGS_READY" = false ]; then
     echo "❌ Timeout waiting for logs to be queryable"
+    echo "   This could mean:"
+    echo "   - CORALOGIX_API_KEY doesn't have DataQuerying permissions"
+    echo "   - Logs were sent to a different Coralogix team than the query key"
+    echo "   - Coralogix indexing is experiencing delays"
     exit 1
   fi
 
@@ -146,9 +155,9 @@ before_test: |
     echo "   ✓ Found $CODE"
   done
 
-  echo "✅ Test setup complete!"
+  echo "✅ Test setup complete! App: $APP_NAME"
 
 after_test: |
   # No cleanup needed - logs will naturally age out of Coralogix
-  # The application name is unique to this test so it won't interfere with others
+  # The application name includes EVAL_RUN_ID so it's unique to this test run
   echo "✅ Cleanup complete (logs will age out naturally)"

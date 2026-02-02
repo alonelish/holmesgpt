@@ -8,7 +8,7 @@ from contextlib import contextmanager
 from typing import Dict, Optional
 
 from tests.llm.utils.env_vars import is_run_live_enabled
-from tests.llm.utils.test_case_utils import HolmesTestCase
+from tests.llm.utils.test_case_utils import HolmesTestCase, generate_run_id
 
 EVAL_SETUP_TIMEOUT = int(
     os.environ.get("EVAL_SETUP_TIMEOUT", "300")
@@ -149,10 +149,17 @@ def _invoke_command(
     cwd: str,
     timeout: Optional[int] = None,
     suppress_logging: bool = False,
+    extra_env: Optional[Dict[str, str]] = None,
 ) -> str:
     try:
         actual_timeout = timeout if timeout is not None else EVAL_SETUP_TIMEOUT
         logging.debug(f"Running `{command}` in {cwd} with timeout {actual_timeout}s")
+
+        # Merge extra env vars with current environment
+        env = os.environ.copy()
+        if extra_env:
+            env.update(extra_env)
+
         result = subprocess.run(
             command,
             shell=True,
@@ -163,6 +170,7 @@ def _invoke_command(
             stdin=subprocess.DEVNULL,
             cwd=cwd,
             timeout=actual_timeout,
+            env=env,
         )
 
         output = f"{result.stdout}\n{result.stderr}"
@@ -199,7 +207,13 @@ def _invoke_command(
 def run_commands(
     test_case: HolmesTestCase, commands_str: str, operation: str
 ) -> CommandResult:
-    """Generic command runner for setup/cleanup operations."""
+    """Generic command runner for setup/cleanup operations.
+
+    For setup operations, generates a unique EVAL_RUN_ID that is:
+    - Available as env var in the before_test script
+    - Stored on test_case.run_id for use in user_prompt templating
+    - Used to prevent tests from succeeding on cached data
+    """
     if not commands_str or not is_run_live_enabled():
         return CommandResult(
             command=f"(no {operation} needed)",
@@ -213,6 +227,19 @@ def run_commands(
     # This preserves multi-line bash constructs like if/then/else, for loops, etc.
     script = commands_str.strip()
 
+    # For setup operations, generate a unique run_id to prevent cache hits
+    extra_env: Dict[str, str] = {}
+    if operation == "setup":
+        run_id = generate_run_id()
+        # Store on test_case for later use in user_prompt templating
+        # Use object.__setattr__ to bypass Pydantic's frozen model validation
+        object.__setattr__(test_case, "run_id", run_id)
+        extra_env["EVAL_RUN_ID"] = run_id
+        logging.debug(f"Generated EVAL_RUN_ID={run_id} for test {test_case.id}")
+    elif operation == "cleanup" and test_case.run_id:
+        # Reuse the same run_id for cleanup
+        extra_env["EVAL_RUN_ID"] = test_case.run_id
+
     try:
         # Execute the entire commands string as a single bash script
         # Use per-test timeout if specified, otherwise use default
@@ -222,7 +249,11 @@ def run_commands(
             else None
         )
         _invoke_command(
-            command=script, cwd=test_case.folder, timeout=timeout, suppress_logging=True
+            command=script,
+            cwd=test_case.folder,
+            timeout=timeout,
+            suppress_logging=True,
+            extra_env=extra_env,
         )
 
         elapsed_time = time.time() - start_time
@@ -297,19 +328,32 @@ def run_commands(
 
 @contextmanager
 def set_test_env_vars(test_case: HolmesTestCase):
-    """Context manager to set and restore environment variables for test execution."""
-    if not test_case.test_env_vars:
+    """Context manager to set and restore environment variables for test execution.
+
+    Also sets EVAL_RUN_ID from test_case.run_id if available, making the unique
+    run identifier available during test execution (for toolset configs, etc.).
+    """
+    # Build env vars to set, including EVAL_RUN_ID if available
+    env_vars_to_set: Dict[str, str] = {}
+    if test_case.test_env_vars:
+        env_vars_to_set.update(test_case.test_env_vars)
+
+    # Always set EVAL_RUN_ID if run_id is available on the test case
+    if hasattr(test_case, "run_id") and test_case.run_id:
+        env_vars_to_set["EVAL_RUN_ID"] = test_case.run_id
+
+    if not env_vars_to_set:
         yield
         return
 
     # Save current environment variable values
     saved_env_vars: Dict[str, Optional[str]] = {}
-    for key in test_case.test_env_vars.keys():
+    for key in env_vars_to_set.keys():
         saved_env_vars[key] = os.environ.get(key)
 
     try:
         # Set test environment variables
-        for key, value in test_case.test_env_vars.items():
+        for key, value in env_vars_to_set.items():
             # Expand environment variables in the value
             expanded_value = os.path.expandvars(value)
             os.environ[key] = expanded_value
