@@ -8,8 +8,6 @@ from typing import Optional
 from unittest.mock import patch
 
 import pytest
-from rich.console import Console
-
 from holmes.config import Config
 from holmes.core.conversations import build_chat_messages
 from holmes.core.models import ChatRequest
@@ -209,7 +207,6 @@ def ask_holmes(
         if test_case.conversation_history:
             pytest.skip("CLI mode does not support conversation history tests")
         else:
-            console = Console()
             if test_case.runbooks is None:
                 runbooks = load_runbook_catalog()
             elif test_case.runbooks == {}:
@@ -225,11 +222,10 @@ def ask_holmes(
             # Render user_prompt with env var templating (e.g., {{ env.EVAL_RUN_ID }})
             rendered_prompt = render_user_prompt(test_case)
             messages = build_initial_ask_messages(
-                console,
-                rendered_prompt,
-                None,
-                ai.tool_executor,
-                runbooks,
+                initial_user_prompt=rendered_prompt,
+                file_paths=None,
+                tool_executor=ai.tool_executor,
+                runbooks=runbooks,
                 system_prompt_additions=additional_system_prompt,
             )
     else:
