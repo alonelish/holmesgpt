@@ -66,7 +66,7 @@ before_test: |
   SPANS_READY=false
   for i in {1..120}; do
     # Query spans source for the error code
-    # Using simple lucene query since DataPrime filter syntax varies by Coralogix version
+    # Note: lucene 'ERR-5847' works for spans (full-text search on all fields)
     JSON_PAYLOAD=$(jq -n \
       --arg query "source spans | lucene '$ERROR_CODE' | limit 10" \
       --arg start "$START_DATE" \
