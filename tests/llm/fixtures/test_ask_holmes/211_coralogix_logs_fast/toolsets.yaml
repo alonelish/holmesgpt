@@ -1,4 +1,4 @@
-# Coralogix toolset configuration for test 173
+# Coralogix toolset configuration for test 211
 # Cloud-only test - no Kubernetes required
 
 toolsets:
