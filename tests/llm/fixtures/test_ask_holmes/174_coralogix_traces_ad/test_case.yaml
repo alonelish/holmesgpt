@@ -107,7 +107,7 @@ before_test: |
   echo "⏳ Waiting for at least 10 traces in Coralogix (poll every 5s)"
   TRACES_READY=false
   for i in {1..60}; do
-    TRACE_COUNT=$(curl -s -X POST "https://ng-api-http.${CORALOGIX_DOMAIN}/api/v1/dataprime/query" \
+    TRACE_COUNT=$(curl -s -X POST "https://ng-api-http.eu2.coralogix.com/api/v1/dataprime/query" \
       -H "Authorization: Bearer ${CORALOGIX_API_KEY}" \
       -H "Content-Type: application/json" \
       -d '{"query": "source spans | lucene '\''app-174 AND ad-service'\'' | limit 50"}' \
