@@ -2,28 +2,35 @@
 Policy-based filtering for tool calls using Python expressions.
 
 This module provides a policy engine that evaluates Python expressions
-to deny tool calls based on tool name, parameters, and context.
+to control tool call access based on tool name, parameters, and context.
 
-Default behavior is ALLOW everything. Users opt-in to restrictions
-by adding deny rules.
+Default behavior is ALLOW everything. Users add rules to define constraints
+for specific tools. When a tool matches one or more rules, ALL matching
+rules' conditions must pass for the call to be allowed.
 
 Example policy configuration:
 
     policy:
-      deny:
-        - name: system-namespaces
+      rules:
+        # Only allow team-a namespaces for kubectl
+        - name: team-namespaces
           match: ["kubectl_*"]
-          when: 'params.get("namespace") in ["kube-system", "kube-public"]'
-          message: "System namespaces are restricted"
+          when: 'params.get("namespace", "").startswith("team-a-") or params.get("namespace") is None'
 
-        - name: secrets
+        # No secrets access
+        - name: no-secrets
           match: ["kubectl_*"]
-          when: 'params.get("kind") == "secret"'
-          message: "Secret access is restricted"
+          when: 'params.get("kind") != "secret"'
 
-        - name: dangerous-tools
-          match: ["bash/*", "kubectl_exec"]
-          # no 'when' = always deny when tool matches
+        # Block bash entirely (when omitted = always fail for matched tools)
+        - name: no-bash
+          match: ["bash/*"]
+          when: "False"
+
+Semantics:
+- Tools matching NO rules → ALLOW
+- Tools matching rules → ALL matching rules' 'when' must be True
+- If 'when' is omitted → treated as "False" (always deny matched tools)
 """
 
 import fnmatch
@@ -50,35 +57,39 @@ class PolicyResult:
         return self.allowed
 
 
-class DenyRule(BaseModel):
-    """A deny rule that blocks tool calls when conditions match."""
+class PolicyRule(BaseModel):
+    """A policy rule that defines conditions for tool access."""
 
     model_config = ConfigDict(extra="forbid")
 
     name: str
     match: List[str] = ["*"]  # Tool name patterns (fnmatch), e.g., ["kubectl_*"]
-    when: Optional[str] = None  # Python expression - if True (or omitted), deny
+    when: Optional[str] = None  # Python expression - must be True to allow. If omitted, always fails.
     message: Optional[str] = None  # Custom denial message
     vars: Dict[str, Any] = {}  # Additional variables available in expression
 
 
 class PolicyConfig(BaseModel):
-    """Policy configuration with deny rules."""
+    """Policy configuration with rules."""
 
     model_config = ConfigDict(extra="forbid")
 
     enabled: bool = True
 
-    # Deny rules - if any matches, tool call is denied
-    # Default (no rules) = allow everything
-    deny: List[DenyRule] = []
+    # Rules define constraints for tools
+    # - Tools matching NO rules → allowed
+    # - Tools matching rules → ALL matching 'when' conditions must pass
+    rules: List[PolicyRule] = []
 
 
 class PolicyEnforcer:
     """
     Evaluates policy rules against tool calls using simpleeval.
 
-    Default behavior is ALLOW. Deny rules opt-in to restrictions.
+    Semantics:
+    - Tools matching NO rules → ALLOW (default open)
+    - Tools matching one or more rules → ALL matching rules' 'when' must be True
+    - If 'when' is omitted → treated as False (blocks matched tools)
 
     The evaluator provides a sandboxed Python expression environment with:
     - `tool`: The tool name being called
@@ -142,7 +153,9 @@ class PolicyEnforcer:
         """
         Check if a tool call is allowed by policy.
 
-        Default is ALLOW. If any deny rule matches, the call is denied.
+        Semantics:
+        - Tools matching NO rules → ALLOW
+        - Tools matching rules → ALL matching 'when' must be True
 
         Args:
             tool_name: Name of the tool being called
@@ -157,17 +170,22 @@ class PolicyEnforcer:
 
         context = context or {}
 
-        for rule in self.config.deny:
-            # Check if rule applies to this tool
-            if not self._matches_tool(tool_name, rule.match):
-                continue
+        # Find all rules that match this tool
+        matching_rules = [
+            rule for rule in self.config.rules
+            if self._matches_tool(tool_name, rule.match)
+        ]
 
-            # If no 'when' expression, deny immediately when tool matches
+        # No matching rules = allow (default open)
+        if not matching_rules:
+            return PolicyResult(allowed=True)
+
+        # All matching rules must pass
+        for rule in matching_rules:
+            # If 'when' is omitted, treat as False (block matched tools)
             if rule.when is None:
-                message = rule.message or f"Denied by policy rule '{rule.name}'"
-                logger.info(
-                    f"Policy denied tool '{tool_name}': {message}"
-                )
+                message = rule.message or f"Blocked by policy rule '{rule.name}'"
+                logger.info(f"Policy denied tool '{tool_name}': {message}")
                 return PolicyResult(
                     allowed=False, rule_name=rule.name, message=message
                 )
@@ -183,9 +201,9 @@ class PolicyEnforcer:
             try:
                 # Set names on evaluator before evaluation
                 self._evaluator.names = names
-                condition_met = self._evaluator.eval(rule.when)
+                condition_passed = self._evaluator.eval(rule.when)
 
-                if condition_met:
+                if not condition_passed:
                     message = rule.message or f"Denied by policy rule '{rule.name}'"
                     logger.info(
                         f"Policy denied tool '{tool_name}' with params {params}: {message}"
@@ -213,7 +231,7 @@ class PolicyEnforcer:
                     message=f"Policy evaluation error: {e}",
                 )
 
-        # No deny rule matched - allow
+        # All matching rules passed
         return PolicyResult(allowed=True)
 
     def _matches_tool(self, tool_name: str, patterns: List[str]) -> bool:
