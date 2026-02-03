@@ -1,31 +1,48 @@
 import json
 import logging
 from datetime import datetime
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, NamedTuple, Optional
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
+from holmes.utils.pydantic_utils import ToolsetConfig
 
-class CoralogixLabelsConfig(BaseModel):
+
+class FlattenedLog(NamedTuple):
+    timestamp: str
+    log_message: str
+
+
+class CoralogixQueryResult(BaseModel):
+    logs: List[FlattenedLog]
+    http_status: Optional[int]
+    error: Optional[str]
+
+
+class CoralogixLabelsConfig(ToolsetConfig):
     pod: str = Field(
         default="resource.attributes.k8s.pod.name",
+        title="Pod Field",
         description="Field path for pod name in log entries",
     )
     namespace: str = Field(
         default="resource.attributes.k8s.namespace.name",
+        title="Namespace Field",
         description="Field path for namespace in log entries",
     )
     log_message: str = Field(
         default="logRecord.body",
+        title="Log Message Field",
         description="Field path for log message content",
     )
     timestamp: str = Field(
         default="logRecord.attributes.time",
+        title="Timestamp Field",
         description="Field path for timestamp in log entries",
     )
 
 
-class CoralogixConfig(BaseModel):
+class CoralogixConfig(ToolsetConfig):
     """Coralogix toolset configuration.
 
     Required:
@@ -39,12 +56,13 @@ class CoralogixConfig(BaseModel):
     """
 
     model_config = ConfigDict(extra="allow")
-
     domain: str = Field(
+        title="Domain",
         description="Coralogix domain",
         examples=["eu2.coralogix.com", "coralogix.us", "coralogix.in"],
     )
     api_key: str = Field(
+        title="API Key",
         description="Coralogix API key (starts with cxuw_)",
         examples=["cxuw_xxxxxxxxxxxx"],
     )
@@ -55,6 +73,7 @@ class CoralogixConfig(BaseModel):
     )
     labels: CoralogixLabelsConfig = Field(
         default_factory=CoralogixLabelsConfig,
+        title="Labels",
         description="Label mappings for log fields",
     )
 
