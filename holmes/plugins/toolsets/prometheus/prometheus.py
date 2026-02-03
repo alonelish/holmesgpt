@@ -83,13 +83,16 @@ class PrometheusConfig(ToolsetConfig):
         "max_metadata_timeout_seconds": "metadata_timeout_seconds_hard_max",
         "metrics_labels_time_window_hrs": "discover_metrics_from_last_hours",
         "prometheus_ssl_enabled": "verify_ssl",
+        # Renamed fields for standardization
+        "prometheus_url": "api_url",
+        "headers": "additional_headers",
         # Deprecated fields with no effect
         "metrics_labels_cache_duration_hrs": None,
         "fetch_labels_with_labels_api": None,
         "fetch_metadata_with_series_api": None,
     }
 
-    prometheus_url: Optional[str] = Field(
+    api_url: Optional[str] = Field(
         default=None,
         title="URL",
         description="Base URL of your Prometheus server including port",
@@ -132,7 +135,7 @@ class PrometheusConfig(ToolsetConfig):
         title="Return Data",
         description="Set to false to return only summaries without raw Prometheus data",
     )
-    headers: Dict[str, str] = Field(
+    additional_headers: Dict[str, str] = Field(
         default_factory=dict,
         title="Headers",
         description="HTTP headers for authentication (e.g., Authorization: Bearer token)",
@@ -165,7 +168,7 @@ class PrometheusConfig(ToolsetConfig):
         examples=[10, 20, 30],
     )
 
-    @field_validator("prometheus_url")
+    @field_validator("api_url")
     def ensure_trailing_slash(cls, v: Optional[str]) -> Optional[str]:
         if v is not None and not v.endswith("/"):
             return v + "/"
@@ -176,13 +179,13 @@ class PrometheusConfig(ToolsetConfig):
 
         # If openshift is enabled, and the user didn't configure auth headers, we will try to load the token from the service account.
         if IS_OPENSHIFT:
-            if self.headers.get("Authorization"):
+            if self.additional_headers.get("Authorization"):
                 return self
 
             openshift_token = load_openshift_token()
             if openshift_token:
                 logging.info("Using openshift token for prometheus toolset auth")
-                self.headers["Authorization"] = f"Bearer {openshift_token}"
+                self.additional_headers["Authorization"] = f"Bearer {openshift_token}"
 
         return self
 
@@ -406,7 +409,7 @@ def do_request(
     if verify is None:
         verify = config.verify_ssl
     if headers is None:
-        headers = config.headers or {}
+        headers = config.additional_headers or {}
 
     if isinstance(config, AMPConfig):
         client = config.get_aws_client()  # cached AWSPrometheusConnect
@@ -656,7 +659,7 @@ class ListPrometheusRules(BasePrometheusTool):
         self._cache = None
 
     def _invoke(self, params: dict, context: ToolInvokeContext) -> StructuredToolResult:
-        if not self.toolset.config or not self.toolset.config.prometheus_url:
+        if not self.toolset.config or not self.toolset.config.api_url:
             return StructuredToolResult(
                 status=StructuredToolResultStatus.ERROR,
                 error="Prometheus is not configured. Prometheus URL is missing",
@@ -682,7 +685,7 @@ class ListPrometheusRules(BasePrometheusTool):
                         params=params,
                     )
 
-            prometheus_url = self.toolset.config.prometheus_url
+            prometheus_url = self.toolset.config.api_url
 
             rules_url = urljoin(prometheus_url, "api/v1/rules")
 
@@ -692,7 +695,7 @@ class ListPrometheusRules(BasePrometheusTool):
                 params=params,
                 timeout=40,
                 verify=self.toolset.config.verify_ssl,
-                headers=self.toolset.config.headers,
+                headers=self.toolset.config.additional_headers,
                 method="GET",
             )
             rules_response.raise_for_status()
@@ -716,7 +719,7 @@ class ListPrometheusRules(BasePrometheusTool):
             logging.warning("SSL error while fetching prometheus rules", exc_info=True)
             return StructuredToolResult(
                 status=StructuredToolResultStatus.ERROR,
-                error=format_ssl_error_message(self.toolset.config.prometheus_url, e),
+                error=format_ssl_error_message(self.toolset.config.api_url, e),
                 params=params,
             )
         except RequestException as e:
@@ -781,7 +784,7 @@ class GetMetricNames(BasePrometheusTool):
         )
 
     def _invoke(self, params: dict, context: ToolInvokeContext) -> StructuredToolResult:
-        if not self.toolset.config or not self.toolset.config.prometheus_url:
+        if not self.toolset.config or not self.toolset.config.api_url:
             return StructuredToolResult(
                 status=StructuredToolResultStatus.ERROR,
                 error="Prometheus is not configured. Prometheus URL is missing",
@@ -797,7 +800,7 @@ class GetMetricNames(BasePrometheusTool):
                 )
 
             url = urljoin(
-                self.toolset.config.prometheus_url, "api/v1/label/__name__/values"
+                self.toolset.config.api_url, "api/v1/label/__name__/values"
             )
             query_params = {
                 "limit": str(PROMETHEUS_METADATA_API_LIMIT),
@@ -825,7 +828,7 @@ class GetMetricNames(BasePrometheusTool):
                 params=query_params,
                 timeout=self.toolset.config.metadata_timeout_seconds_default,
                 verify=self.toolset.config.verify_ssl,
-                headers=self.toolset.config.headers,
+                headers=self.toolset.config.additional_headers,
                 method="GET",
             )
             response.raise_for_status()
@@ -900,7 +903,7 @@ class GetLabelValues(BasePrometheusTool):
         )
 
     def _invoke(self, params: dict, context: ToolInvokeContext) -> StructuredToolResult:
-        if not self.toolset.config or not self.toolset.config.prometheus_url:
+        if not self.toolset.config or not self.toolset.config.api_url:
             return StructuredToolResult(
                 status=StructuredToolResultStatus.ERROR,
                 error="Prometheus is not configured. Prometheus URL is missing",
@@ -916,7 +919,7 @@ class GetLabelValues(BasePrometheusTool):
                 )
 
             url = urljoin(
-                self.toolset.config.prometheus_url, f"api/v1/label/{label}/values"
+                self.toolset.config.api_url, f"api/v1/label/{label}/values"
             )
             query_params = {"limit": str(PROMETHEUS_METADATA_API_LIMIT)}
             if params.get("match"):
@@ -943,7 +946,7 @@ class GetLabelValues(BasePrometheusTool):
                 params=query_params,
                 timeout=self.toolset.config.metadata_timeout_seconds_default,
                 verify=self.toolset.config.verify_ssl,
-                headers=self.toolset.config.headers,
+                headers=self.toolset.config.additional_headers,
                 method="GET",
             )
             response.raise_for_status()
@@ -1014,14 +1017,14 @@ class GetAllLabels(BasePrometheusTool):
         )
 
     def _invoke(self, params: dict, context: ToolInvokeContext) -> StructuredToolResult:
-        if not self.toolset.config or not self.toolset.config.prometheus_url:
+        if not self.toolset.config or not self.toolset.config.api_url:
             return StructuredToolResult(
                 status=StructuredToolResultStatus.ERROR,
                 error="Prometheus is not configured. Prometheus URL is missing",
                 params=params,
             )
         try:
-            url = urljoin(self.toolset.config.prometheus_url, "api/v1/labels")
+            url = urljoin(self.toolset.config.api_url, "api/v1/labels")
             query_params = {"limit": str(PROMETHEUS_METADATA_API_LIMIT)}
             if params.get("match"):
                 query_params["match[]"] = params["match"]
@@ -1047,7 +1050,7 @@ class GetAllLabels(BasePrometheusTool):
                 params=query_params,
                 timeout=self.toolset.config.metadata_timeout_seconds_default,
                 verify=self.toolset.config.verify_ssl,
-                headers=self.toolset.config.headers,
+                headers=self.toolset.config.additional_headers,
                 method="GET",
             )
             response.raise_for_status()
@@ -1119,7 +1122,7 @@ class GetSeries(BasePrometheusTool):
         )
 
     def _invoke(self, params: dict, context: ToolInvokeContext) -> StructuredToolResult:
-        if not self.toolset.config or not self.toolset.config.prometheus_url:
+        if not self.toolset.config or not self.toolset.config.api_url:
             return StructuredToolResult(
                 status=StructuredToolResultStatus.ERROR,
                 error="Prometheus is not configured. Prometheus URL is missing",
@@ -1134,7 +1137,7 @@ class GetSeries(BasePrometheusTool):
                     params=params,
                 )
 
-            url = urljoin(self.toolset.config.prometheus_url, "api/v1/series")
+            url = urljoin(self.toolset.config.api_url, "api/v1/series")
             query_params = {
                 "match[]": match,
                 "limit": str(PROMETHEUS_METADATA_API_LIMIT),
@@ -1161,7 +1164,7 @@ class GetSeries(BasePrometheusTool):
                 params=query_params,
                 timeout=self.toolset.config.metadata_timeout_seconds_default,
                 verify=self.toolset.config.verify_ssl,
-                headers=self.toolset.config.headers,
+                headers=self.toolset.config.additional_headers,
                 method="GET",
             )
             response.raise_for_status()
@@ -1221,14 +1224,14 @@ class GetMetricMetadata(BasePrometheusTool):
         )
 
     def _invoke(self, params: dict, context: ToolInvokeContext) -> StructuredToolResult:
-        if not self.toolset.config or not self.toolset.config.prometheus_url:
+        if not self.toolset.config or not self.toolset.config.api_url:
             return StructuredToolResult(
                 status=StructuredToolResultStatus.ERROR,
                 error="Prometheus is not configured. Prometheus URL is missing",
                 params=params,
             )
         try:
-            url = urljoin(self.toolset.config.prometheus_url, "api/v1/metadata")
+            url = urljoin(self.toolset.config.api_url, "api/v1/metadata")
             query_params = {"limit": str(PROMETHEUS_METADATA_API_LIMIT)}
 
             if params.get("metric"):
@@ -1240,7 +1243,7 @@ class GetMetricMetadata(BasePrometheusTool):
                 params=query_params,
                 timeout=self.toolset.config.metadata_timeout_seconds_default,
                 verify=self.toolset.config.verify_ssl,
-                headers=self.toolset.config.headers,
+                headers=self.toolset.config.additional_headers,
                 method="GET",
             )
             response.raise_for_status()
@@ -1310,7 +1313,7 @@ class ExecuteInstantQuery(BasePrometheusTool):
         )
 
     def _invoke(self, params: dict, context: ToolInvokeContext) -> StructuredToolResult:
-        if not self.toolset.config or not self.toolset.config.prometheus_url:
+        if not self.toolset.config or not self.toolset.config.api_url:
             return StructuredToolResult(
                 status=StructuredToolResultStatus.ERROR,
                 error="Prometheus is not configured. Prometheus URL is missing",
@@ -1320,7 +1323,7 @@ class ExecuteInstantQuery(BasePrometheusTool):
             query = params.get("query", "")
             description = params.get("description", "")
 
-            url = urljoin(self.toolset.config.prometheus_url, "api/v1/query")
+            url = urljoin(self.toolset.config.api_url, "api/v1/query")
 
             payload = {"query": query}
 
@@ -1339,7 +1342,7 @@ class ExecuteInstantQuery(BasePrometheusTool):
             response = do_request(
                 config=self.toolset.config,
                 url=url,
-                headers=self.toolset.config.headers,
+                headers=self.toolset.config.additional_headers,
                 data=payload,
                 timeout=timeout,
                 verify=self.toolset.config.verify_ssl,
@@ -1445,7 +1448,7 @@ class ExecuteInstantQuery(BasePrometheusTool):
             logging.warning("SSL error while executing Prometheus query", exc_info=True)
             return StructuredToolResult(
                 status=StructuredToolResultStatus.ERROR,
-                error=format_ssl_error_message(self.toolset.config.prometheus_url, e),
+                error=format_ssl_error_message(self.toolset.config.api_url, e),
                 params=params,
             )
         except RequestException as e:
@@ -1535,7 +1538,7 @@ class ExecuteRangeQuery(BasePrometheusTool):
         )
 
     def _invoke(self, params: dict, context: ToolInvokeContext) -> StructuredToolResult:
-        if not self.toolset.config or not self.toolset.config.prometheus_url:
+        if not self.toolset.config or not self.toolset.config.api_url:
             return StructuredToolResult(
                 status=StructuredToolResultStatus.ERROR,
                 error="Prometheus is not configured. Prometheus URL is missing",
@@ -1543,7 +1546,7 @@ class ExecuteRangeQuery(BasePrometheusTool):
             )
 
         try:
-            url = urljoin(self.toolset.config.prometheus_url, "api/v1/query_range")
+            url = urljoin(self.toolset.config.api_url, "api/v1/query_range")
 
             query = get_param_or_raise(params, "query")
             (start, end) = process_timestamps_to_rfc3339(
@@ -1588,7 +1591,7 @@ class ExecuteRangeQuery(BasePrometheusTool):
             response = do_request(
                 config=self.toolset.config,
                 url=url,
-                headers=self.toolset.config.headers,
+                headers=self.toolset.config.additional_headers,
                 data=payload,
                 timeout=timeout,
                 verify=self.toolset.config.verify_ssl,
@@ -1698,7 +1701,7 @@ class ExecuteRangeQuery(BasePrometheusTool):
             )
             return StructuredToolResult(
                 status=StructuredToolResultStatus.ERROR,
-                error=format_ssl_error_message(self.toolset.config.prometheus_url, e),
+                error=format_ssl_error_message(self.toolset.config.api_url, e),
                 params=params,
             )
         except RequestException as e:
@@ -1800,12 +1803,12 @@ class PrometheusToolset(Toolset):
                 if not prometheus_url:
                     return (
                         False,
-                        "Unable to auto-detect prometheus. Define prometheus_url in the configuration for tool prometheus/metrics",
+                        "Unable to auto-detect prometheus. Define api_url in the configuration for tool prometheus/metrics",
                     )
 
             self.config = PrometheusConfig(
-                prometheus_url=prometheus_url,
-                headers=add_prometheus_auth(os.environ.get("PROMETHEUS_AUTH_HEADER")),
+                api_url=prometheus_url,
+                additional_headers=add_prometheus_auth(os.environ.get("PROMETHEUS_AUTH_HEADER")),
             )
             logging.info(f"Prometheus auto discovered at url {prometheus_url}")
             self._reload_llm_instructions()
@@ -1825,19 +1828,19 @@ class PrometheusToolset(Toolset):
         if (
             not hasattr(self, "config")
             or not self.config
-            or not self.config.prometheus_url
+            or not self.config.api_url
         ):
             return (
                 False,
                 f"Toolset {self.name} failed to initialize because prometheus is not configured correctly",
             )
 
-        url = urljoin(self.config.prometheus_url, "api/v1/query?query=up")
+        url = urljoin(self.config.api_url, "api/v1/query?query=up")
         try:
             response = do_request(
                 config=self.config,
                 url=url,
-                headers=self.config.headers,
+                headers=self.config.additional_headers,
                 timeout=10,
                 verify=self.config.verify_ssl,
                 method="GET",

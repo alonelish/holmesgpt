@@ -84,8 +84,13 @@ class MCPMode(str, Enum):
 
 
 class MCPConfig(ToolsetConfig):
-    url: AnyUrl = Field(
-        title="URL",
+    _deprecated_mappings: ClassVar[Dict[str, Optional[str]]] = {
+        "url": "api_url",
+        "headers": "additional_headers",
+    }
+
+    api_url: AnyUrl = Field(
+        title="API URL",
         description="MCP server URL (for SSE or Streamable HTTP modes).",
         examples=["http://example.com:8000/mcp/messages"],
     )
@@ -95,9 +100,9 @@ class MCPConfig(ToolsetConfig):
         description="Connection mode to use when talking to the MCP server.",
         examples=[MCPMode.STREAMABLE_HTTP],
     )
-    headers: Optional[Dict[str, str]] = Field(
+    additional_headers: Optional[Dict[str, str]] = Field(
         default=None,
-        title="Headers",
+        title="Additional Headers",
         description="Optional HTTP headers to include in requests (e.g., Authorization).",
         examples=[{"Authorization": "Bearer YOUR_TOKEN"}],
     )
@@ -120,7 +125,7 @@ class MCPConfig(ToolsetConfig):
     )
 
     def get_lock_string(self) -> str:
-        return str(self.url)
+        return str(self.api_url)
 
 
 class StdioMCPConfig(ToolsetConfig):
@@ -173,7 +178,7 @@ async def get_initialized_mcp_session(
                 _ = await session.initialize()
                 yield session
     elif toolset._mcp_config.mode == MCPMode.SSE:
-        url = str(toolset._mcp_config.url)
+        url = str(toolset._mcp_config.api_url)
         httpx_factory = create_mcp_http_client_factory(toolset._mcp_config.verify_ssl)
         rendered_headers = toolset._render_headers(request_context)
         async with sse_client(
@@ -189,7 +194,7 @@ async def get_initialized_mcp_session(
                 _ = await session.initialize()
                 yield session
     else:
-        url = str(toolset._mcp_config.url)
+        url = str(toolset._mcp_config.api_url)
         httpx_factory = create_mcp_http_client_factory(toolset._mcp_config.verify_ssl)
         rendered_headers = toolset._render_headers(request_context)
         async with streamablehttp_client(
@@ -351,8 +356,8 @@ class RemoteMCPToolset(Toolset):
 
         # Start with direct headers (no rendering, backward compatibility)
         final_headers = {}
-        if self._mcp_config.headers:
-            final_headers.update(self._mcp_config.headers)
+        if self._mcp_config.additional_headers:
+            final_headers.update(self._mcp_config.additional_headers)
 
         # Render and merge extra_headers
         if self._mcp_config.extra_headers:
@@ -431,17 +436,17 @@ class RemoteMCPToolset(Toolset):
             values["config"] = config
 
         toolset_name = values.get("name", "unknown")
-        if "url" in config:
+        if "api_url" in config or "url" in config:
             logging.warning(
-                f"Toolset {toolset_name}: has two urls defined, remove the 'url' field from the toolset configuration and keep the 'url' in the config section."
+                f"Toolset {toolset_name}: has two urls defined, remove the 'url' field from the toolset configuration and keep the 'api_url' in the config section."
             )
             return values
 
         logging.warning(
             f"Toolset {toolset_name}: 'url' field has been migrated to config. "
-            "Please move 'url' to the config section."
+            "Please move 'url' to the config section as 'api_url'."
         )
-        config["url"] = url_value
+        config["api_url"] = url_value
         return values
 
     def prerequisites_callable(self, config) -> Tuple[bool, str]:
@@ -461,12 +466,12 @@ class RemoteMCPToolset(Toolset):
                 self._mcp_config = StdioMCPConfig(**config)
             else:
                 self._mcp_config = MCPConfig(**config)
-                clean_url_str = str(self._mcp_config.url).rstrip("/")
+                clean_url_str = str(self._mcp_config.api_url).rstrip("/")
 
                 if self._mcp_config.mode == MCPMode.SSE and not clean_url_str.endswith(
                     "/sse"
                 ):
-                    self._mcp_config.url = AnyUrl(clean_url_str + "/sse")
+                    self._mcp_config.api_url = AnyUrl(clean_url_str + "/sse")
 
             tools_result = asyncio.run(self._get_server_tools())
 
