@@ -41,17 +41,12 @@ before_test: |
 
   # Send traces using Python OTLP HTTP exporter
   # The script will fail with non-zero exit code if OTLP export fails
+  # Note: set -e ensures script exits on failure, so no explicit error check needed
   SSL_VERIFY=false python3 ../../shared/coralogix/send_traces.py \
     --app-name "$APP_NAME" \
     --subsystem "$SUBSYSTEM" \
     --trace-id "$TRACE_ID" \
     --error-code "$ERROR_CODE"
-
-  if [ $? -ne 0 ]; then
-    echo "❌ Failed to send traces"
-    echo "   This usually means CORALOGIX_SEND_API_KEY is invalid or has wrong permissions"
-    exit 1
-  fi
 
   echo "✅ Traces sent to $APP_NAME/$SUBSYSTEM"
 

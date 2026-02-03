@@ -42,17 +42,12 @@ before_test: |
   echo "⏳ Sending metrics to Coralogix via Prometheus RemoteWrite (prefix: ${METRIC_PREFIX})..."
 
   # Send metrics using the Python RemoteWrite script
+  # Note: set -e ensures script exits on failure, so no explicit error check needed
   python3 ../../shared/coralogix/send_metrics.py \
     --api-key "$CORALOGIX_SEND_API_KEY" \
     --app-name "$APP_NAME" \
     --subsystem "$SUBSYSTEM" \
     --metric-prefix "$METRIC_PREFIX"
-
-  if [ $? -ne 0 ]; then
-    echo "❌ Failed to send metrics"
-    echo "   This usually means CORALOGIX_SEND_API_KEY is invalid or has wrong permissions"
-    exit 1
-  fi
 
   echo "✅ Metrics sent to Coralogix"
 
