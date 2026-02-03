@@ -26,7 +26,7 @@ tags:
   - medium
   - fast
 
-setup_timeout: 600
+setup_timeout: 900
 
 before_test: |
   set -e
@@ -62,7 +62,7 @@ before_test: |
   METRICS_URL="https://api.eu2.coralogix.com/metrics/api/v1/query"
 
   METRICS_READY=false
-  for i in {1..120}; do
+  for i in {1..180}; do
     # Query for the metric via PromQL
     RESULT=$(curl -sk --max-time 60 -X GET \
       "${METRICS_URL}?query=${METRIC_PREFIX}_http_errors_total" \
@@ -79,7 +79,7 @@ before_test: |
       break
     fi
 
-    echo "   Attempt $i/120: Metrics not yet indexed, waiting 5s..."
+    echo "   Attempt $i/180: Metrics not yet indexed, waiting 5s..."
     sleep 5
   done
 

@@ -27,7 +27,7 @@ tags:
   - medium
   - fast
 
-setup_timeout: 600
+setup_timeout: 900
 
 before_test: |
   set -e
@@ -97,7 +97,7 @@ before_test: |
   echo "   Query time range: $START_DATE to $END_DATE"
 
   LOGS_READY=false
-  for i in {1..120}; do
+  for i in {1..180}; do
     # Search for the error code using DataPrime filter on text field
     # Note: lucene 'ERR-7291' doesn't work, must use filter text.contains() or lucene 'text:ERR-7291'
     JSON_PAYLOAD=$(jq -n \
@@ -121,7 +121,7 @@ before_test: |
       break
     fi
 
-    echo "   Attempt $i/120: Logs not yet indexed, waiting 5s..."
+    echo "   Attempt $i/180: Logs not yet indexed, waiting 5s..."
     sleep 5
   done
 

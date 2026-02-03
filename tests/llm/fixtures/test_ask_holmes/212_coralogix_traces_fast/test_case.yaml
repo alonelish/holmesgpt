@@ -23,7 +23,7 @@ tags:
   - medium
   - fast
 
-setup_timeout: 600
+setup_timeout: 900
 
 before_test: |
   set -e
@@ -64,7 +64,7 @@ before_test: |
   END_DATE=$(date -u '+%Y-%m-%dT%H:%M:%SZ')
 
   SPANS_READY=false
-  for i in {1..120}; do
+  for i in {1..180}; do
     # Query spans source for the error code
     # Note: lucene 'ERR-5847' works for spans (full-text search on all fields)
     JSON_PAYLOAD=$(jq -n \
@@ -87,7 +87,7 @@ before_test: |
       break
     fi
 
-    echo "   Attempt $i/120: Spans not yet indexed, waiting 5s..."
+    echo "   Attempt $i/180: Spans not yet indexed, waiting 5s..."
     sleep 5
   done
 
