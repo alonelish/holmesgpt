@@ -57,56 +57,60 @@ def npx_not_available() -> tuple[bool, str]:
         return True, f"npx not available: {str(e)}"
 
 
-class TestToolParameterTypeNormalization:
-    """Tests for ToolParameter.normalize_type validator (issue #1459 fix)."""
+class TestToolParameterJsonSchemaTypes:
+    """Tests for ToolParameter accepting JSON Schema type formats (issue #1459 fix).
 
-    def test_string_type_unchanged(self):
-        """Standard string type should remain unchanged."""
+    ToolParameter.type accepts both string types and JSON Schema union types,
+    preserving the original schema semantics without normalization.
+    """
+
+    def test_string_type_accepted(self):
+        """Standard string type should be accepted."""
         param = ToolParameter(type="string")
         assert param.type == "string"
 
-    def test_integer_type_unchanged(self):
-        """Standard integer type should remain unchanged."""
+    def test_integer_type_accepted(self):
+        """Standard integer type should be accepted."""
         param = ToolParameter(type="integer")
         assert param.type == "integer"
 
-    def test_nullable_string_normalized(self):
-        """Nullable string type ["string", "null"] should be normalized to "string"."""
+    def test_nullable_string_preserved(self):
+        """Nullable string type ["string", "null"] should be preserved as-is."""
         param = ToolParameter(type=["string", "null"])
-        assert param.type == "string"
+        assert param.type == ["string", "null"]
 
-    def test_nullable_number_normalized(self):
-        """Nullable number type ["number", "null"] should be normalized to "number"."""
+    def test_nullable_number_preserved(self):
+        """Nullable number type ["number", "null"] should be preserved as-is."""
         param = ToolParameter(type=["number", "null"])
-        assert param.type == "number"
+        assert param.type == ["number", "null"]
 
-    def test_nullable_integer_normalized(self):
-        """Nullable integer type ["integer", "null"] should be normalized to "integer"."""
+    def test_nullable_integer_preserved(self):
+        """Nullable integer type ["integer", "null"] should be preserved as-is."""
         param = ToolParameter(type=["integer", "null"])
-        assert param.type == "integer"
+        assert param.type == ["integer", "null"]
 
-    def test_null_first_in_list(self):
-        """Type list with "null" first should still extract the non-null type."""
+    def test_null_first_in_list_preserved(self):
+        """Type list with "null" first should be preserved as-is."""
         param = ToolParameter(type=["null", "string"])
-        assert param.type == "string"
+        assert param.type == ["null", "string"]
 
-    def test_only_null_in_list(self):
-        """Type list with only "null" should default to "string"."""
+    def test_only_null_in_list_preserved(self):
+        """Type list with only "null" should be preserved as-is."""
         param = ToolParameter(type=["null"])
-        assert param.type == "string"
+        assert param.type == ["null"]
 
-    def test_multiple_types_takes_first_non_null(self):
-        """Type list with multiple types should take the first non-null type."""
+    def test_multiple_types_preserved(self):
+        """Type list with multiple types should be preserved as-is."""
         param = ToolParameter(type=["integer", "string", "null"])
-        assert param.type == "integer"
+        assert param.type == ["integer", "string", "null"]
 
-    def test_array_type_unchanged(self):
-        """Array type should remain unchanged."""
+    def test_array_type_accepted(self):
+        """Array type should be accepted."""
         param = ToolParameter(type="array")
         assert param.type == "array"
 
-    def test_object_type_unchanged(self):
-        """Object type should remain unchanged."""
+    def test_object_type_accepted(self):
+        """Object type should be accepted."""
         param = ToolParameter(type="object")
         assert param.type == "object"
 
@@ -154,10 +158,13 @@ class TestMCPGeneral:
         assert tool.description == "desc"
 
     def test_parsed_tool_schema_with_nullable_types(self, suppress_migration_warnings):
-        """Test that JSON Schema nullable types (e.g., ["string", "null"]) are handled correctly.
+        """Test that JSON Schema nullable types (e.g., ["string", "null"]) are preserved.
 
         This tests the fix for issue #1459 where MCP servers using JSON Schema's
         nullable type pattern would cause a Pydantic validation error.
+
+        The types are preserved as-is (pass-through) rather than normalized,
+        maintaining full JSON Schema semantics.
         """
         mcp_tool = Tool(
             name="test_nullable",
@@ -180,15 +187,16 @@ class TestMCPGeneral:
             annotations=None,
         )
 
+        # Types are preserved as-is, not normalized
         expected_schema = {
             "required_string": ToolParameter(type="string", required=True),
-            "nullable_string": ToolParameter(type="string", required=False),
+            "nullable_string": ToolParameter(type=["string", "null"], required=False),
             "nullable_number": ToolParameter(
-                type="number", required=False, description="optional number"
+                type=["number", "null"], required=False, description="optional number"
             ),
-            "nullable_integer": ToolParameter(type="integer", required=False),
-            "null_only": ToolParameter(type="string", required=False),
-            "multi_type": ToolParameter(type="string", required=False),
+            "nullable_integer": ToolParameter(type=["integer", "null"], required=False),
+            "null_only": ToolParameter(type=["null"], required=False),
+            "multi_type": ToolParameter(type=["string", "integer", "null"], required=False),
         }
 
         mock_toolset = RemoteMCPToolset(

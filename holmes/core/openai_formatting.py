@@ -16,8 +16,28 @@ LLMS_WITH_STRICT_TOOL_CALLS_LIST = [
 ]
 
 
+def _normalize_json_schema_type(raw_type: Any) -> tuple[str, bool]:
+    """Extract the primary type and nullability from a JSON Schema type field.
+
+    JSON Schema allows type to be either a string ("string") or a list of types
+    (["string", "null"] for nullable fields). This function normalizes both forms.
+
+    Args:
+        raw_type: The type field value (str or list)
+
+    Returns:
+        A tuple of (primary_type, is_nullable)
+    """
+    if isinstance(raw_type, list):
+        is_nullable = "null" in raw_type
+        non_null_types = [t for t in raw_type if t != "null"]
+        primary_type = non_null_types[0] if non_null_types else "string"
+        return primary_type, is_nullable
+    return raw_type.strip() if isinstance(raw_type, str) else str(raw_type), False
+
+
 def type_to_open_ai_schema(param_attributes: Any, strict_mode: bool) -> dict[str, Any]:
-    param_type = param_attributes.type.strip()
+    param_type, is_explicitly_nullable = _normalize_json_schema_type(param_attributes.type)
     type_obj: Optional[dict[str, Any]] = None
 
     if param_type == "object":
@@ -61,8 +81,14 @@ def type_to_open_ai_schema(param_attributes: Any, strict_mode: bool) -> dict[str
         else:
             type_obj = {"type": match.group("simple_type")}
 
-    if strict_mode and type_obj and not param_attributes.required:
-        type_obj["type"] = [type_obj["type"], "null"]
+    # Handle nullability: respect explicit nullability from source schema,
+    # or add null for optional params in strict mode
+    if type_obj:
+        should_be_nullable = is_explicitly_nullable or (
+            strict_mode and not param_attributes.required
+        )
+        if should_be_nullable and not isinstance(type_obj["type"], list):
+            type_obj["type"] = [type_obj["type"], "null"]
 
     return type_obj
 

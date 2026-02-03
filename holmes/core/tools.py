@@ -32,7 +32,6 @@ from pydantic import (
     Field,
     FilePath,
     PrivateAttr,
-    field_validator,
     model_validator,
 )
 from rich.console import Console
@@ -151,31 +150,19 @@ class ToolsetType(str, Enum):
 
 
 class ToolParameter(BaseModel):
+    """Represents a tool parameter in JSON Schema format.
+
+    The `type` field accepts both string types ("string", "integer", etc.)
+    and JSON Schema union types (["string", "null"] for nullable fields).
+    This preserves the full schema semantics from sources like MCP servers.
+    """
+
     description: Optional[str] = None
-    type: str = "string"
+    type: Union[str, List[str]] = "string"  # Accepts JSON Schema type unions
     required: bool = True
     properties: Optional[Dict[str, "ToolParameter"]] = None  # For object types
     items: Optional["ToolParameter"] = None  # For array item schemas
     enum: Optional[List[str]] = None  # For restricting to specific values
-
-    @field_validator("type", mode="before")
-    @classmethod
-    def normalize_type(cls, v: Union[str, List[str]]) -> str:
-        """Normalize JSON Schema type field.
-
-        JSON Schema allows type to be either a string or a list of types
-        (e.g., ["string", "null"] for nullable strings). This validator
-        normalizes list types to a single string by extracting the primary
-        non-null type.
-        """
-        if isinstance(v, list):
-            # Filter out "null" and take the first remaining type
-            non_null_types = [t for t in v if t != "null"]
-            if non_null_types:
-                return non_null_types[0]
-            # If only "null" in list, default to string
-            return "string"
-        return v
 
 
 class ToolInvokeContext(BaseModel):
