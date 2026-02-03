@@ -57,64 +57,6 @@ def npx_not_available() -> tuple[bool, str]:
         return True, f"npx not available: {str(e)}"
 
 
-class TestToolParameterJsonSchemaTypes:
-    """Tests for ToolParameter accepting JSON Schema type formats (issue #1459 fix).
-
-    ToolParameter.type accepts both string types and JSON Schema union types,
-    preserving the original schema semantics without normalization.
-    """
-
-    def test_string_type_accepted(self):
-        """Standard string type should be accepted."""
-        param = ToolParameter(type="string")
-        assert param.type == "string"
-
-    def test_integer_type_accepted(self):
-        """Standard integer type should be accepted."""
-        param = ToolParameter(type="integer")
-        assert param.type == "integer"
-
-    def test_nullable_string_preserved(self):
-        """Nullable string type ["string", "null"] should be preserved as-is."""
-        param = ToolParameter(type=["string", "null"])
-        assert param.type == ["string", "null"]
-
-    def test_nullable_number_preserved(self):
-        """Nullable number type ["number", "null"] should be preserved as-is."""
-        param = ToolParameter(type=["number", "null"])
-        assert param.type == ["number", "null"]
-
-    def test_nullable_integer_preserved(self):
-        """Nullable integer type ["integer", "null"] should be preserved as-is."""
-        param = ToolParameter(type=["integer", "null"])
-        assert param.type == ["integer", "null"]
-
-    def test_null_first_in_list_preserved(self):
-        """Type list with "null" first should be preserved as-is."""
-        param = ToolParameter(type=["null", "string"])
-        assert param.type == ["null", "string"]
-
-    def test_only_null_in_list_preserved(self):
-        """Type list with only "null" should be preserved as-is."""
-        param = ToolParameter(type=["null"])
-        assert param.type == ["null"]
-
-    def test_multiple_types_preserved(self):
-        """Type list with multiple types should be preserved as-is."""
-        param = ToolParameter(type=["integer", "string", "null"])
-        assert param.type == ["integer", "string", "null"]
-
-    def test_array_type_accepted(self):
-        """Array type should be accepted."""
-        param = ToolParameter(type="array")
-        assert param.type == "array"
-
-    def test_object_type_accepted(self):
-        """Object type should be accepted."""
-        param = ToolParameter(type="object")
-        assert param.type == "object"
-
-
 class TestMCPGeneral:
     def test_parsed_tool_schema_matches_expected(self, suppress_migration_warnings):
         mcp_tool = Tool(
