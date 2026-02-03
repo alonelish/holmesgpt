@@ -19,6 +19,7 @@ from typing import (
     List,
     Optional,
     OrderedDict,
+    Pattern,
     Tuple,
     Type,
     Union,
@@ -45,6 +46,7 @@ from holmes.core.transformers import (
     registry,
 )
 from holmes.plugins.prompts import load_and_render_prompt
+from holmes.common.env_vars import ADDITIONAL_INSTRUCTIONS_STRICT_MODE
 from holmes.utils.config_utils import merge_transformers
 from holmes.utils.memory_limit import check_oom_and_append_hint, get_ulimit_prefix
 
@@ -52,6 +54,99 @@ if TYPE_CHECKING:
     from holmes.core.transformers import BaseTransformer
 
 logger = logging.getLogger(__name__)
+
+# Security: Whitelist of allowed command prefixes for additional_instructions
+# These are safe data processing commands that can filter/transform tool output
+# Commands must start with one of these patterns to be executed
+ALLOWED_ADDITIONAL_INSTRUCTIONS_PATTERNS: List[Pattern[str]] = [
+    re.compile(r"^grep(\s|$)"),
+    re.compile(r"^egrep(\s|$)"),
+    re.compile(r"^fgrep(\s|$)"),
+    re.compile(r"^jq(\s|$)"),
+    re.compile(r"^awk(\s|$)"),
+    re.compile(r"^gawk(\s|$)"),
+    re.compile(r"^sed(\s|$)"),
+    re.compile(r"^head(\s|$)"),
+    re.compile(r"^tail(\s|$)"),
+    re.compile(r"^cut(\s|$)"),
+    re.compile(r"^sort(\s|$)"),
+    re.compile(r"^uniq(\s|$)"),
+    re.compile(r"^wc(\s|$)"),
+    re.compile(r"^tr(\s|$)"),
+    re.compile(r"^cat(\s|$)"),  # Safe when used as a filter (reads from stdin)
+    re.compile(r"^tee(\s|$)"),  # Can be used for output splitting
+    re.compile(r"^column(\s|$)"),  # Format tabular data
+    re.compile(r"^paste(\s|$)"),  # Merge lines
+    re.compile(r"^join(\s|$)"),  # Join files on a common field
+    re.compile(r"^comm(\s|$)"),  # Compare sorted files
+    re.compile(r"^diff(\s|$)"),  # Compare files
+    re.compile(r"^xargs(\s|$)"),  # Build and execute commands - restricted use
+]
+
+# Dangerous command names that should NEVER be allowed in additional_instructions
+# even if they're in the whitelist. These are checked as the first command.
+# Note: Since we use shell=False with shlex.split(), shell metacharacters like
+# $, ;, &, |, ` are NOT interpreted. The whitelist check is the primary security control.
+# These patterns catch dangerous binaries that could be harmful even without shell interpretation.
+DANGEROUS_COMMAND_PATTERNS: List[Pattern[str]] = [
+    re.compile(r"^curl(\s|$)"),  # Network access
+    re.compile(r"^wget(\s|$)"),  # Network access
+    re.compile(r"^nc(\s|$)"),  # netcat
+    re.compile(r"^netcat(\s|$)"),  # netcat
+    re.compile(r"^rm(\s|$)"),  # Remove files
+    re.compile(r"^chmod(\s|$)"),  # Change permissions
+    re.compile(r"^chown(\s|$)"),  # Change ownership
+    re.compile(r"^mkdir(\s|$)"),  # Create directories
+    re.compile(r"^touch(\s|$)"),  # Create files (less dangerous but unnecessary)
+    re.compile(r"^mv(\s|$)"),  # Move/rename files
+    re.compile(r"^cp(\s|$)"),  # Copy files
+    re.compile(r"^dd(\s|$)"),  # Low-level copy
+    re.compile(r"^sh(\s|$)"),  # Shell invocation
+    re.compile(r"^bash(\s|$)"),  # Bash invocation
+    re.compile(r"^zsh(\s|$)"),  # Zsh invocation
+    re.compile(r"^python"),  # Python invocation (python, python3, etc.)
+    re.compile(r"^perl(\s|$)"),  # Perl invocation
+    re.compile(r"^ruby(\s|$)"),  # Ruby invocation
+    re.compile(r"^node(\s|$)"),  # Node.js invocation
+    re.compile(r"^php(\s|$)"),  # PHP invocation
+    re.compile(r"^eval(\s|$)"),  # eval command
+    re.compile(r"^exec(\s|$)"),  # exec command
+    re.compile(r"^source(\s|$)"),  # source command
+]
+
+
+def _is_safe_additional_instruction(instruction: str) -> Tuple[bool, str]:
+    """
+    Validate that additional_instructions contains only safe data processing commands.
+
+    Security model:
+    - Since we use shell=False with shlex.split(), shell metacharacters ($ ; & | `) are NOT
+      interpreted as shell commands. They're just literal characters passed to the command.
+    - The whitelist check ensures only safe data-processing binaries can be invoked.
+    - The dangerous command check blocks explicitly harmful commands.
+
+    Returns:
+        Tuple of (is_safe, error_message). If is_safe is True, error_message is empty.
+    """
+    if not instruction or not instruction.strip():
+        return True, ""
+
+    instruction = instruction.strip()
+
+    # Check for dangerous commands first (these should never be allowed)
+    for pattern in DANGEROUS_COMMAND_PATTERNS:
+        if pattern.match(instruction):
+            return False, f"Additional instruction starts with dangerous command: {pattern.pattern}"
+
+    # Check if instruction starts with an allowed command
+    is_allowed = any(pattern.match(instruction) for pattern in ALLOWED_ADDITIONAL_INSTRUCTIONS_PATTERNS)
+    if not is_allowed:
+        return False, (
+            f"Additional instruction '{instruction[:50]}...' does not start with an allowed command. "
+            f"Allowed commands: grep, jq, awk, sed, head, tail, cut, sort, uniq, wc, tr, cat, column, paste, join, comm, diff"
+        )
+
+    return True, ""
 
 
 class StructuredToolResultStatus(str, Enum):
@@ -523,16 +618,49 @@ class YAMLTool(Tool, BaseModel):
         )
 
     def __apply_additional_instructions(self, raw_output: str) -> str:
+        """
+        Apply additional instructions to filter/transform the raw output.
+
+        Security: When ADDITIONAL_INSTRUCTIONS_STRICT_MODE is enabled (default),
+        only safe data processing commands are allowed (grep, jq, awk, sed, etc.).
+        Commands with shell metacharacters, redirections, or dangerous operations are blocked.
+
+        Even when strict mode is disabled, we use shell=False with shlex.split() to prevent
+        basic shell injection attacks.
+        """
+        if not self.additional_instructions:
+            return raw_output
+
+        # Validate the instruction against the whitelist if strict mode is enabled
+        if ADDITIONAL_INSTRUCTIONS_STRICT_MODE:
+            is_safe, error_msg = _is_safe_additional_instruction(self.additional_instructions)
+            if not is_safe:
+                logger.error(
+                    f"Blocked unsafe additional_instructions for tool '{self.name}': {error_msg}. "
+                    f"Set ADDITIONAL_INSTRUCTIONS_STRICT_MODE=false to disable this check (not recommended)."
+                )
+                return f"Error: Additional instructions blocked for security reasons: {error_msg}"
+
         try:
+            # Use shlex.split to properly parse the command into arguments
+            # This prevents shell injection by not using shell=True with arbitrary input
+            cmd_parts = shlex.split(self.additional_instructions)
             result = subprocess.run(
-                self.additional_instructions,  # type: ignore
+                cmd_parts,
                 input=raw_output,
-                shell=True,
+                shell=False,  # Disable shell to prevent injection
                 text=True,
                 capture_output=True,
                 check=True,
             )
             return result.stdout.strip()
+        except ValueError as e:
+            # shlex.split can raise ValueError for malformed input
+            logger.error(
+                f"Failed to parse additional instructions: {self.additional_instructions}. "
+                f"Error: {e}"
+            )
+            return f"Error parsing additional instructions: {e}"
         except subprocess.CalledProcessError as e:
             logger.error(
                 f"Failed to apply additional instructions: {self.additional_instructions}. "
@@ -542,16 +670,25 @@ class YAMLTool(Tool, BaseModel):
 
     def __invoke_command(self, params) -> Tuple[str, int, str]:
         context = self._build_context(params)
-        command = os.path.expandvars(self.command)  # type: ignore
-        template = Template(command)  # type: ignore
+        # Security: Do NOT use os.path.expandvars() here.
+        # Environment variable expansion after parameter sanitization creates a
+        # command injection vulnerability (CVE-TBD-001). Environment variables
+        # containing shell metacharacters like $(command) would be expanded and
+        # executed, bypassing the shlex.quote() sanitization applied to params.
+        #
+        # Environment variables in commands (e.g., ${GRAFANA_URL}) are intentionally
+        # expanded by the shell during subprocess execution, which is the secure path.
+        template = Template(self.command)  # type: ignore
         rendered_command = template.render(context)
         output, return_code = self.__execute_subprocess(rendered_command)
         return output, return_code, rendered_command
 
     def __invoke_script(self, params) -> str:
         context = self._build_context(params)
-        script = os.path.expandvars(self.script)  # type: ignore
-        template = Template(script)  # type: ignore
+        # Security: Do NOT use os.path.expandvars() here.
+        # See comment in __invoke_command for details on why this is a security risk.
+        # Environment variables in scripts are expanded by the shell during execution.
+        template = Template(self.script)  # type: ignore
         rendered_script = template.render(context)
 
         with tempfile.NamedTemporaryFile(

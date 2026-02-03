@@ -88,6 +88,12 @@ MAX_OUTPUT_TOKEN_RESERVATION = int(
 # When using the bash tool, setting BASH_TOOL_UNSAFE_ALLOW_ALL will skip any command validation and run any command requested by the LLM
 BASH_TOOL_UNSAFE_ALLOW_ALL = load_bool("BASH_TOOL_UNSAFE_ALLOW_ALL", False)
 
+# Security: Controls validation of additional_instructions in YAML toolsets.
+# When True (default), only safe data processing commands (grep, jq, awk, sed, etc.) are allowed.
+# When False, any command can be executed - USE WITH CAUTION, this enables command injection.
+# Only disable this if you fully trust all custom toolset YAML files being loaded.
+ADDITIONAL_INSTRUCTIONS_STRICT_MODE = load_bool("ADDITIONAL_INSTRUCTIONS_STRICT_MODE", True)
+
 LOG_LLM_USAGE_RESPONSE = load_bool("LOG_LLM_USAGE_RESPONSE", False)
 
 
