@@ -25,7 +25,6 @@ tags:
   - coralogix
   - logs
   - medium
-  - fast
 
 setup_timeout: 900
 

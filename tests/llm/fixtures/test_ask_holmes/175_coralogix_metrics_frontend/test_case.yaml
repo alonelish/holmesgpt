@@ -15,7 +15,7 @@ setup_timeout: 900
 
 before_test: |
   # Validate required Coralogix environment variables
-  [ -n "${CORALOGIX_API_KEY:-}" ] && [ -n "${CORALOGIX_DOMAIN:-}" ] && [ -n "${CORALOGIX_TEAM_HOSTNAME:-}" ] || { for v in CORALOGIX_API_KEY CORALOGIX_DOMAIN CORALOGIX_TEAM_HOSTNAME; do [ -n "${!v:-}" ] || echo "Missing env var: $v"; done; exit 1; }
+  [ -n "${CORALOGIX_API_KEY:-}" ] || { echo "Missing env var: CORALOGIX_API_KEY"; exit 1; }
 
   echo "🚀 Setting up test 175 - Creating namespace app-175"
   kubectl create namespace app-175 || true

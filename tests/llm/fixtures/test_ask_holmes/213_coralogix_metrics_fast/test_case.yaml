@@ -24,7 +24,6 @@ tags:
   - coralogix
   - metrics
   - medium
-  - fast
 
 setup_timeout: 900
 

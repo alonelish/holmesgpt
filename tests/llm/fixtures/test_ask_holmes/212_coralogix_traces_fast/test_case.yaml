@@ -21,7 +21,6 @@ tags:
   - coralogix
   - traces
   - medium
-  - fast
 
 setup_timeout: 900
 
