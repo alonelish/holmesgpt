@@ -62,12 +62,16 @@ before_test: |
   # Send logs via REST API
   INGRESS_URL=$(cx_ingress_url)
 
+  # Use unique temp file to avoid parallel test collisions
+  RESPONSE_FILE=$(mktemp)
+  trap "rm -f $RESPONSE_FILE" EXIT
+
   # Check HTTP status code to validate write succeeded
-  HTTP_CODE=$(curl -sk -o /tmp/cx_response.txt -w "%{http_code}" -X POST "${INGRESS_URL}/logs/v1/singles" \
+  HTTP_CODE=$(curl -sk -o "$RESPONSE_FILE" -w "%{http_code}" -X POST "${INGRESS_URL}/logs/v1/singles" \
     -H "Authorization: Bearer ${CORALOGIX_SEND_API_KEY}" \
     -H "Content-Type: application/json" \
     -d "$LOG_ENTRIES")
-  RESPONSE=$(cat /tmp/cx_response.txt 2>/dev/null || echo "")
+  RESPONSE=$(cat "$RESPONSE_FILE" 2>/dev/null || echo "")
 
   echo "   Ingestion HTTP status: $HTTP_CODE"
   echo "   Ingestion response: $RESPONSE"

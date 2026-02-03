@@ -16,8 +16,9 @@ setup_timeout: 900  # 15 minutes to handle pod scheduling delays
 before_test: |
   # Validate required Coralogix environment variables
   [ -n "${CORALOGIX_API_KEY:-}" ] || { echo "Missing env var: CORALOGIX_API_KEY"; exit 1; }
+  [ -n "${CORALOGIX_SEND_API_KEY:-}" ] || { echo "Missing env var: CORALOGIX_SEND_API_KEY"; exit 1; }
 
-  echo "🚀 Setting up test 163 - Creating namespace app-173"
+  echo "🚀 Setting up test 173 - Creating namespace app-173"
   kubectl create namespace app-173 || true
   echo "✅ Namespace app-173 created successfully!"
 
@@ -32,7 +33,7 @@ before_test: |
     -n app-173 --dry-run=client -o yaml | kubectl apply -f -
 
   echo "💳 Deploying payment service"
-  kubectl apply -f payment-service.yaml -n app-173
+  envsubst < payment-service.yaml | kubectl apply -f - -n app-173
 
   echo "⏳ Waiting for payment pod to exist"
   for i in {1..60}; do
