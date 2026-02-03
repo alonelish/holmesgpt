@@ -97,10 +97,10 @@ before_test: |
 
   LOGS_READY=false
   for i in {1..180}; do
-    # Search for the error code using DataPrime filter on text field
-    # Note: lucene 'ERR-7291' doesn't work, must use filter text.contains() or lucene 'text:ERR-7291'
+    # Search for the error code using lucene full-text search
+    # Note: lucene does full-text search across all fields including userData JSON
     JSON_PAYLOAD=$(jq -n \
-      --arg query "source logs | filter text.contains('$ERROR_CODE_1') | limit 1" \
+      --arg query "source logs | lucene '$ERROR_CODE_1' | limit 1" \
       --arg start "$START_DATE" \
       --arg end "$END_DATE" \
       '{query: $query, metadata: {syntax: "QUERY_SYNTAX_DATAPRIME", startDate: $start, endDate: $end}}')
@@ -137,7 +137,7 @@ before_test: |
   echo "🔍 Verifying all error codes are queryable..."
   for CODE in $ERROR_CODE_1 $ERROR_CODE_2 $ERROR_CODE_3; do
     JSON_PAYLOAD=$(jq -n \
-      --arg query "source logs | filter text.contains('$CODE') | limit 1" \
+      --arg query "source logs | lucene '$CODE' | limit 1" \
       --arg start "$START_DATE" \
       --arg end "$END_DATE" \
       '{query: $query, metadata: {syntax: "QUERY_SYNTAX_DATAPRIME", startDate: $start, endDate: $end}}')
