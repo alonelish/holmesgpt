@@ -57,6 +57,60 @@ def npx_not_available() -> tuple[bool, str]:
         return True, f"npx not available: {str(e)}"
 
 
+class TestToolParameterTypeNormalization:
+    """Tests for ToolParameter.normalize_type validator (issue #1459 fix)."""
+
+    def test_string_type_unchanged(self):
+        """Standard string type should remain unchanged."""
+        param = ToolParameter(type="string")
+        assert param.type == "string"
+
+    def test_integer_type_unchanged(self):
+        """Standard integer type should remain unchanged."""
+        param = ToolParameter(type="integer")
+        assert param.type == "integer"
+
+    def test_nullable_string_normalized(self):
+        """Nullable string type ["string", "null"] should be normalized to "string"."""
+        param = ToolParameter(type=["string", "null"])
+        assert param.type == "string"
+
+    def test_nullable_number_normalized(self):
+        """Nullable number type ["number", "null"] should be normalized to "number"."""
+        param = ToolParameter(type=["number", "null"])
+        assert param.type == "number"
+
+    def test_nullable_integer_normalized(self):
+        """Nullable integer type ["integer", "null"] should be normalized to "integer"."""
+        param = ToolParameter(type=["integer", "null"])
+        assert param.type == "integer"
+
+    def test_null_first_in_list(self):
+        """Type list with "null" first should still extract the non-null type."""
+        param = ToolParameter(type=["null", "string"])
+        assert param.type == "string"
+
+    def test_only_null_in_list(self):
+        """Type list with only "null" should default to "string"."""
+        param = ToolParameter(type=["null"])
+        assert param.type == "string"
+
+    def test_multiple_types_takes_first_non_null(self):
+        """Type list with multiple types should take the first non-null type."""
+        param = ToolParameter(type=["integer", "string", "null"])
+        assert param.type == "integer"
+
+    def test_array_type_unchanged(self):
+        """Array type should remain unchanged."""
+        param = ToolParameter(type="array")
+        assert param.type == "array"
+
+    def test_object_type_unchanged(self):
+        """Object type should remain unchanged."""
+        param = ToolParameter(type="object")
+        assert param.type == "object"
+
+
 class TestMCPGeneral:
     def test_parsed_tool_schema_matches_expected(self, suppress_migration_warnings):
         mcp_tool = Tool(
@@ -98,6 +152,53 @@ class TestMCPGeneral:
         tool = RemoteMCPTool.create(mcp_tool, mock_toolset)
         assert tool.parameters == expected_schema
         assert tool.description == "desc"
+
+    def test_parsed_tool_schema_with_nullable_types(self, suppress_migration_warnings):
+        """Test that JSON Schema nullable types (e.g., ["string", "null"]) are handled correctly.
+
+        This tests the fix for issue #1459 where MCP servers using JSON Schema's
+        nullable type pattern would cause a Pydantic validation error.
+        """
+        mcp_tool = Tool(
+            name="test_nullable",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "required_string": {"type": "string"},
+                    "nullable_string": {"type": ["string", "null"]},
+                    "nullable_number": {
+                        "type": ["number", "null"],
+                        "description": "optional number",
+                    },
+                    "nullable_integer": {"type": ["integer", "null"]},
+                    "null_only": {"type": ["null"]},
+                    "multi_type": {"type": ["string", "integer", "null"]},
+                },
+                "required": ["required_string"],
+            },
+            description="Tool with nullable types",
+            annotations=None,
+        )
+
+        expected_schema = {
+            "required_string": ToolParameter(type="string", required=True),
+            "nullable_string": ToolParameter(type="string", required=False),
+            "nullable_number": ToolParameter(
+                type="number", required=False, description="optional number"
+            ),
+            "nullable_integer": ToolParameter(type="integer", required=False),
+            "null_only": ToolParameter(type="string", required=False),
+            "multi_type": ToolParameter(type="string", required=False),
+        }
+
+        mock_toolset = RemoteMCPToolset(
+            name="test_toolset",
+            description="Test toolset",
+            config={"url": "http://localhost:1234"},
+        )
+        tool = RemoteMCPTool.create(mcp_tool, mock_toolset)
+        assert tool.parameters == expected_schema
+        assert tool.description == "Tool with nullable types"
 
     def test_unreachable_server_returns_error(self, suppress_migration_warnings):
         mcp_toolset = RemoteMCPToolset(
