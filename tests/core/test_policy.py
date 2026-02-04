@@ -80,14 +80,14 @@ class TestPolicyEnforcer:
         assert not result.allowed
         assert "team-a" in result.message
 
-    def test_omitted_when_blocks_tool(self):
-        """Rules without 'when' block matched tools entirely."""
+    def test_when_false_blocks_tool(self):
+        """Rules with when='False' block matched tools entirely."""
         config = PolicyConfig(
             rules=[
                 PolicyRule(
                     name="block-bash",
                     match=["bash/*"],
-                    # no 'when' = always block
+                    when="False",
                     message="Bash is disabled",
                 )
             ],
@@ -314,7 +314,7 @@ class TestPolicyConfigFromDict:
                 {
                     "name": "block-bash",
                     "match": ["bash/*"],
-                    # no 'when' - blocks entirely
+                    "when": "False",
                 },
             ],
         }
@@ -440,8 +440,8 @@ class TestDefaultDeny:
         assert not result.allowed
         assert "no matching rules" in result.message.lower()
 
-    def test_default_deny_omitted_when_still_blocks(self):
-        """With default: deny, omitting 'when' still blocks matched tools."""
+    def test_default_deny_when_false_blocks(self):
+        """With default: deny, when='False' blocks matched tools."""
         config = PolicyConfig(
             default="deny",
             rules=[
@@ -453,7 +453,7 @@ class TestDefaultDeny:
                 PolicyRule(
                     name="block-dangerous",
                     match=["prometheus_delete_*"],
-                    # no when = always block, even in whitelist mode
+                    when="False",  # Always block dangerous tools
                 ),
             ],
         )
@@ -575,11 +575,13 @@ class TestRealWorldScenarios:
                 PolicyRule(
                     name="block-bash",
                     match=["bash/*"],
+                    when="False",
                     message="Bash commands disabled",
                 ),
                 PolicyRule(
                     name="block-exec",
                     match=["kubectl_exec"],
+                    when="False",
                     message="kubectl exec disabled",
                 ),
             ],
@@ -673,7 +675,7 @@ class TestRealWorldScenarios:
                 PolicyRule(
                     name="no-exec",
                     match=["kubectl_exec"],
-                    # no when = always block
+                    when="False",  # Always block exec
                 ),
             ],
         )

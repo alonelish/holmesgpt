@@ -20,9 +20,10 @@ Example policy configuration (blacklist mode - default allow):
           match: ["kubectl_*"]
           when: 'params.get("namespace", "").startswith("team-a-")'
 
-        # Block bash entirely (when omitted = always block)
+        # Block bash entirely
         - name: no-bash
           match: ["bash/*"]
+          when: "False"
 
 Example policy configuration (whitelist mode - default deny):
 
@@ -42,7 +43,7 @@ Example policy configuration (whitelist mode - default deny):
 Semantics:
 - Tools matching NO rules → use `default` (allow or deny)
 - Tools matching rules → ALL matching rules' 'when' must be True
-- If 'when' is omitted → always blocks matched tools (regardless of default)
+- `when` is required - use "True" to always allow, "False" to always block
 """
 
 import fnmatch
@@ -76,7 +77,7 @@ class PolicyRule(BaseModel):
 
     name: str
     match: List[str] = ["*"]  # Tool name patterns (fnmatch), e.g., ["kubectl_*"]
-    when: Optional[str] = None  # Python expression - must be True to allow. If omitted, always fails.
+    when: str  # Python expression - must be True to allow. Required.
     message: Optional[str] = None  # Custom denial message
     vars: Dict[str, Any] = {}  # Additional variables available in expression
 
@@ -106,7 +107,7 @@ class PolicyEnforcer:
     Semantics:
     - Tools matching NO rules → use `default` setting (allow or deny)
     - Tools matching one or more rules → ALL matching rules' 'when' must be True
-    - If 'when' is omitted → always blocks matched tools (regardless of default)
+    - `when` is required - use "True" to always allow, "False" to always block
 
     The evaluator provides a sandboxed Python expression environment with:
     - `tool`: The tool name being called
@@ -205,14 +206,6 @@ class PolicyEnforcer:
 
         # All matching rules must pass
         for rule in matching_rules:
-            # If 'when' is omitted, treat as False (block matched tools)
-            if rule.when is None:
-                message = rule.message or f"Blocked by policy rule '{rule.name}'"
-                logger.info(f"Policy denied tool '{tool_name}': {message}")
-                return PolicyResult(
-                    allowed=False, rule_name=rule.name, message=message
-                )
-
             # Build evaluation context
             names = {
                 "tool": tool_name,
