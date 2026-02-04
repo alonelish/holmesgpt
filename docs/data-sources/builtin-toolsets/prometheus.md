@@ -2,10 +2,51 @@
 
 Connect HolmesGPT to Prometheus for metrics analysis and query generation.
 
+## Quick Setup with AI Assistance
+
+If you need help setting up Prometheus and AlertManager in your Kubernetes cluster, copy this prompt to an AI assistant like Claude:
+
+??? note "AI Setup Prompt (click to expand)"
+
+    ```text
+    Help me set up Prometheus and AlertManager in my Kubernetes cluster for use with HolmesGPT.
+
+    My environment:
+    - Kubernetes cluster: [DESCRIBE: e.g., EKS, GKE, AKS, on-prem, minikube]
+    - Current monitoring: [DESCRIBE: e.g., none, basic metrics, existing Prometheus]
+    - Namespace preference: [e.g., monitoring, observability, or suggest one]
+
+    Please help me:
+
+    1. **Install Prometheus Stack**: Use kube-prometheus-stack Helm chart with:
+       - Prometheus server with appropriate retention (7 days default)
+       - AlertManager with basic configuration
+       - Standard Kubernetes recording rules and alerts
+       - ServiceMonitor CRDs for autodiscovery
+
+    2. **Configure AlertManager**: Set up AlertManager with:
+       - A catch-all receiver (for testing)
+       - Grouping by alertname and namespace
+       - Reasonable group_wait (30s) and group_interval (5m)
+
+    3. **Verify the installation**: Show me commands to:
+       - Check all pods are running
+       - Port-forward to Prometheus UI
+       - Port-forward to AlertManager UI
+       - Test a simple PromQL query
+
+    4. **Generate HolmesGPT config**: Provide the toolset configuration for:
+       - Prometheus URL (cluster-internal DNS)
+       - Any required authentication headers
+
+    Please provide step-by-step commands I can run, and explain any decisions
+    you're making based on my environment.
+    ```
+
 ## Prerequisites
 
-- A running and accessible Prometheus server
-- Ensure HolmesGPT can connect to the Prometheus endpoint (see [Finding your Prometheus URL](#finding-your-prometheus-url))
+- A running and accessible Prometheus server (see [Quick Setup](#quick-setup-with-ai-assistance) if you need one)
+- Network connectivity from HolmesGPT to the Prometheus endpoint
 
 ## Configuration
 
@@ -45,6 +86,26 @@ kubectl get svc --all-namespaces -o jsonpath='{range .items[*]}{.metadata.name}{
 ```
 
 This will print all possible Prometheus service URLs in your cluster. Pick the one that matches your deployment.
+
+### Testing Your Connection
+
+After configuring the Prometheus URL, verify HolmesGPT can connect:
+
+```bash
+# Test with a simple query
+holmes ask "What metrics are available in Prometheus? List 5 metric names."
+
+# If using CLI with explicit URL
+holmes ask "Query Prometheus for up metric" \
+  --toolset "prometheus/metrics" \
+  --toolset-config '{"prometheus/metrics": {"prometheus_url": "http://localhost:9090"}}'
+```
+
+If the connection works, Holmes will list metrics from your Prometheus instance. Common issues:
+
+- **Connection refused**: Check the URL and ensure port-forwarding is active (if testing locally)
+- **401/403 errors**: Authentication headers may be required
+- **Timeout**: The Prometheus server may be overloaded or unreachable from HolmesGPT
 
 ## Specific Providers
 
