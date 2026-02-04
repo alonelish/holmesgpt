@@ -67,7 +67,7 @@ gcloud container node-pools update NODE_POOL_NAME \
 
 #### Step 3: Create a GCP Service Account
 
-Follow the same steps as [Creating a GCP Service Account](#creating-a-gcp-service-account) above, but **skip the key generation step** - Workload Identity doesn't require a JSON key file.
+Follow the same steps as [Creating a GCP Service Account](#creating-a-gcp-service-account) below, but **skip the key generation step** - Workload Identity doesn't require a JSON key file.
 
 #### Step 4: Bind Kubernetes Service Account to GCP Service Account
 
@@ -250,6 +250,9 @@ For the complete list and setup details, see the [GCP MCP setup documentation](h
 
 ## Configuration
 
+!!! note "Using Workload Identity?"
+    If you're using Workload Identity on GKE, use the Helm configuration from [Step 5 of Workload Identity](#step-5-helm-configuration) instead. The tabs below are for Service Account Key authentication.
+
 === "Holmes CLI"
 
     For CLI usage, you need to deploy the GCP MCP servers first, then configure Holmes to connect to them.
@@ -390,26 +393,9 @@ For the complete list and setup details, see the [GCP MCP setup documentation](h
     kubectl apply -f gcp-mcp-deployment.yaml
     ```
 
-    **Step 2: Configure GCP Service Account**
+    **Step 2: Create GCP Service Account**
 
-    You need to create a GCP service account with appropriate permissions. Use the automated setup script from the [holmes-mcp-integrations repository](https://github.com/robusta-dev/holmes-mcp-integrations/tree/master/servers/gcp):
-
-    ```bash
-    # Clone the repository
-    git clone https://github.com/robusta-dev/holmes-mcp-integrations.git
-    cd holmes-mcp-integrations/servers/gcp
-
-    # Run the setup script
-    ./setup-gcp-service-account.sh \
-      --project your-project-id \
-      --k8s-namespace holmes-mcp
-    ```
-
-    This script will:
-    - Create a GCP service account
-    - Grant ~50 optimized read-only roles for incident response
-    - Generate a service account key
-    - Create the Kubernetes secret (`gcp-sa-key`)
+    Follow the [Creating a GCP Service Account](#creating-a-gcp-service-account) instructions, using `--k8s-namespace holmes-mcp` (or your chosen namespace).
 
     **Step 3: Configure Holmes CLI**
 
@@ -489,7 +475,7 @@ For the complete list and setup details, see the [GCP MCP setup documentation](h
 
 === "Holmes Helm Chart"
 
-    The MCP servers use a GCP service account key for authentication. You need to create the service account and secret first - see the Service Account Configuration section below for setup details.
+    The MCP servers use a GCP service account key for authentication. You need to create the service account and secret first - see [Creating a GCP Service Account](#creating-a-gcp-service-account) in the Authentication section.
 
     Add the following configuration to your `values.yaml` file:
 
@@ -526,15 +512,11 @@ For the complete list and setup details, see the [GCP MCP setup documentation](h
 
 === "Robusta Helm Chart"
 
-    The MCP servers use a GCP service account key for authentication. You need to create the service account and secret first - see the Service Account Configuration section below for setup details.
+    The MCP servers use a GCP service account key for authentication. You need to create the service account and secret first - see [Creating a GCP Service Account](#creating-a-gcp-service-account) in the Authentication section.
 
     Add the following configuration to your `generated_values.yaml`:
 
     ```yaml
-    globalConfig:
-      # Your existing Robusta configuration
-
-    # Add the Holmes MCP addon configuration
     holmes:
       mcpAddons:
         gcp:
@@ -590,13 +572,15 @@ For the complete list and setup details, see the [GCP MCP setup documentation](h
 
 ## Troubleshooting
 
+Replace `YOUR_NAMESPACE` with your actual namespace (`holmes-mcp` for CLI deployments, `holmes` for Helm).
+
 ```bash
 # Authentication errors - check if secret is mounted
-kubectl exec -n holmes deployment/holmes-gcp-mcp-server -c gcloud-mcp -- \
+kubectl exec -n YOUR_NAMESPACE deployment/gcp-mcp-server -c gcloud-mcp -- \
   ls -la /var/secrets/gcp/
 
 # Verify authentication
-kubectl exec -n holmes deployment/holmes-gcp-mcp-server -c gcloud-mcp -- \
+kubectl exec -n YOUR_NAMESPACE deployment/gcp-mcp-server -c gcloud-mcp -- \
   gcloud auth list
 
 # Permission denied - verify service account roles
@@ -605,8 +589,8 @@ gcloud projects get-iam-policy PROJECT_ID \
   --filter="bindings.members:holmes-gcp-mcp@"
 
 # Pod not starting - check events and logs
-kubectl describe pod -n holmes -l app.kubernetes.io/component=gcp-mcp-server
-kubectl logs -n holmes deployment/holmes-gcp-mcp-server --all-containers
+kubectl describe pod -n YOUR_NAMESPACE -l app=gcp-mcp-server
+kubectl logs -n YOUR_NAMESPACE deployment/gcp-mcp-server --all-containers
 ```
 
 **Note:** The gcloud MCP requires version 550.0.0+. The provided Docker images include the correct version.
