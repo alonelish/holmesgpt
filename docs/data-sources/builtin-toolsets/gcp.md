@@ -1,22 +1,22 @@
 # GCP (MCP)
 
-The GCP MCP servers provide comprehensive access to Google Cloud Platform services through secure, read-only interfaces. They enable Holmes to investigate GCP infrastructure issues, analyze audit logs, examine security configurations, troubleshoot service-specific problems, and retrieve historical data from deleted resources.
+Connect Holmes to Google Cloud Platform for investigating infrastructure issues, audit logs, and retrieving historical data from deleted resources.
 
 ## Overview
 
-!!! info "Prerequisites"
-    You need to configure GCP authentication before installing the MCP servers. Choose one of the following methods:
+You need to configure GCP authentication before installing the MCP servers. Choose one of the following methods:
 
-    - **[Workload Identity](#workload-identity-gke)** - **Recommended** For GKE clusters (no key management required)
-    - **[Service Account Key](#service-account-key)** - Traditional authentication using a JSON key file (works anywhere)
+- **[Workload Identity](#workload-identity-gke---recommended)** - **Recommended** for GKE clusters (no key management required)
+- **[Service Account Key](#service-account-key)** - Traditional authentication using a JSON key file (works anywhere)
 
-The GCP MCP addon consists of three specialized servers:
+When using the Holmes or Robusta Helm charts, the relevant MCP servers are deployed as pods in your cluster. For CLI users, you'll need to deploy the MCP servers manually and configure Holmes to connect to them.
 
-- **gcloud MCP**: General GCP management via gcloud CLI commands, supporting multi-project queries
-- **Observability MCP**: Cloud Logging, Monitoring, Trace, and Error Reporting - can retrieve historical logs for deleted Kubernetes resources
-- **Storage MCP**: Cloud Storage operations and management
+??? info "How it works"
+    The GCP MCP addon consists of three specialized servers:
 
-When using the Holmes or Robusta Helm charts, these servers are deployed as separate pods in your cluster. For CLI users, you'll need to deploy the MCP servers manually and configure Holmes to connect to them.
+    - **gcloud MCP**: General GCP management via gcloud CLI commands, supporting multi-project queries
+    - **Observability MCP**: Cloud Logging, Monitoring, Trace, and Error Reporting - can retrieve historical logs for deleted Kubernetes resources
+    - **Storage MCP**: Cloud Storage operations and management
 
 ### Project and Region Defaults
 
