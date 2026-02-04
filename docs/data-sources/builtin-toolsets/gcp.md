@@ -18,10 +18,6 @@ When using the Holmes or Robusta Helm charts, the relevant MCP servers are deplo
     - **Observability MCP**: Cloud Logging, Monitoring, Trace, and Error Reporting - can retrieve historical logs for deleted Kubernetes resources
     - **Storage MCP**: Cloud Storage operations and management
 
-### Project and Region Defaults
-
-The optional `project` and `region` settings are used by Holmes by default, if not asked about a specific project or region. Holmes can still query anything the service account has access to.
-
 ## Authentication
 
 The GCP MCP servers support two authentication methods: ``Workload Identity`` or ``Service Account Key``
@@ -103,12 +99,11 @@ Replace:
           annotations:
             iam.gke.io/gcp-service-account: "GCP_SERVICE_ACCOUNT_EMAIL"
 
-        # Optional: specify primary project/region
+        # Optional: defaults when user doesn't specify. Holmes can query any project the SA has access to.
         config:
           project: "your-primary-project"
           region: "us-central1"
 
-        # Enable the MCP servers you need
         gcloud:
           enabled: true
         observability:
@@ -130,12 +125,11 @@ Replace:
             annotations:
               iam.gke.io/gcp-service-account: "GCP_SERVICE_ACCOUNT_EMAIL"
 
-          # Optional: specify primary project/region
+          # Optional: defaults when user doesn't specify. Holmes can query any project the SA has access to.
           config:
             project: "your-primary-project"
             region: "us-central1"
 
-          # Enable the MCP servers you need
           gcloud:
             enabled: true
           observability:
@@ -484,16 +478,14 @@ For the complete list and setup details, see the [GCP MCP setup documentation](h
       gcp:
         enabled: true
 
-        # Reference the secret created by setup script
         serviceAccountKey:
-          secretName: "gcp-sa-key"
+          secretName: "gcp-sa-key"  # Created by setup script
 
-        # Optional: Holmes uses these if not asked about a specific project/region
+        # Optional: defaults when user doesn't specify. Holmes can query any project the SA has access to.
         config:
           project: "your-primary-project"
           region: "us-central1"
 
-        # Enable the MCP servers you need
         gcloud:
           enabled: true
         observability:
@@ -501,8 +493,6 @@ For the complete list and setup details, see the [GCP MCP setup documentation](h
         storage:
           enabled: true
     ```
-
-    For additional configuration options (resources, network policy, node selectors, etc.), see the [full chart values](https://github.com/HolmesGPT/holmesgpt/blob/master/helm/holmes/values.yaml).
 
     Then deploy or upgrade your Holmes installation:
 
@@ -522,16 +512,14 @@ For the complete list and setup details, see the [GCP MCP setup documentation](h
         gcp:
           enabled: true
 
-          # Reference the secret created by setup script
           serviceAccountKey:
-            secretName: "gcp-sa-key"
+            secretName: "gcp-sa-key"  # Created by setup script
 
-          # Optional: Holmes uses these if not asked about a specific project/region
+          # Optional: defaults when user doesn't specify. Holmes can query any project the SA has access to.
           config:
             project: "your-primary-project"
             region: "us-central1"
 
-          # Enable the MCP servers you need
           gcloud:
             enabled: true
           observability:
