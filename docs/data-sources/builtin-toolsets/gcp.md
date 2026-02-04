@@ -4,12 +4,10 @@ Connect Holmes to Google Cloud Platform for investigating infrastructure issues,
 
 ## Overview
 
-You need to configure GCP authentication before installing the MCP servers. Choose one of the following methods:
+Choose your setup path based on your environment:
 
-- **Workload Identity** - **Recommended** for GKE clusters (no key management required)
-- **Service Account Key** - Traditional authentication using a JSON key file (works anywhere)
-
-When using the Holmes or Robusta Helm charts, the relevant MCP servers are deployed as pods in your cluster. For CLI users, you'll need to deploy the MCP servers manually and configure Holmes to connect to them.
+- **[GKE with Workload Identity](#gke-with-workload-identity)** - Recommended for GKE clusters (no key management)
+- **[Service Account Key](#service-account-key)** - Works anywhere (CLI, EKS, AKS, on-premise)
 
 ??? info "How it works"
     The GCP MCP addon consists of three specialized servers:
@@ -18,142 +16,152 @@ When using the Holmes or Robusta Helm charts, the relevant MCP servers are deplo
     - **Observability MCP**: Cloud Logging, Monitoring, Trace, and Error Reporting - can retrieve historical logs for deleted Kubernetes resources
     - **Storage MCP**: Cloud Storage operations and management
 
-## Authentication
+## GKE with Workload Identity
 
-=== "Workload Identity (GKE) - Recommended"
+Workload Identity is Google's recommended way to authenticate workloads on GKE. It eliminates service account keys by allowing Kubernetes service accounts to impersonate GCP service accounts.
 
-    Workload Identity is Google's recommended way to authenticate workloads running on GKE. It eliminates the need for service account keys by allowing Kubernetes service accounts to impersonate GCP service accounts.
+**Step 1: Enable Workload Identity on Your Cluster**
 
-    !!! tip "When to use"
-        - GKE clusters (Standard or Autopilot)
-        - Production environments where key management is a concern
-        - Organizations with strict security policies against long-lived credentials
+```bash
+gcloud container clusters update CLUSTER_NAME \
+  --project PROJECT_ID \
+  --workload-pool=PROJECT_ID.svc.id.goog \
+  --region REGION
+```
 
-    **Step 1: Enable Workload Identity on Your Cluster**
+**Step 2: Enable Workload Identity on Node Pools**
+
+Repeat for all node pools where Holmes pods may run:
+
+```bash
+gcloud container node-pools update NODE_POOL_NAME \
+  --project PROJECT_ID \
+  --cluster CLUSTER_NAME \
+  --workload-metadata=GKE_METADATA \
+  --region REGION
+```
+
+**Step 3: Create and Configure GCP Service Account**
+
+```bash
+# Create service account
+gcloud iam service-accounts create holmes-gcp-mcp \
+  --display-name="Holmes GCP MCP Service Account"
+
+# Grant roles (see IAM Permissions Details below for full list)
+PROJECT_ID=your-project
+SA_EMAIL=holmes-gcp-mcp@${PROJECT_ID}.iam.gserviceaccount.com
+
+for role in browser compute.viewer container.viewer logging.privateLogViewer monitoring.viewer; do
+  gcloud projects add-iam-policy-binding ${PROJECT_ID} \
+    --member="serviceAccount:${SA_EMAIL}" \
+    --role="roles/${role}"
+done
+```
+
+??? info "IAM Permissions Details"
+    For comprehensive incident response, grant ~50 read-only roles using the [setup script](https://github.com/robusta-dev/holmes-mcp-integrations/tree/master/servers/gcp) with `--skip-key-generation`:
 
     ```bash
-    gcloud container clusters update CLUSTER_NAME \
-      --project PROJECT_ID \
-      --workload-pool=PROJECT_ID.svc.id.goog \
-      --region REGION
+    git clone https://github.com/robusta-dev/holmes-mcp-integrations.git
+    cd holmes-mcp-integrations/servers/gcp
+    ./setup-gcp-service-account.sh --project your-project-id --skip-key-generation
     ```
 
-    **Step 2: Enable Workload Identity on Node Pools**
+    **What's Included:** Audit logs, networking, database metadata, security findings, container visibility, monitoring/logging/tracing.
 
-    Each node pool that runs workloads using Workload Identity needs to have GKE metadata server enabled. Repeat for all node pools where Holmes pods may run:
+    **Security Boundaries:** NO data access, NO secret values, NO write permissions.
 
-    ```bash
-    gcloud container node-pools update NODE_POOL_NAME \
-      --project PROJECT_ID \
-      --cluster CLUSTER_NAME \
-      --workload-metadata=GKE_METADATA \
-      --region REGION
-    ```
+**Step 4: Bind Kubernetes Service Account to GCP Service Account**
 
-    **Step 3: Create a GCP Service Account**
+```bash
+gcloud iam service-accounts add-iam-policy-binding holmes-gcp-mcp@PROJECT_ID.iam.gserviceaccount.com \
+  --project PROJECT_ID \
+  --role roles/iam.workloadIdentityUser \
+  --member "serviceAccount:PROJECT_ID.svc.id.goog[NAMESPACE/gcp-mcp-sa]"
+```
 
-    Use the setup script from the Service Account Key tab, but **skip the key generation step** - Workload Identity doesn't require a JSON key file.
+Replace `PROJECT_ID` with your GCP project and `NAMESPACE` with the Kubernetes namespace where Holmes will be deployed.
 
-    **Step 4: Bind Kubernetes Service Account to GCP Service Account**
+**Step 5: Deploy with Helm**
 
-    Allow the Kubernetes Service Account (KSA) to impersonate the GCP Service Account (GSA). The `GCP_SERVICE_ACCOUNT_EMAIL` can be found in the GCP Console under **IAM & Admin > Service Accounts**.
+**Holmes Helm Chart:**
 
-    ```bash
-    gcloud iam service-accounts add-iam-policy-binding GCP_SERVICE_ACCOUNT_EMAIL \
-      --project PROJECT_ID \
-      --role roles/iam.workloadIdentityUser \
-      --member "serviceAccount:PROJECT_ID.svc.id.goog[NAMESPACE/gcp-mcp-sa]"
-    ```
+```yaml
+mcpAddons:
+  gcp:
+    enabled: true
+    serviceAccount:
+      name: gcp-mcp-sa
+      annotations:
+        iam.gke.io/gcp-service-account: "holmes-gcp-mcp@PROJECT_ID.iam.gserviceaccount.com"
+    # Optional: defaults when user doesn't specify. Holmes can query any project the SA has access to.
+    config:
+      project: "your-primary-project"
+      region: "us-central1"
+    gcloud:
+      enabled: true
+    observability:
+      enabled: true
+    storage:
+      enabled: true
+```
 
-    Replace `GCP_SERVICE_ACCOUNT_EMAIL` with your service account email, `PROJECT_ID` with your GCP project, and `NAMESPACE` with the Kubernetes namespace where Holmes will be deployed.
+```bash
+helm upgrade --install holmes robusta/holmes -f values.yaml
+```
 
-    **Step 5: Helm Configuration**
+**Robusta Helm Chart:**
 
-    **Holmes Helm Chart:**
-
-    ```yaml
-    mcpAddons:
-      gcp:
+```yaml
+holmes:
+  mcpAddons:
+    gcp:
+      enabled: true
+      serviceAccount:
+        name: gcp-mcp-sa
+        annotations:
+          iam.gke.io/gcp-service-account: "holmes-gcp-mcp@PROJECT_ID.iam.gserviceaccount.com"
+      # Optional: defaults when user doesn't specify. Holmes can query any project the SA has access to.
+      config:
+        project: "your-primary-project"
+        region: "us-central1"
+      gcloud:
         enabled: true
-        serviceAccount:
-          name: gcp-mcp-sa
-          annotations:
-            iam.gke.io/gcp-service-account: "GCP_SERVICE_ACCOUNT_EMAIL"
-        # Optional: defaults when user doesn't specify. Holmes can query any project the SA has access to.
-        config:
-          project: "your-primary-project"
-          region: "us-central1"
-        gcloud:
-          enabled: true
-        observability:
-          enabled: true
-        storage:
-          enabled: true
-    ```
+      observability:
+        enabled: true
+      storage:
+        enabled: true
+```
 
-    **Robusta Helm Chart:**
+```bash
+helm upgrade --install robusta robusta/robusta -f generated_values.yaml --set clusterName=YOUR_CLUSTER_NAME
+```
 
-    ```yaml
-    holmes:
-      mcpAddons:
-        gcp:
-          enabled: true
-          serviceAccount:
-            name: gcp-mcp-sa
-            annotations:
-              iam.gke.io/gcp-service-account: "GCP_SERVICE_ACCOUNT_EMAIL"
-          # Optional: defaults when user doesn't specify. Holmes can query any project the SA has access to.
-          config:
-            project: "your-primary-project"
-            region: "us-central1"
-          gcloud:
-            enabled: true
-          observability:
-            enabled: true
-          storage:
-            enabled: true
-    ```
+## Service Account Key
 
-=== "Service Account Key"
+Service account keys work in any environment but require managing and rotating key files.
 
-    Service account keys are the traditional way to authenticate GCP applications. This method works in any environment but requires managing and rotating key files.
+=== "Holmes CLI"
 
-    !!! tip "When to use"
-        - Non-GKE Kubernetes clusters (EKS, AKS, on-premise)
-        - Local development and testing
-        - Environments where Workload Identity is not available
-
-    **Create a GCP Service Account**
-
-    We provide an automated script that creates a service account with ~50 optimized read-only IAM roles:
+    **Step 1: Create GCP Service Account**
 
     ```bash
     git clone https://github.com/robusta-dev/holmes-mcp-integrations.git
     cd holmes-mcp-integrations/servers/gcp
 
-    # Single project setup
     ./setup-gcp-service-account.sh \
       --project your-project-id \
-      --k8s-namespace holmes  # Or your namespace
-
-    # Multi-project setup (for cross-project investigations)
-    ./setup-gcp-service-account.sh \
-      --project primary-project \
-      --other-projects dev-project,staging-project,prod-project \
-      --k8s-namespace holmes
+      --k8s-namespace holmes-mcp
     ```
 
-    The script creates a GCP service account, grants IAM roles, generates a key, and creates a Kubernetes secret (`gcp-sa-key`).
+    The script creates a service account with ~50 read-only IAM roles, generates a key, and creates a Kubernetes secret (`gcp-sa-key`).
 
     ??? note "Manual Setup"
-        If you prefer to set up manually:
-
         ```bash
-        # Create service account
         gcloud iam service-accounts create holmes-gcp-mcp \
           --display-name="Holmes GCP MCP Service Account"
 
-        # Grant essential roles (example)
         PROJECT_ID=your-project
         SA_EMAIL=holmes-gcp-mcp@${PROJECT_ID}.iam.gserviceaccount.com
 
@@ -163,64 +171,19 @@ When using the Holmes or Robusta Helm charts, the relevant MCP servers are deplo
             --role="roles/${role}"
         done
 
-        # Create key
-        gcloud iam service-accounts keys create key.json \
-          --iam-account=${SA_EMAIL}
-
-        # Create Kubernetes secret
-        kubectl create secret generic gcp-sa-key \
-          --from-file=key.json \
-          --namespace=holmes
+        gcloud iam service-accounts keys create key.json --iam-account=${SA_EMAIL}
+        kubectl create secret generic gcp-sa-key --from-file=key.json --namespace=holmes-mcp
         ```
 
-        **Note:** The manual setup above only includes essential roles. For the full set of ~50 optimized roles, use the setup script or see the [complete role list](https://github.com/robusta-dev/holmes-mcp-integrations/tree/master/servers/gcp).
+    **Step 2: Deploy the MCP Servers**
 
-    ??? info "IAM Permissions Details"
-        The setup script grants ~50 optimized read-only roles designed for incident response:
-
-        **What's Included:**
-
-        - ✅ Complete audit log visibility (who changed what)
-        - ✅ Full networking troubleshooting (firewalls, load balancers, SSL)
-        - ✅ Database and BigQuery metadata (schemas, configurations)
-        - ✅ Security findings and IAM analysis
-        - ✅ Container and Kubernetes visibility
-        - ✅ Monitoring, logging, and tracing
-
-        **Security Boundaries:**
-
-        - ❌ NO actual data access (cannot read storage objects or BigQuery data)
-        - ❌ NO secret values (only metadata)
-        - ❌ NO write permissions
-
-        Key roles include: `roles/browser`, `roles/logging.privateLogViewer`, `roles/compute.viewer`, `roles/container.viewer`, `roles/monitoring.viewer`, `roles/iam.securityReviewer`, `roles/storage.legacyBucketReader`, `roles/bigquery.metadataViewer`.
-
-        For the complete list, see the [GCP MCP setup documentation](https://github.com/robusta-dev/holmes-mcp-integrations/tree/master/servers/gcp).
-
-## Configuration
-
-=== "Holmes CLI"
-
-    For CLI usage, you need to deploy the GCP MCP servers first, then configure Holmes to connect to them.
-
-    **Step 1: Deploy the GCP MCP Servers**
-
-    Create a file named `gcp-mcp-deployment.yaml`:
+    Create `gcp-mcp-deployment.yaml`:
 
     ```yaml
     apiVersion: v1
     kind: Namespace
     metadata:
       name: holmes-mcp
-    ---
-    apiVersion: v1
-    kind: Secret
-    metadata:
-      name: gcp-sa-key
-      namespace: holmes-mcp
-    data:
-      # Add your base64-encoded service account key here
-      key.json: YOUR_BASE64_ENCODED_KEY
     ---
     apiVersion: apps/v1
     kind: Deployment
@@ -240,35 +203,19 @@ When using the Holmes or Robusta Helm charts, the relevant MCP servers are deplo
           containers:
           - name: gcloud-mcp
             image: us-central1-docker.pkg.dev/genuine-flight-317411/holmesgpt/gcloud-cli-mcp:1.0.7
-            imagePullPolicy: Always
             ports:
             - containerPort: 8000
-              name: gcloud
             env:
             - name: GOOGLE_APPLICATION_CREDENTIALS
               value: "/var/secrets/gcp/key.json"
-            - name: GCP_PROJECT_ID
-              value: "your-project-id"  # Optional: Holmes uses this if not asked about a specific project
-            - name: GCP_REGION
-              value: "us-central1"      # Optional: Holmes uses this if not asked about a specific region
             volumeMounts:
             - name: gcp-key
               mountPath: /var/secrets/gcp
               readOnly: true
-            resources:
-              requests:
-                memory: "256Mi"
-                cpu: "100m"
-              limits:
-                memory: "512Mi"
-                cpu: "250m"
-
           - name: observability-mcp
             image: us-central1-docker.pkg.dev/genuine-flight-317411/holmesgpt/gcloud-observability-mcp:1.0.0
-            imagePullPolicy: Always
             ports:
             - containerPort: 8001
-              name: observability
             env:
             - name: GOOGLE_APPLICATION_CREDENTIALS
               value: "/var/secrets/gcp/key.json"
@@ -276,20 +223,10 @@ When using the Holmes or Robusta Helm charts, the relevant MCP servers are deplo
             - name: gcp-key
               mountPath: /var/secrets/gcp
               readOnly: true
-            resources:
-              requests:
-                memory: "256Mi"
-                cpu: "100m"
-              limits:
-                memory: "512Mi"
-                cpu: "250m"
-
           - name: storage-mcp
             image: us-central1-docker.pkg.dev/genuine-flight-317411/holmesgpt/gcloud-storage-mcp:1.0.0
-            imagePullPolicy: Always
             ports:
             - containerPort: 8002
-              name: storage
             env:
             - name: GOOGLE_APPLICATION_CREDENTIALS
               value: "/var/secrets/gcp/key.json"
@@ -297,14 +234,6 @@ When using the Holmes or Robusta Helm charts, the relevant MCP servers are deplo
             - name: gcp-key
               mountPath: /var/secrets/gcp
               readOnly: true
-            resources:
-              requests:
-                memory: "256Mi"
-                cpu: "100m"
-              limits:
-                memory: "512Mi"
-                cpu: "250m"
-
           volumes:
           - name: gcp-key
             secret:
@@ -321,31 +250,22 @@ When using the Holmes or Robusta Helm charts, the relevant MCP servers are deplo
       ports:
       - port: 8000
         targetPort: 8000
-        protocol: TCP
         name: gcloud
       - port: 8001
         targetPort: 8001
-        protocol: TCP
         name: observability
       - port: 8002
         targetPort: 8002
-        protocol: TCP
         name: storage
     ```
-
-    Deploy it to your cluster:
 
     ```bash
     kubectl apply -f gcp-mcp-deployment.yaml
     ```
 
-    **Step 2: Create GCP Service Account**
-
-    Run the setup script from the Service Account Key tab in the Authentication section, using `--k8s-namespace holmes-mcp`.
-
     **Step 3: Configure Holmes CLI**
 
-    Add the MCP server configurations to **~/.holmes/config.yaml**:
+    Add to `~/.holmes/config.yaml`:
 
     ```yaml
     mcp_servers:
@@ -354,90 +274,53 @@ When using the Holmes or Robusta Helm charts, the relevant MCP servers are deplo
         config:
           url: "http://gcp-mcp-server.holmes-mcp.svc.cluster.local:8000/sse"
           mode: "sse"
-        llm_instructions: |
-          Use this server to investigate GCP infrastructure and GKE issues across multiple projects.
-
-          Pass gcloud arguments as an array. Do NOT include 'gcloud' itself.
-          - Correct: args: ["compute", "instances", "list", "--project", "my-project"]
-
-          ALWAYS include --project flag for resource queries to support multi-project investigations.
-
-          Common investigations:
-          - GKE issues: Node pools, cluster configs, workload identity
-          - Networking: VPC peering, firewall rules, Cloud NAT, load balancers, SSL certificates
-          - IAM/Auth: Permission errors, service account bindings, OAuth scopes
-          - Resources: Quotas, disk space, compute capacity
-          - Configuration changes: Audit logs (use with observability MCP)
-
       gcp_observability:
-        description: "GCP Observability - logs, metrics, traces, errors"
+        description: "GCP Observability - logs, metrics, traces"
         config:
           url: "http://gcp-mcp-server.holmes-mcp.svc.cluster.local:8001/sse"
           mode: "sse"
-        llm_instructions: |
-          Use this server for GCP-level logs, metrics, traces, and monitoring.
-
-          KEY ADVANTAGE: Can retrieve historical logs for deleted Kubernetes resources (pods, jobs, etc.)
-          that are no longer available via kubectl.
-
-          CRITICAL: Always answer log questions with actual log entries first.
-          After providing results, include markdown links to Logs Explorer:
-          [Descriptive Name](https://console.cloud.google.com/logs/query;query=YOUR_FILTER?project=PROJECT)
-
-          Common patterns:
-          - Deleted pod logs: filter='resource.labels.pod_name="POD_NAME"'
-          - OOM kills: filter='jsonPayload.reason="OOMKilling"'
-          - Audit trail: filter='logName=~"cloudaudit"'
-          - Permission issues: filter='protoPayload.status.code=7'
-
       gcp_storage:
         description: "Google Cloud Storage operations"
         config:
           url: "http://gcp-mcp-server.holmes-mcp.svc.cluster.local:8002/sse"
           mode: "sse"
-        llm_instructions: |
-          Use this server for Cloud Storage bucket and object operations.
-
-          Common investigations:
-          - Access denied: Check bucket IAM and object ACLs
-          - Missing data: Use list_objects(versions=true) and check lifecycle rules
-          - Cost analysis: Review storage classes and find large/old objects
     ```
 
-    **Step 4: Port Forwarding (Optional for Local Testing)**
-
-    If running Holmes CLI locally and need to access the MCP server:
+    **For local testing**, port-forward and use localhost URLs:
 
     ```bash
     kubectl port-forward -n holmes-mcp svc/gcp-mcp-server 8000:8000 8001:8001 8002:8002
     ```
 
-    Then update the URLs in config.yaml to use localhost:
-    ```yaml
-    url: "http://localhost:8000/sse"  # For gcloud
-    url: "http://localhost:8001/sse"  # For observability
-    url: "http://localhost:8002/sse"  # For storage
-    ```
-
 === "Holmes Helm Chart"
 
-    Create the service account and secret first using the setup script in the Service Account Key tab above.
+    **Step 1: Create GCP Service Account**
 
-    Add the following configuration to your `values.yaml` file:
+    ```bash
+    git clone https://github.com/robusta-dev/holmes-mcp-integrations.git
+    cd holmes-mcp-integrations/servers/gcp
+
+    ./setup-gcp-service-account.sh \
+      --project your-project-id \
+      --k8s-namespace holmes
+    ```
+
+    The script creates a service account with ~50 read-only IAM roles, generates a key, and creates a Kubernetes secret (`gcp-sa-key`).
+
+    **Step 2: Configure and Deploy**
+
+    Add to your `values.yaml`:
 
     ```yaml
     mcpAddons:
       gcp:
         enabled: true
-
         serviceAccountKey:
-          secretName: "gcp-sa-key"  # Created by setup script
-
+          secretName: "gcp-sa-key"
         # Optional: defaults when user doesn't specify. Holmes can query any project the SA has access to.
         config:
           project: "your-primary-project"
           region: "us-central1"
-
         gcloud:
           enabled: true
         observability:
@@ -446,32 +329,40 @@ When using the Holmes or Robusta Helm charts, the relevant MCP servers are deplo
           enabled: true
     ```
 
-    Then deploy or upgrade your Holmes installation:
-
     ```bash
     helm upgrade --install holmes robusta/holmes -f values.yaml
     ```
 
 === "Robusta Helm Chart"
 
-    Create the service account and secret first using the setup script in the Service Account Key tab above.
+    **Step 1: Create GCP Service Account**
 
-    Add the following configuration to your `generated_values.yaml`:
+    ```bash
+    git clone https://github.com/robusta-dev/holmes-mcp-integrations.git
+    cd holmes-mcp-integrations/servers/gcp
+
+    ./setup-gcp-service-account.sh \
+      --project your-project-id \
+      --k8s-namespace robusta
+    ```
+
+    The script creates a service account with ~50 read-only IAM roles, generates a key, and creates a Kubernetes secret (`gcp-sa-key`).
+
+    **Step 2: Configure and Deploy**
+
+    Add to your `generated_values.yaml`:
 
     ```yaml
     holmes:
       mcpAddons:
         gcp:
           enabled: true
-
           serviceAccountKey:
-            secretName: "gcp-sa-key"  # Created by setup script
-
+            secretName: "gcp-sa-key"
           # Optional: defaults when user doesn't specify. Holmes can query any project the SA has access to.
           config:
             project: "your-primary-project"
             region: "us-central1"
-
           gcloud:
             enabled: true
           observability:
@@ -479,10 +370,6 @@ When using the Holmes or Robusta Helm charts, the relevant MCP servers are deplo
           storage:
             enabled: true
     ```
-
-    For additional configuration options (resources, network policy, node selectors, etc.), see the [full chart values](https://github.com/HolmesGPT/holmesgpt/blob/master/helm/holmes/values.yaml).
-
-    Then deploy or upgrade your Robusta installation:
 
     ```bash
     helm upgrade --install robusta robusta/robusta -f generated_values.yaml --set clusterName=YOUR_CLUSTER_NAME
@@ -506,37 +393,20 @@ When using the Holmes or Robusta Helm charts, the relevant MCP servers are deplo
 "Why is my application getting 403 errors accessing the data-bucket?"
 ```
 
-```
-"Check the SSL certificates on our load balancers"
-```
-
 ## Troubleshooting
 
-Replace `YOUR_NAMESPACE` with your actual namespace (`holmes-mcp` for CLI deployments, `holmes` for Helm).
-
 ```bash
-# Authentication errors - check if secret is mounted
-kubectl exec -n YOUR_NAMESPACE deployment/gcp-mcp-server -c gcloud-mcp -- \
-  ls -la /var/secrets/gcp/
+# Check if secret is mounted
+kubectl exec -n YOUR_NAMESPACE deployment/gcp-mcp-server -c gcloud-mcp -- ls -la /var/secrets/gcp/
 
 # Verify authentication
-kubectl exec -n YOUR_NAMESPACE deployment/gcp-mcp-server -c gcloud-mcp -- \
-  gcloud auth list
+kubectl exec -n YOUR_NAMESPACE deployment/gcp-mcp-server -c gcloud-mcp -- gcloud auth list
 
-# Permission denied - verify service account roles
-gcloud projects get-iam-policy PROJECT_ID \
-  --flatten="bindings[].members" \
-  --filter="bindings.members:holmes-gcp-mcp@"
+# Check service account roles
+gcloud projects get-iam-policy PROJECT_ID --flatten="bindings[].members" --filter="bindings.members:holmes-gcp-mcp@"
 
-# Pod not starting - check events and logs
-kubectl describe pod -n YOUR_NAMESPACE -l app=gcp-mcp-server
+# Check pod logs
 kubectl logs -n YOUR_NAMESPACE deployment/gcp-mcp-server --all-containers
 ```
 
-**Note:** The gcloud MCP requires version 550.0.0+. The provided Docker images include the correct version.
-
-## Additional Resources
-
-- **Setup Scripts and Documentation**: [holmes-mcp-integrations/servers/gcp](https://github.com/robusta-dev/holmes-mcp-integrations/tree/master/servers/gcp)
-- **Service Account Setup Script**: [setup-gcp-service-account.sh](https://github.com/robusta-dev/holmes-mcp-integrations/blob/master/servers/gcp/setup-gcp-service-account.sh)
-- **Helm Values Reference**: [values.yaml](https://github.com/HolmesGPT/holmesgpt/blob/master/helm/holmes/values.yaml)
+Replace `YOUR_NAMESPACE` with `holmes-mcp` (CLI), `holmes` (Holmes Helm), or `robusta` (Robusta Helm).
