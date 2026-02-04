@@ -591,3 +591,20 @@ When writing documentation in the `docs/` directory:
   curl http://localhost:8000/health
   ```
   ```
+
+- **Don't describe Holmes's behavior**: In "Common Use Cases" sections, show only the example prompts. Don't explain what Holmes will do or list steps like "Holmes will: 1. Query X, 2. Analyze Y, 3. Return Z". Users will see this when they run it.
+
+- **Skip Capabilities sections**: Don't list what a toolset/integration can do. Users discover capabilities by using Holmes. Feature lists become stale quickly.
+
+- **Skip Security Best Practices sections**: Assume users understand basics like rotating credentials, using least privilege, and deleting local secrets. These sections add little value.
+
+- **Consolidate troubleshooting commands**: Instead of separate headers for each troubleshooting scenario, use a single code block with comments:
+  ```bash
+  # Authentication errors - check if secret is mounted
+  kubectl exec ...
+
+  # Permission denied - verify roles
+  gcloud projects get-iam-policy ...
+  ```
+
+- **Common Use Cases format**: Just example prompts, one per code block, no sub-headers, no explanations.
