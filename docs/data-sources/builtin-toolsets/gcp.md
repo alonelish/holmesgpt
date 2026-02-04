@@ -70,7 +70,7 @@ done
 
     **What's Included:** Audit logs, networking, database metadata, security findings, container visibility, monitoring/logging/tracing.
 
-    **Security Boundaries:** NO data access, NO secret values, NO write permissions.
+    **Security Boundaries:** Read-only metadata access. Cannot read storage objects, secret values, or modify resources.
 
 **Step 4: Bind Kubernetes Service Account to GCP Service Account**
 
