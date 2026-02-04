@@ -4,40 +4,52 @@ Policy-based filtering for tool calls using Python expressions.
 This module provides a policy engine that evaluates Python expressions
 to control tool call access based on tool name, parameters, and context.
 
-Default behavior is ALLOW everything. Users add rules to define constraints
-for specific tools. When a tool matches one or more rules, ALL matching
-rules' conditions must pass for the call to be allowed.
+The `default` setting controls behavior when NO rules match a tool:
+- `default: allow` (default) - tools not matching any rule are allowed
+- `default: deny` - tools not matching any rule are denied (whitelist mode)
 
-Example policy configuration:
+When rules DO match, ALL matching rules' `when` conditions must be True.
+
+Example policy configuration (blacklist mode - default allow):
 
     policy:
+      default: allow  # Optional, this is the default
       rules:
         # Only allow team-a namespaces for kubectl
         - name: team-namespaces
           match: ["kubectl_*"]
-          when: 'params.get("namespace", "").startswith("team-a-") or params.get("namespace") is None'
+          when: 'params.get("namespace", "").startswith("team-a-")'
 
-        # No secrets access
-        - name: no-secrets
-          match: ["kubectl_*"]
-          when: 'params.get("kind") != "secret"'
-
-        # Block bash entirely (when omitted = always fail for matched tools)
+        # Block bash entirely (when omitted = always block)
         - name: no-bash
           match: ["bash/*"]
-          when: "False"
+
+Example policy configuration (whitelist mode - default deny):
+
+    policy:
+      default: deny
+      rules:
+        # Allow prometheus tools
+        - name: allow-prometheus
+          match: ["prometheus_*"]
+          when: "True"
+
+        # Allow kubectl with namespace constraint
+        - name: allow-kubectl
+          match: ["kubectl_*"]
+          when: 'params.get("namespace", "").startswith("team-a-")'
 
 Semantics:
-- Tools matching NO rules → ALLOW
+- Tools matching NO rules → use `default` (allow or deny)
 - Tools matching rules → ALL matching rules' 'when' must be True
-- If 'when' is omitted → treated as "False" (always deny matched tools)
+- If 'when' is omitted → always blocks matched tools (regardless of default)
 """
 
 import fnmatch
 import logging
 import re
 from dataclasses import dataclass
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Literal, Optional
 
 from pydantic import BaseModel, ConfigDict
 from simpleeval import EvalWithCompoundTypes, NameNotDefined
@@ -76,8 +88,13 @@ class PolicyConfig(BaseModel):
 
     enabled: bool = True
 
+    # Default behavior when NO rules match a tool:
+    # - "allow": tool is allowed (blacklist mode - block specific tools)
+    # - "deny": tool is denied (whitelist mode - allow specific tools)
+    default: Literal["allow", "deny"] = "allow"
+
     # Rules define constraints for tools
-    # - Tools matching NO rules → allowed
+    # - Tools matching NO rules → use 'default' setting
     # - Tools matching rules → ALL matching 'when' conditions must pass
     rules: List[PolicyRule] = []
 
@@ -87,9 +104,9 @@ class PolicyEnforcer:
     Evaluates policy rules against tool calls using simpleeval.
 
     Semantics:
-    - Tools matching NO rules → ALLOW (default open)
+    - Tools matching NO rules → use `default` setting (allow or deny)
     - Tools matching one or more rules → ALL matching rules' 'when' must be True
-    - If 'when' is omitted → treated as False (blocks matched tools)
+    - If 'when' is omitted → always blocks matched tools (regardless of default)
 
     The evaluator provides a sandboxed Python expression environment with:
     - `tool`: The tool name being called
@@ -154,7 +171,7 @@ class PolicyEnforcer:
         Check if a tool call is allowed by policy.
 
         Semantics:
-        - Tools matching NO rules → ALLOW
+        - Tools matching NO rules → use `default` setting
         - Tools matching rules → ALL matching 'when' must be True
 
         Args:
@@ -176,8 +193,14 @@ class PolicyEnforcer:
             if self._matches_tool(tool_name, rule.match)
         ]
 
-        # No matching rules = allow (default open)
+        # No matching rules = use default setting
         if not matching_rules:
+            if self.config.default == "deny":
+                logger.info(f"Policy denied tool '{tool_name}': no matching rules (default: deny)")
+                return PolicyResult(
+                    allowed=False,
+                    message=f"Tool '{tool_name}' not allowed by policy (no matching rules)"
+                )
             return PolicyResult(allowed=True)
 
         # All matching rules must pass

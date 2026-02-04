@@ -347,6 +347,158 @@ class TestPolicyConfigFromDict:
         assert result.allowed
 
 
+class TestDefaultDeny:
+    """Tests for default: deny (whitelist mode)."""
+
+    def test_default_allow_is_default(self):
+        """Default behavior is allow when no rules match."""
+        config = PolicyConfig(rules=[])
+        assert config.default == "allow"
+
+        enforcer = PolicyEnforcer(config)
+        result = enforcer.check("any_tool", {})
+        assert result.allowed
+
+    def test_default_deny_blocks_unmatched_tools(self):
+        """With default: deny, unmatched tools are blocked."""
+        config = PolicyConfig(
+            default="deny",
+            rules=[
+                PolicyRule(
+                    name="allow-prometheus",
+                    match=["prometheus_*"],
+                    when="True",
+                ),
+            ],
+        )
+        enforcer = PolicyEnforcer(config)
+
+        # Matched tool with passing condition - allowed
+        result = enforcer.check("prometheus_query", {"query": "up"})
+        assert result.allowed
+
+        # Unmatched tool - denied (default deny)
+        result = enforcer.check("kubectl_get", {"namespace": "default"})
+        assert not result.allowed
+        assert "no matching rules" in result.message.lower()
+
+    def test_default_deny_with_explicit_when_true(self):
+        """Whitelist mode requires explicit when: 'True' to allow."""
+        config = PolicyConfig(
+            default="deny",
+            rules=[
+                PolicyRule(
+                    name="allow-safe-tools",
+                    match=["prometheus_*", "grafana_*"],
+                    when="True",
+                ),
+                PolicyRule(
+                    name="allow-kubectl-read",
+                    match=["kubectl_get_*", "kubectl_describe"],
+                    when="True",
+                ),
+            ],
+        )
+        enforcer = PolicyEnforcer(config)
+
+        # Allowed tools
+        assert enforcer.check("prometheus_query", {}).allowed
+        assert enforcer.check("grafana_list_dashboards", {}).allowed
+        assert enforcer.check("kubectl_get_pods", {}).allowed
+        assert enforcer.check("kubectl_describe", {}).allowed
+
+        # Not in allowlist - denied
+        assert not enforcer.check("kubectl_delete", {}).allowed
+        assert not enforcer.check("bash/run_command", {}).allowed
+
+    def test_default_deny_with_conditions(self):
+        """Whitelist mode with additional conditions."""
+        config = PolicyConfig(
+            default="deny",
+            rules=[
+                PolicyRule(
+                    name="allow-team-kubectl",
+                    match=["kubectl_*"],
+                    when='params.get("namespace", "").startswith("team-a-")',
+                    message="Only team-a namespaces allowed",
+                ),
+            ],
+        )
+        enforcer = PolicyEnforcer(config)
+
+        # Matched tool, condition passes - allowed
+        result = enforcer.check("kubectl_get", {"namespace": "team-a-prod"})
+        assert result.allowed
+
+        # Matched tool, condition fails - denied
+        result = enforcer.check("kubectl_get", {"namespace": "team-b-prod"})
+        assert not result.allowed
+        assert "team-a" in result.message
+
+        # Unmatched tool - denied (default deny)
+        result = enforcer.check("prometheus_query", {})
+        assert not result.allowed
+        assert "no matching rules" in result.message.lower()
+
+    def test_default_deny_omitted_when_still_blocks(self):
+        """With default: deny, omitting 'when' still blocks matched tools."""
+        config = PolicyConfig(
+            default="deny",
+            rules=[
+                PolicyRule(
+                    name="allow-prometheus",
+                    match=["prometheus_*"],
+                    when="True",
+                ),
+                PolicyRule(
+                    name="block-dangerous",
+                    match=["prometheus_delete_*"],
+                    # no when = always block, even in whitelist mode
+                ),
+            ],
+        )
+        enforcer = PolicyEnforcer(config)
+
+        # Safe prometheus - allowed
+        assert enforcer.check("prometheus_query", {}).allowed
+
+        # Dangerous prometheus - matches both rules, second blocks
+        result = enforcer.check("prometheus_delete_series", {})
+        assert not result.allowed
+        assert "block-dangerous" in result.rule_name
+
+    def test_default_deny_multiple_rules_and_semantics(self):
+        """With default: deny, multiple matching rules still use AND semantics."""
+        config = PolicyConfig(
+            default="deny",
+            rules=[
+                PolicyRule(
+                    name="allow-kubectl",
+                    match=["kubectl_*"],
+                    when="True",  # Allow kubectl tools
+                ),
+                PolicyRule(
+                    name="namespace-constraint",
+                    match=["kubectl_*"],
+                    when='params.get("namespace", "").startswith("team-a-")',
+                ),
+            ],
+        )
+        enforcer = PolicyEnforcer(config)
+
+        # Both rules match kubectl, both must pass
+        result = enforcer.check("kubectl_get", {"namespace": "team-a-prod"})
+        assert result.allowed
+
+        # First passes (when: True), second fails (wrong namespace)
+        result = enforcer.check("kubectl_get", {"namespace": "team-b-prod"})
+        assert not result.allowed
+        assert result.rule_name == "namespace-constraint"
+
+        # Unmatched tool - denied (default deny)
+        assert not enforcer.check("bash/run", {}).allowed
+
+
 class TestRealWorldScenarios:
     """Tests for realistic policy scenarios."""
 
