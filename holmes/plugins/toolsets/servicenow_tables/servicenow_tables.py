@@ -4,7 +4,7 @@ from typing import Any, ClassVar, Dict, Optional, Tuple, Type, cast
 from urllib.parse import urljoin
 
 import requests  # type: ignore
-from pydantic import BaseModel
+from pydantic import Field
 
 from holmes.core.tools import (
     CallablePrerequisite,
@@ -16,9 +16,10 @@ from holmes.core.tools import (
     Toolset,
 )
 from holmes.plugins.toolsets.utils import toolset_name_for_one_liner
+from holmes.utils.pydantic_utils import ToolsetConfig
 
 
-class ServiceNowTablesConfig(BaseModel):
+class ServiceNowTablesConfig(ToolsetConfig):
     """Configuration for ServiceNow Tables API access.
 
     Example configuration:
@@ -28,13 +29,26 @@ class ServiceNowTablesConfig(BaseModel):
     ```
     """
 
-    api_key: str
-    instance_url: str
-    api_key_header: str = "x-sn-apikey"
+    api_key: str = Field(
+        title="API Key",
+        description="ServiceNow API key for authentication",
+        examples=["now_1234567890abcdef"],
+    )
+    instance_url: str = Field(
+        title="Instance URL",
+        description="ServiceNow instance base URL",
+        examples=["https://your-instance.service-now.com"],
+    )
+    api_key_header: str = Field(
+        default="x-sn-apikey",
+        title="API Key Header",
+        description="HTTP header name to use for passing the API key",
+        examples=["x-sn-apikey"],
+    )
 
 
 class ServiceNowTablesToolset(Toolset):
-    config_class: ClassVar[Type[ServiceNowTablesConfig]] = ServiceNowTablesConfig
+    config_classes: ClassVar[list[Type[ServiceNowTablesConfig]]] = [ServiceNowTablesConfig]
 
     def __init__(self):
         super().__init__(
@@ -105,14 +119,6 @@ class ServiceNowTablesToolset(Toolset):
     @property
     def servicenow_config(self) -> ServiceNowTablesConfig:
         return cast(ServiceNowTablesConfig, self.config)
-
-    def get_example_config(self) -> Dict[str, Any]:
-        """Return an example configuration for this toolset."""
-        example_config = ServiceNowTablesConfig(
-            api_key="now_1234567890abcdef",
-            instance_url="https://your-instance.service-now.com",
-        )
-        return example_config.model_dump()
 
     def _make_api_request(
         self,

@@ -2,12 +2,13 @@ import base64
 import json
 import logging
 import os
-from typing import Any, Dict, Optional
+from typing import Any, Optional
 
-from pydantic import BaseModel
+from pydantic import Field
 
 from holmes.core.tools import (
     CallablePrerequisite,
+    ClassVar,
     StructuredToolResult,
     StructuredToolResultStatus,
     Tool,
@@ -15,9 +16,11 @@ from holmes.core.tools import (
     ToolParameter,
     Toolset,
     ToolsetTag,
+    Type,
 )
 from holmes.plugins.toolsets.newrelic.new_relic_api import NewRelicAPI
 from holmes.plugins.toolsets.utils import toolset_name_for_one_liner
+from holmes.utils.pydantic_utils import ToolsetConfig
 
 
 def _build_newrelic_query_url(
@@ -222,14 +225,32 @@ class ListOrganizationAccounts(Tool):
         return f"{toolset_name_for_one_liner(self._toolset.name)}: List organization accounts"
 
 
-class NewrelicConfig(BaseModel):
-    nr_api_key: str
-    nr_account_id: str
-    is_eu_datacenter: Optional[bool] = False
-    enable_multi_account: Optional[bool] = False
+class NewrelicConfig(ToolsetConfig):
+    nr_api_key: str = Field(
+        title="API Key",
+        description="New Relic API key for authentication",
+        examples=["NRAK-XXXXXXXXXXXXXXXXXXXXXXXXXX"],
+    )
+    nr_account_id: str = Field(
+        title="Account ID",
+        description="New Relic account ID",
+        examples=["1234567"],
+    )
+    is_eu_datacenter: Optional[bool] = Field(
+        default=False,
+        title="EU Datacenter",
+        description="Whether to use EU datacenter (api.eu.newrelic.com) instead of US",
+    )
+    enable_multi_account: Optional[bool] = Field(
+        default=False,
+        title="Multi-Account Mode",
+        description="Enable multi-account support for querying across accounts",
+    )
 
 
 class NewRelicToolset(Toolset):
+    config_classes: ClassVar[list[Type[NewrelicConfig]]] = [NewrelicConfig]
+
     nr_api_key: Optional[str] = None
     nr_account_id: Optional[str] = None
     is_eu_datacenter: bool = False
@@ -310,11 +331,3 @@ class NewRelicToolset(Toolset):
         except Exception as e:
             logging.exception("Failed to set up New Relic toolset")
             return False, str(e)
-
-    def get_example_config(self) -> Dict[str, Any]:
-        return {
-            "nr_api_key": "NRAK-XXXXXXXXXXXXXXXXXXXXXXXXXX",
-            "nr_account_id": "1234567",
-            "is_eu_datacenter": False,
-            "enable_multi_account": False,
-        }

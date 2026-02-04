@@ -29,7 +29,7 @@ from holmes.config import (
     SourceFactory,
     SupportedTicketSources,
 )
-from holmes.core.prompt import build_initial_ask_messages, generate_user_prompt
+from holmes.core.prompt import build_initial_ask_messages, build_system_prompt, generate_user_prompt
 from holmes.core.resource_instruction import ResourceInstructionDocument
 from holmes.core.tools import pretty_print_toolset_status
 from holmes.core.tracing import SpanType, TracingFactory
@@ -215,10 +215,26 @@ def ask(
         "--system-prompt-additions",
         help="Additional content to append to the system prompt",
     ),
+    bash_always_deny: bool = typer.Option(
+        False,
+        "--bash-always-deny",
+        help="Auto-deny all bash commands not in allow list without prompting",
+    ),
+    bash_always_allow: bool = typer.Option(
+        False,
+        "--bash-always-allow",
+        help="Bypass bash command approval checks. Recommended only for sandboxed environments",
+    ),
 ):
     """
     Ask any question and answer using available tools
     """
+    # Validate mutually exclusive flags
+    if bash_always_deny and bash_always_allow:
+        raise typer.BadParameter(
+            "--bash-always-deny and --bash-always-allow are mutually exclusive. Choose one."
+        )
+
     console = init_logging(verbose, log_costs)  # type: ignore
     # Detect and read piped input
     piped_data = None
@@ -296,11 +312,16 @@ def ask(
             config.get_runbook_catalog(),
             system_prompt_additions,
             json_output_file=json_output_file,
+            bash_always_deny=bash_always_deny,
+            bash_always_allow=bash_always_allow,
         )
         return
 
+    if include_file:
+        for file_path in include_file:
+            console.print(f"[bold yellow]Adding file {file_path} to context[/bold yellow]")
+
     messages = build_initial_ask_messages(
-        console,
         prompt,  # type: ignore
         include_file,
         ai.tool_executor,
@@ -602,9 +623,6 @@ def ticket(
         help="ticket ID to investigate (e.g., 'KAN-1')",
     ),
     config_file: Optional[Path] = opt_config_file,  # type: ignore
-    system_prompt: Optional[str] = typer.Option(
-        "builtin://generic_ticket.jinja2", help=system_prompt_help
-    ),
     model: Optional[str] = opt_model,
 ):
     """
@@ -638,15 +656,24 @@ def ticket(
         )
         return
 
-    system_prompt = load_and_render_prompt(
-        prompt=system_prompt,  # type: ignore
+    ai = ticket_source.config.create_console_issue_investigator(model_name=model)
+
+    # Render ticket-specific additions
+    ticket_additions = load_and_render_prompt(
+        prompt="builtin://_ticket_additions.jinja2",
         context={
             "source": source,
             "output_instructions": ticket_source.output_instructions,
         },
     )
 
-    ai = ticket_source.config.create_console_issue_investigator(model_name=model)
+    system_prompt = build_system_prompt(
+        toolsets=ai.tool_executor.toolsets,
+        runbooks=None,
+        system_prompt_additions=ticket_additions,
+        cluster_name=ticket_source.config.cluster_name,
+        ask_user_enabled=False,
+    )
     console.print(
         f"[bold yellow]Analyzing ticket: {issue_to_investigate.name}...[/bold yellow]"
     )
