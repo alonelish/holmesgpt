@@ -60,7 +60,7 @@ done
 ```
 
 ??? info "IAM Permissions Details"
-    For comprehensive incident response, grant ~50 read-only roles using the [setup script](https://github.com/robusta-dev/holmes-mcp-integrations/tree/master/servers/gcp) with `--skip-key-generation`:
+    For most users, we recommend granting ~50 read-only roles using the [setup script](https://github.com/robusta-dev/holmes-mcp-integrations/tree/master/servers/gcp) with `--skip-key-generation`:
 
     ```bash
     git clone https://github.com/robusta-dev/holmes-mcp-integrations.git
