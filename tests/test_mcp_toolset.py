@@ -153,7 +153,7 @@ class TestMCPGeneral:
 
         # prerequisites_callable receives self.config from the framework, which has both url and headers
         mcp_toolset.prerequisites_callable(config=mcp_toolset.config)
-        assert mcp_toolset._mcp_config.headers.get("header1") == "test1"
+        assert mcp_toolset._mcp_config.additional_headers.get("header1") == "test1"
 
     def test_toolset_without_headers_returns_none(self, suppress_migration_warnings):
         mcp_toolset = RemoteMCPToolset(
@@ -163,7 +163,7 @@ class TestMCPGeneral:
         )
 
         mcp_toolset.prerequisites_callable(config=mcp_toolset.config)
-        assert mcp_toolset._mcp_config.headers is None
+        assert mcp_toolset._mcp_config.additional_headers is None
 
     def test_old_config_format_with_url_field_returns_true(
         self, monkeypatch, suppress_migration_warnings
@@ -181,7 +181,7 @@ class TestMCPGeneral:
         monkeypatch.setattr(mcp_toolset, "_get_server_tools", mock_get_server_tools)
         result = mcp_toolset.prerequisites_callable(config=mcp_toolset.config)
         assert result[0] is True
-        assert str(mcp_toolset._mcp_config.url) == "http://localhost:1234/sse"
+        assert str(mcp_toolset._mcp_config.api_url) == "http://localhost:1234/sse"
         assert mcp_toolset._mcp_config.mode == MCPMode.SSE
 
     def test_new_config_format_with_url_in_config_returns_true(
@@ -200,7 +200,7 @@ class TestMCPGeneral:
             config={"url": "http://localhost:1234"}
         )
         assert result[0] is True
-        assert str(mcp_toolset._mcp_config.url) == "http://localhost:1234/sse"
+        assert str(mcp_toolset._mcp_config.api_url) == "http://localhost:1234/sse"
         assert mcp_toolset._mcp_config.mode == MCPMode.SSE
 
     def test_no_url_returns_false(self):

@@ -58,10 +58,10 @@ MAX_METADATA_TIMEOUT_SECONDS = 60
 DEFAULT_METADATA_TIME_WINDOW_HRS = 1
 
 
-def format_ssl_error_message(prometheus_url: str, error: SSLError) -> str:
+def format_ssl_error_message(prometheus_api_url: str, error: SSLError) -> str:
     """Format a clear SSL error message with remediation steps."""
     return (
-        f"SSL certificate verification failed when connecting to Prometheus at {prometheus_url}. "
+        f"SSL certificate verification failed when connecting to Prometheus at {prometheus_api_url}. "
         f"Error: {str(error)}. "
         f"To disable SSL verification, set 'verify_ssl: false' in your configuration. "
         f"For Helm deployments, add this to your values.yaml:\n"
@@ -221,7 +221,7 @@ class AMPConfig(PrometheusConfig):
         if not self._aws_client or self._should_refresh_client():
             try:
                 base_config = BasePrometheusConfig(
-                    url=self.prometheus_url,
+                    url=self.api_url,
                     disable_ssl=not self.verify_ssl,
                     additional_labels=self.additional_labels,
                 )
@@ -315,7 +315,7 @@ class AzurePrometheusConfig(PrometheusConfig):
 
         # Create prometrix Azure config
         self._prometrix_config = PrometrixAzureConfig(
-            url=self.prometheus_url,
+            url=self.api_url,
             azure_resource=azure_resource,
             azure_metadata_endpoint=azure_metadata_endpoint,
             azure_token_endpoint=azure_token_endpoint,
@@ -685,9 +685,9 @@ class ListPrometheusRules(BasePrometheusTool):
                         params=params,
                     )
 
-            prometheus_url = self.toolset.config.api_url
+            prometheus_api_url = self.toolset.config.api_url
 
-            rules_url = urljoin(prometheus_url, "api/v1/rules")
+            rules_url = urljoin(prometheus_api_url, "api/v1/rules")
 
             rules_response = do_request(
                 config=self.toolset.config,
@@ -1797,28 +1797,28 @@ class PrometheusToolset(Toolset):
             logging.exception("Failed to create prometheus config")
             return False, "Failed to create prometheus config"
         try:
-            prometheus_url = os.environ.get("PROMETHEUS_URL")
-            if not prometheus_url:
-                prometheus_url = self.auto_detect_prometheus_url()
-                if not prometheus_url:
+            prometheus_api_url = os.environ.get("PROMETHEUS_URL")
+            if not prometheus_api_url:
+                prometheus_api_url = self.auto_detect_prometheus_api_url()
+                if not prometheus_api_url:
                     return (
                         False,
                         "Unable to auto-detect prometheus. Define api_url in the configuration for tool prometheus/metrics",
                     )
 
             self.config = PrometheusConfig(
-                api_url=prometheus_url,
+                api_url=prometheus_api_url,
                 additional_headers=add_prometheus_auth(os.environ.get("PROMETHEUS_AUTH_HEADER")),
             )
-            logging.info(f"Prometheus auto discovered at url {prometheus_url}")
+            logging.info(f"Prometheus auto discovered at url {prometheus_api_url}")
             self._reload_llm_instructions()
             return self._is_healthy()
         except Exception as e:
             logging.exception("Failed to set up prometheus")
             return False, str(e)
 
-    def auto_detect_prometheus_url(self) -> Optional[str]:
-        url: Optional[str] = PrometheusDiscovery.find_prometheus_url()
+    def auto_detect_prometheus_api_url(self) -> Optional[str]:
+        url: Optional[str] = PrometheusDiscovery.find_prometheus_api_url()
         if not url:
             url = PrometheusDiscovery.find_vm_url()
 

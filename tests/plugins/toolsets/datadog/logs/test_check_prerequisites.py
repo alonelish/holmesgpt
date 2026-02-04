@@ -21,7 +21,7 @@ class TestDatadogToolsetCheckPrerequisites:
         assert toolset.status == ToolsetStatusEnum.FAILED
         assert (
             toolset.error
-            == "Missing config for dd_api_key, dd_app_key, or site_api_url. For details: https://holmesgpt.dev/data-sources/builtin-toolsets/datadog/"
+            == "Missing config for api_key, app_key, or api_url. For details: https://holmesgpt.dev/data-sources/builtin-toolsets/datadog/"
         )
 
     def test_check_prerequisites_empty_config(self):
@@ -33,7 +33,7 @@ class TestDatadogToolsetCheckPrerequisites:
         assert toolset.status == ToolsetStatusEnum.FAILED
         assert (
             toolset.error
-            == "Missing config for dd_api_key, dd_app_key, or site_api_url. For details: https://holmesgpt.dev/data-sources/builtin-toolsets/datadog/"
+            == "Missing config for api_key, app_key, or api_url. For details: https://holmesgpt.dev/data-sources/builtin-toolsets/datadog/"
         )
 
     def test_check_prerequisites_missing_required_fields(self):
@@ -86,10 +86,10 @@ class TestDatadogToolsetCheckPrerequisites:
         assert toolset.status == ToolsetStatusEnum.ENABLED
         assert toolset.error is None  # Changed from "" to None
         assert toolset.dd_config is not None
-        assert toolset.dd_config.dd_api_key == "test-api-key"
-        assert toolset.dd_config.dd_app_key == "test-app-key"
+        assert toolset.dd_config.api_key == "test-api-key"
+        assert toolset.dd_config.app_key == "test-app-key"
         assert (
-            str(toolset.dd_config.site_api_url).rstrip("/")
+            str(toolset.dd_config.api_url).rstrip("/")
             == "https://api.datadoghq.com"
         )
         assert toolset.dd_config.storage_tiers == DEFAULT_STORAGE_TIERS
@@ -155,7 +155,7 @@ class TestDatadogToolsetCheckPrerequisites:
         assert toolset.error is None  # Changed from "" to None
         assert toolset.dd_config is not None
         assert (
-            str(toolset.dd_config.site_api_url).rstrip("/")
+            str(toolset.dd_config.api_url).rstrip("/")
             == "https://api.us3.datadoghq.com"
         )
         assert toolset.dd_config.indexes == ["main", "secondary"]
