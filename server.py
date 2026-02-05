@@ -59,6 +59,10 @@ from holmes.utils.holmes_status import update_holmes_status_in_db
 from holmes.utils.holmes_sync_toolsets import holmes_sync_toolsets_status
 from holmes.utils.log import EndpointFilter
 from holmes.utils.stream import stream_chat_formatter, stream_investigate_formatter
+from holmes.core.tools_utils.filesystem_result_storage import (
+    cleanup_all_sessions,
+    get_session_cleanup_notice,
+)
 
 # removed: add_runbooks_to_user_prompt
 
@@ -354,6 +358,19 @@ def chat(chat_request: ChatRequest, http_request: Request):
             f"streaming={chat_request.stream}"
         )
 
+        # Clean up any previous tool result sessions from prior requests
+        # This prevents disk from filling up with old results
+        sessions_cleaned = cleanup_all_sessions()
+
+        # Build additional system prompt, including cleanup notice if relevant
+        additional_prompt = chat_request.additional_system_prompt
+        if sessions_cleaned > 0:
+            cleanup_notice = get_session_cleanup_notice()
+            if additional_prompt:
+                additional_prompt = f"{additional_prompt}\n\n{cleanup_notice}"
+            else:
+                additional_prompt = cleanup_notice
+
         runbooks = config.get_runbook_catalog()
         ai = config.create_toolcalling_llm(dal=dal, model=chat_request.model)
         global_instructions = dal.get_global_instructions_for_account()
@@ -363,7 +380,7 @@ def chat(chat_request: ChatRequest, http_request: Request):
             ai=ai,
             config=config,
             global_instructions=global_instructions,
-            additional_system_prompt=chat_request.additional_system_prompt,
+            additional_system_prompt=additional_prompt,
             runbooks=runbooks,
             images=chat_request.images,
         )
