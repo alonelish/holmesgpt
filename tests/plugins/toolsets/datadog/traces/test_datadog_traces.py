@@ -76,8 +76,8 @@ class TestFetchDatadogSpansByFilter:
         """Setup test configuration."""
         self.toolset = DatadogTracesToolset()
         self.toolset.dd_config = MagicMock()
-        self.toolset.dd_config.site_api_url = "https://api.datadoghq.com"
-        self.toolset.dd_config.request_timeout = 60
+        self.toolset.dd_config.api_url = "https://api.datadoghq.com"
+        self.toolset.dd_config.timeout_seconds = 60
         self.tool = GetSpans(self.toolset)
 
     def test_get_parameterized_one_liner(self):
