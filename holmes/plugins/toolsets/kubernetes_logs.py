@@ -67,6 +67,7 @@ class KubernetesLogsToolset(BasePodLoggingToolset):
             prerequisites=[prerequisite],
             is_default=True,
             tools=[],  # Initialize with empty tools first
+            categories=["Logs"],
             tags=[ToolsetTag.CORE],
         )
         # Now that parent is initialized and self.name exists, create the tool

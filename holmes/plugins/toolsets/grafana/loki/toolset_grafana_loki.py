@@ -99,6 +99,7 @@ class GrafanaLokiToolset(BaseGrafanaToolset):
             icon_url="https://grafana.com/media/docs/loki/logo-grafana-loki.png",
             docs_url="https://holmesgpt.dev/data-sources/builtin-toolsets/grafanaloki/",
             tools=[],
+            categories=["Logs"],
         )
 
         self.tools = [LokiQuery(toolset=self)]

@@ -122,6 +122,7 @@ class NotionToolset(InternetBaseToolset):
             tools=[
                 FetchNotion(self),
             ],
+            categories=["ITSM and Knowledgebase"],
             tags=[
                 ToolsetTag.CORE,
             ],

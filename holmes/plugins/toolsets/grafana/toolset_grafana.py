@@ -62,6 +62,7 @@ class GrafanaToolset(BaseGrafanaToolset):
                 GetHomeDashboard(self),
                 GetDashboardTags(self),
             ],
+            categories=["Other"],
         )
 
         self._load_llm_instructions_from_file(

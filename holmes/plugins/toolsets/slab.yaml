@@ -3,6 +3,8 @@ toolsets:
     description: "Fetches slab pages"
     docs_url: "https://holmesgpt.dev/data-sources/builtin-toolsets/slab/"
     icon_url: "https://platform.robusta.dev/demos/slab-mark.svg"
+    categories:
+      - "ITSM and Knowledgebase"
     tags:
       - core
     prerequisites:

@@ -398,6 +398,7 @@ class RobustaToolset(Toolset):
             name="robusta",
             prerequisites=[dal_prereq],
             tools=tools,
+            categories=["Other"],
             tags=[
                 ToolsetTag.CORE,
             ],

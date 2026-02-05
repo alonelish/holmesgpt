@@ -302,6 +302,7 @@ class NewRelicToolset(Toolset):
             icon_url="https://companieslogo.com/img/orig/NEWR-de5fcb2e.png?t=1720244493",
             prerequisites=[CallablePrerequisite(callable=self.prerequisites_callable)],  # type: ignore
             tools=[],
+            categories=["Logs", "Metrics", "Traces"],
             tags=[ToolsetTag.CORE],
         )
 

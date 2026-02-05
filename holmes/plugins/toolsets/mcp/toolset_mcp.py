@@ -313,6 +313,7 @@ class RemoteMCPToolset(Toolset):
     ]
     tools: List[RemoteMCPTool] = Field(default_factory=list)  # type: ignore
     icon_url: str = "https://registry.npmmirror.com/@lobehub/icons-static-png/1.46.0/files/light/mcp.png"
+    categories: List[str] = ["Other"]
     _mcp_config: Optional[Union[MCPConfig, StdioMCPConfig]] = None
 
     def _render_headers(

@@ -4,7 +4,6 @@ import os
 from datetime import datetime
 from typing import Any, Optional, Tuple
 
-
 from holmes.core.tools import (
     CallablePrerequisite,
     ClassVar,
@@ -673,6 +672,7 @@ class DatadogMetricsToolset(Toolset):
                 QueryMetricsMetadata(toolset=self),
                 ListMetricTags(toolset=self),
             ],
+            categories=["Metrics"],
             tags=[ToolsetTag.CORE],
         )
         self._reload_instructions()

@@ -139,6 +139,7 @@ class CoreInvestigationToolset(Toolset):
             description="Core investigation tools for task management and planning",
             enabled=True,
             tools=[TodoWriteTool()],
+            categories=["Other"],
             tags=[ToolsetTag.CORE],
             is_default=True,
         )

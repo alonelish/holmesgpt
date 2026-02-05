@@ -3,7 +3,6 @@ import logging
 import os
 from typing import Any, ClassVar, Dict, Optional, Tuple, Type
 
-
 from holmes.core.tools import (
     CallablePrerequisite,
     StructuredToolResult,
@@ -73,6 +72,7 @@ class DatadogLogsToolset(Toolset):
             icon_url="https://imgix.datadoghq.com//img/about/presskit/DDlogo.jpg",
             prerequisites=[CallablePrerequisite(callable=self.prerequisites_callable)],
             tools=[],  # Initialize with empty tools first
+            categories=["Logs"],
             tags=[ToolsetTag.CORE],
         )
         # Now that parent is initialized and self.name exists, create the tool

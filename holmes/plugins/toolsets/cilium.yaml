@@ -3,6 +3,8 @@ toolsets:
     description: "Cilium CNI and Hubble network observability tools for troubleshooting network connectivity and security"
     docs_url: "https://robusta-dev.github.io/holmesgpt/data-sources/builtin-toolsets/cilium/"
     icon_url: "https://cilium.io/static/logo-dark-text.png"
+    categories:
+      - "Other"
     llm_instructions: |
       You have access to comprehensive Cilium and Hubble tools for debugging Kubernetes networking and security.
       Use these tools to investigate:
@@ -110,6 +112,8 @@ toolsets:
     description: "Hubble network observability tools for monitoring and troubleshooting network flows"
     docs_url: "https://robusta-dev.github.io/holmesgpt/data-sources/builtin-toolsets/cilium/#hubble"
     icon_url: "https://raw.githubusercontent.com/cilium/hubble/main/Documentation/images/hubble_logo.png"
+    categories:
+      - "Other"
     llm_instructions: |
       Use Hubble to observe and analyze network traffic flows in your Kubernetes cluster.
 

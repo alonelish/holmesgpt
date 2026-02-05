@@ -24,7 +24,9 @@ from holmes.core.tools import (
 )
 from holmes.plugins.prompts import load_and_render_prompt
 from holmes.plugins.toolsets.bash.common.bash import BashResult, execute_bash_command
-from holmes.plugins.toolsets.bash.common.cli_prefixes import load_cli_bash_tools_approved_prefixes
+from holmes.plugins.toolsets.bash.common.cli_prefixes import (
+    load_cli_bash_tools_approved_prefixes,
+)
 from holmes.plugins.toolsets.bash.common.config import BashExecutorConfig
 from holmes.plugins.toolsets.bash.validation import (
     DenyReason,
@@ -310,6 +312,7 @@ class BashExecutorToolset(Toolset):
             icon_url="https://raw.githubusercontent.com/Templarian/MaterialDesign/master/svg/console.svg",
             prerequisites=[CallablePrerequisite(callable=self.prerequisites_callable)],
             tools=[RunBashCommand(self)],
+            categories=["Other"],
             tags=[ToolsetTag.CORE],
             is_default=True,
         )

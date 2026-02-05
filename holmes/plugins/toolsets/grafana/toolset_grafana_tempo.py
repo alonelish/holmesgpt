@@ -1086,6 +1086,7 @@ class GrafanaTempoToolset(BaseGrafanaTempoToolset):
                 QueryMetricsInstant(self),
                 QueryMetricsRange(self),
             ],
+            categories=["Traces"],
         )
         template_file_path = os.path.abspath(
             os.path.join(os.path.dirname(__file__), "toolset_grafana_tempo.jinja2")

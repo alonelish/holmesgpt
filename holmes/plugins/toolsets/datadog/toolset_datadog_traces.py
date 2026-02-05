@@ -7,7 +7,6 @@ import os
 import re
 from typing import Any, Dict, Optional, Tuple
 
-
 from holmes.core.tools import (
     CallablePrerequisite,
     ClassVar,
@@ -63,6 +62,7 @@ class DatadogTracesToolset(Toolset):
                 GetSpans(toolset=self),
                 AggregateSpans(toolset=self),
             ],
+            categories=["Traces"],
             tags=[ToolsetTag.CORE],
         )
         self._load_llm_instructions_from_file(

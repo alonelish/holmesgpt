@@ -24,7 +24,6 @@ from typing import (
     Union,
 )
 
-from holmes.utils.pydantic_utils import build_config_example
 from jinja2 import Template
 from pydantic import (
     BaseModel,
@@ -47,6 +46,7 @@ from holmes.core.transformers import (
 from holmes.plugins.prompts import load_and_render_prompt
 from holmes.utils.config_utils import merge_transformers
 from holmes.utils.memory_limit import check_oom_and_append_hint, get_ulimit_prefix
+from holmes.utils.pydantic_utils import build_config_example
 
 if TYPE_CHECKING:
     from holmes.core.transformers import BaseTransformer
@@ -91,7 +91,7 @@ class StructuredToolResult(BaseModel):
     invocation: Optional[str] = None
     params: Optional[Dict] = None
     icon_url: Optional[str] = None
-    
+
     def get_stringified_data(self) -> str:
         if self.data is None:
             return ""
@@ -635,6 +635,10 @@ class Toolset(BaseModel):
     tags: List[ToolsetTag] = Field(
         default_factory=lambda: [ToolsetTag.CORE],
     )
+    categories: List[str] = Field(
+        default_factory=list,
+        description="Functional categories for organizing toolsets (e.g., Logs, Metrics, Traces, ITSM and Knowledgebase, Other)",
+    )
     config: Optional[Any] = None
     is_default: bool = False
     llm_instructions: Optional[str] = None
@@ -848,7 +852,6 @@ class Toolset(BaseModel):
         if not silent:
             logger.info(f"✅ Toolset {self.name}")
 
-
     def get_config_example(self) -> Optional[Dict[str, Any]]:
         """Returns a JSON-serializable example object for the toolset's configuration.
 
@@ -857,7 +860,6 @@ class Toolset(BaseModel):
         if self.config_classes:
             return build_config_example(self.config_classes[0])
         return None
-        
 
     def get_config_schema(self) -> Optional[Dict[str, Any]]:
         """Returns JSON Schema for the toolset's configuration.
@@ -941,6 +943,7 @@ class ToolsetDBModel(BaseModel):
     description: Optional[str] = None
     docs_url: Optional[str] = None
     installation_instructions: Optional[str] = None
+    categories: Optional[List[str]] = None
     updated_at: str = Field(default_factory=datetime.now().isoformat)
 
 

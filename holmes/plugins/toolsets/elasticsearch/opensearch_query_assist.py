@@ -62,6 +62,7 @@ class OpenSearchQueryAssistToolset(Toolset):
             experimental=True,
             icon_url="https://opensearch.org/assets/brand/PNG/Mark/opensearch_mark_default.png",
             tools=[PplQueryAssistTool(self)],
+            categories=["Other"],
             tags=[ToolsetTag.CORE],
             prerequisites=[ToolsetEnvironmentPrerequisite(env=["OPENSEARCH_URL"])],
         )

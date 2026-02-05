@@ -112,6 +112,7 @@ class ConnectivityCheckToolset(Toolset):
             tools=[
                 TcpCheckTool(self),
             ],
+            categories=["Other"],
             tags=[
                 ToolsetTag.CORE,
             ],

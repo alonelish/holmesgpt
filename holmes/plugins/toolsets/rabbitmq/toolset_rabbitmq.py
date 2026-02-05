@@ -30,9 +30,7 @@ class RabbitMQConfig(ToolsetConfig):
     clusters: List[RabbitMQClusterConfig] = Field(
         title="Clusters",
         description="List of RabbitMQ clusters to connect to",
-        examples=[
-            [build_config_example(RabbitMQClusterConfig)]
-        ],
+        examples=[[build_config_example(RabbitMQClusterConfig)]],
     )
 
 
@@ -149,6 +147,7 @@ class RabbitMQToolset(Toolset):
                 ListConfiguredClusters(toolset=self),
                 GetRabbitMQClusterStatus(toolset=self),
             ],
+            categories=["Other"],
             tags=[ToolsetTag.CORE],
         )
         self._reload_llm_instructions()

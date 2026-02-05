@@ -258,6 +258,7 @@ class RunbookToolset(Toolset):
                 ),
             ],
             docs_url="https://holmesgpt.dev/data-sources/",
+            categories=["Other"],
             tags=[
                 ToolsetTag.CORE,
             ],

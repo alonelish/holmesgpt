@@ -90,7 +90,7 @@ class KafkaConfig(ToolsetConfig):
     kafka_clusters: List[KafkaClusterConfig] = Field(
         title="Clusters",
         description="List of Kafka clusters to connect to",
-        examples=[[build_config_example(KafkaClusterConfig)]]
+        examples=[[build_config_example(KafkaClusterConfig)]],
     )
 
 
@@ -619,6 +619,7 @@ class KafkaToolset(Toolset):
             prerequisites=[CallablePrerequisite(callable=self.prerequisites_callable)],
             docs_url="https://holmesgpt.dev/data-sources/builtin-toolsets/kafka/",
             icon_url="https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcT-cR1JrBgJxB_SPVKUIRwtiHnR8qBvLeHXjQ&s",
+            categories=["Other"],
             tags=[ToolsetTag.CORE],
             tools=[
                 ListKafkaClusters(self),

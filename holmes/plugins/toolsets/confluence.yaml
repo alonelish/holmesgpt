@@ -3,6 +3,8 @@ toolsets:
     description: "Fetch confluence pages"
     docs_url: "https://holmesgpt.dev/data-sources/builtin-toolsets/confluence/"
     icon_url: "https://platform.robusta.dev/demos/confluence.svg"
+    categories:
+      - "ITSM and Knowledgebase"
     tags:
       - core
     prerequisites:

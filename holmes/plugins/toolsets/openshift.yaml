@@ -2,6 +2,8 @@ toolsets:
   openshift/core:
     description: "Read access to OpenShift cluster resources including projects, routes, and deployment configs"
     docs_url: "https://holmesgpt.dev/data-sources/builtin-toolsets/openshift/"
+    categories:
+      - "Other"
     tags:
       - core
     prerequisites:
@@ -155,6 +157,8 @@ toolsets:
   openshift/logs:
     description: "Read pod logs using oc command"
     docs_url: "https://holmesgpt.dev/data-sources/builtin-toolsets/openshift/"
+    categories:
+      - "Other"
     tags:
       - core
     prerequisites:
@@ -228,6 +232,8 @@ toolsets:
   openshift/live-metrics:
     description: "Provides real-time metrics for pods and nodes using oc"
     docs_url: "https://holmesgpt.dev/data-sources/builtin-toolsets/openshift/"
+    categories:
+      - "Other"
     llm_instructions: |
       The oc_top_pods or oc_top_nodes do not return time series data or metrics that can be used for graphs
       Do NOT use oc_top_pods or oc_top_nodes for graph generation - it only shows current snapshot data
@@ -249,6 +255,8 @@ toolsets:
   openshift/security:
     description: "OpenShift security-related resources and configurations"
     docs_url: "https://holmesgpt.dev/data-sources/builtin-toolsets/openshift/"
+    categories:
+      - "Other"
     tags:
       - core
     prerequisites:

@@ -51,6 +51,7 @@ class MongoDBAtlasToolset(Toolset):
         "https://www.mongodb.com/docs/atlas/reference/api-resources-spec/v2/"
     )
     icon_url: str = "https://webimages.mongodb.com/_com_assets/cms/kuyjf3vea2hg34taa-horizontal_default_slate_blue.svg?auto=format%252Ccompress"
+    categories: List[str] = ["Other"]
     tags: List[ToolsetTag] = [ToolsetTag.CORE]
     _session: requests.Session = PrivateAttr(default=requests.Session())
 

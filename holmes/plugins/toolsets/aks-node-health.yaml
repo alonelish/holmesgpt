@@ -1,6 +1,8 @@
 toolsets:
   aks/node-health:
     description: "Set of tools to troubleshoot AKS node health issues"
+    categories:
+      - "Other"
     tags:
       - cli
     prerequisites:

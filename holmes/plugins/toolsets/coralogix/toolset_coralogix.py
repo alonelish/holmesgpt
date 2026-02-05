@@ -191,6 +191,7 @@ class CoralogixToolset(Toolset):
             icon_url="https://avatars.githubusercontent.com/u/35295744?s=200&v=4",
             prerequisites=[CallablePrerequisite(callable=self.prerequisites_callable)],
             tools=[ExecuteDataPrimeQuery(self)],
+            categories=["Logs", "Metrics", "Traces"],
             tags=[ToolsetTag.CORE],
         )
         template_path = os.path.join(os.path.dirname(__file__), "coralogix.jinja2")

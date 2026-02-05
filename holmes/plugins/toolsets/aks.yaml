@@ -1,6 +1,8 @@
 toolsets:
   aks/core:
     description: "Set of tools to read Azure Kubernetes Service resources"
+    categories:
+      - "Other"
     tags:
       - cli
     prerequisites:
