@@ -1,0 +1,68 @@
+# V2: New version with a memory leak that causes OOMKill
+# Same deployment name — this is a rolling update from v1
+apiVersion: v1
+kind: Secret
+metadata:
+  name: inventory-app-v2
+  namespace: app-214
+type: Opaque
+stringData:
+  run.sh: |
+    #!/bin/sh
+    echo "[inventory-service v2.0.0] Starting..."
+    echo "[inventory-service] Initializing new caching layer..."
+    echo "[inventory-service] Loading product catalog into memory..."
+    # Simulate memory leak: allocate memory in a loop until OOMKilled
+    # Each iteration adds ~15MB, will exceed 64Mi limit on ~3rd-4th iteration
+    BATCH=1
+    while true; do
+      DATA=$(dd if=/dev/urandom bs=1M count=15 2>/dev/null | base64)
+      echo "[inventory-service] INFO: cached product batch $BATCH (${#DATA} bytes)"
+      BATCH=$((BATCH + 1))
+      sleep 2
+    done
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: inventory-service
+  namespace: app-214
+  labels:
+    app: inventory-service
+  annotations:
+    kubernetes.io/change-cause: "deploy v2.0.0 - new caching layer"
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: inventory-service
+  strategy:
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 1
+  template:
+    metadata:
+      labels:
+        app: inventory-service
+        version: v2
+    spec:
+      containers:
+      - name: inventory-service
+        image: busybox:1.36
+        command: ["/bin/sh", "/app/run.sh"]
+        ports:
+        - containerPort: 8080
+        volumeMounts:
+        - name: app-code
+          mountPath: /app
+        resources:
+          requests:
+            memory: "32Mi"
+            cpu: "10m"
+          limits:
+            memory: "64Mi"
+            cpu: "100m"
+      volumes:
+      - name: app-code
+        secret:
+          secretName: inventory-app-v2

@@ -1,0 +1,63 @@
+# Red herring: a "fraud-detection" service that logs connection errors to payment-db
+# It's running and healthy, but its logs are full of retry warnings that could
+# mislead Holmes into thinking the DB is the problem
+apiVersion: v1
+kind: Secret
+metadata:
+  name: fraud-detection-app
+  namespace: app-213
+type: Opaque
+stringData:
+  run.sh: |
+    #!/bin/sh
+    echo "[fraud-detection] Starting fraud detection service v2.4.1"
+    echo "[fraud-detection] Connecting to payment-db:5432..."
+    i=0
+    while true; do
+      i=$((i + 1))
+      echo "[fraud-detection] WARN: connection pool exhausted, retrying payment-db:5432 (attempt $i)"
+      echo "[fraud-detection] ERROR: timeout waiting for available connection from pool (30s)"
+      echo "[fraud-detection] WARN: falling back to direct connection for transaction txn-$(head -c 4 /dev/urandom | od -An -tx1 | tr -d ' ')"
+      echo "[fraud-detection] INFO: processed fraud check in 2847ms (degraded mode)"
+      sleep 3
+      echo "[fraud-detection] WARN: connection pool exhausted, retrying payment-db:5432 (attempt $((i + 1)))"
+      echo "[fraud-detection] INFO: recovered connection pool, 2/10 connections available"
+      echo "[fraud-detection] INFO: processed fraud check in 145ms"
+      sleep 5
+    done
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: fraud-detection
+  namespace: app-213
+  labels:
+    app: fraud-detection
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: fraud-detection
+  template:
+    metadata:
+      labels:
+        app: fraud-detection
+    spec:
+      containers:
+      - name: fraud-detection
+        image: busybox:1.36
+        command: ["/bin/sh", "/app/run.sh"]
+        volumeMounts:
+        - name: app-code
+          mountPath: /app
+        resources:
+          requests:
+            memory: "16Mi"
+            cpu: "10m"
+          limits:
+            memory: "32Mi"
+            cpu: "50m"
+      volumes:
+      - name: app-code
+        secret:
+          secretName: fraud-detection-app

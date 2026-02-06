@@ -1,17 +1,17 @@
 apiVersion: autoscaling/v2
 kind: HorizontalPodAutoscaler
 metadata:
-  name: order-gateway-hpa
-  namespace: app-212
+  name: dispatch-service-hpa
+  namespace: app-216
   labels:
-    app: order-gateway
+    app: dispatch-service
 spec:
   scaleTargetRef:
     apiVersion: apps/v1
     kind: Deployment
-    name: order-gateway
-  minReplicas: 2
-  maxReplicas: 10
+    name: dispatch-service
+  minReplicas: 3
+  maxReplicas: 3
   metrics:
   - type: Resource
     resource:
@@ -19,10 +19,3 @@ spec:
       target:
         type: Utilization
         averageUtilization: 50
-  behavior:
-    scaleUp:
-      stabilizationWindowSeconds: 0
-      policies:
-      - type: Percent
-        value: 100
-        periodSeconds: 15

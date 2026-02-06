@@ -5,7 +5,8 @@ metadata:
   namespace: app-212
 spec:
   hard:
-    requests.cpu: "400m"
-    requests.memory: "512Mi"
-    limits.cpu: "800m"
-    limits.memory: "1Gi"
+    # Tight quota: allows ~2 order-gateway pods + 2 decoy pods, but not more
+    requests.cpu: "500m"
+    requests.memory: "640Mi"
+    limits.cpu: "1200m"
+    limits.memory: "1280Mi"

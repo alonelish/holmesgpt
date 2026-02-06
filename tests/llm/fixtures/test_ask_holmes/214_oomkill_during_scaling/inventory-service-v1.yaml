@@ -1,21 +1,19 @@
+# V1: Stable version that runs fine within memory limits
 apiVersion: v1
 kind: Secret
 metadata:
-  name: inventory-app
+  name: inventory-app-v1
   namespace: app-214
 type: Opaque
 stringData:
-  app.sh: |
+  run.sh: |
     #!/bin/sh
-    echo "Starting inventory service..."
-    # Allocate memory that will exceed the 32Mi limit
-    # dd reads from /dev/urandom into memory via a variable
-    # This will trigger OOMKill
+    echo "[inventory-service v1.3.2] Starting..."
+    echo "[inventory-service] Connected to inventory-db:5432"
+    echo "[inventory-service] Cache warmed: 1247 SKUs loaded"
     while true; do
-      # Each iteration allocates ~20MB, will OOM on 2nd iteration
-      DATA=$(dd if=/dev/urandom bs=1M count=20 2>/dev/null | base64)
-      echo "Loaded batch into memory (size: ${#DATA} bytes)"
-      sleep 2
+      echo "[inventory-service] INFO: processed inventory check in 23ms"
+      sleep 5
     done
 ---
 apiVersion: apps/v1
@@ -25,20 +23,27 @@ metadata:
   namespace: app-214
   labels:
     app: inventory-service
+  annotations:
+    kubernetes.io/change-cause: "deploy v1.3.2 - stable release"
 spec:
   replicas: 3
   selector:
     matchLabels:
       app: inventory-service
+  strategy:
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 1
   template:
     metadata:
       labels:
         app: inventory-service
+        version: v1
     spec:
       containers:
       - name: inventory-service
         image: busybox:1.36
-        command: ["/bin/sh", "/app/app.sh"]
+        command: ["/bin/sh", "/app/run.sh"]
         ports:
         - containerPort: 8080
         volumeMounts:
@@ -49,12 +54,12 @@ spec:
             memory: "32Mi"
             cpu: "10m"
           limits:
-            memory: "32Mi"
+            memory: "64Mi"
             cpu: "100m"
       volumes:
       - name: app-code
         secret:
-          secretName: inventory-app
+          secretName: inventory-app-v1
 ---
 apiVersion: v1
 kind: Service
