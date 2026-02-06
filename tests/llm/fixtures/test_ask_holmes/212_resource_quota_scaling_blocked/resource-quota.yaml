@@ -1,0 +1,11 @@
+apiVersion: v1
+kind: ResourceQuota
+metadata:
+  name: compute-limits
+  namespace: app-212
+spec:
+  hard:
+    requests.cpu: "400m"
+    requests.memory: "512Mi"
+    limits.cpu: "800m"
+    limits.memory: "1Gi"

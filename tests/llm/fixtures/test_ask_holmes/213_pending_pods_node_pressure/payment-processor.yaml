@@ -1,0 +1,44 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: payment-processor
+  namespace: app-213
+  labels:
+    app: payment-processor
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: payment-processor
+  template:
+    metadata:
+      labels:
+        app: payment-processor
+    spec:
+      containers:
+      - name: payment-processor
+        image: registry.k8s.io/pause:3.9
+        ports:
+        - containerPort: 8080
+        resources:
+          requests:
+            memory: "64Mi"
+            cpu: "500m"
+          limits:
+            memory: "128Mi"
+            cpu: "1000m"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: payment-processor
+  namespace: app-213
+  labels:
+    app: payment-processor
+spec:
+  selector:
+    app: payment-processor
+  ports:
+  - port: 80
+    targetPort: 8080
+    name: http

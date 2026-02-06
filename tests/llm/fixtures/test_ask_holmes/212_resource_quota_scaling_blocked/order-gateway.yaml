@@ -1,0 +1,44 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: order-gateway
+  namespace: app-212
+  labels:
+    app: order-gateway
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: order-gateway
+  template:
+    metadata:
+      labels:
+        app: order-gateway
+    spec:
+      containers:
+      - name: order-gateway
+        image: registry.k8s.io/pause:3.9
+        ports:
+        - containerPort: 8080
+        resources:
+          requests:
+            memory: "128Mi"
+            cpu: "100m"
+          limits:
+            memory: "256Mi"
+            cpu: "200m"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: order-gateway
+  namespace: app-212
+  labels:
+    app: order-gateway
+spec:
+  selector:
+    app: order-gateway
+  ports:
+  - port: 80
+    targetPort: 8080
+    name: http

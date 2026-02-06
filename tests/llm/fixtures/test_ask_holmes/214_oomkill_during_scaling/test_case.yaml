@@ -1,0 +1,69 @@
+user_prompt:
+- "The inventory-service in namespace app-214 has high latency and some requests are failing. This started recently. Please investigate."
+
+expected_output:
+  - Must identify that pods are being OOMKilled (exit code 137 or OOMKilled reason)
+  - Must mention that the container memory limit is too low or that the pods are running out of memory
+  - Should note that pods are restarting repeatedly due to OOMKill, creating instability
+
+tags:
+  - kubernetes
+  - medium
+  - chain-of-causation
+
+setup_timeout: 180
+
+before_test: |
+  set -e
+
+  echo "📁 Creating namespace..."
+  kubectl create namespace app-214 --dry-run=client -o yaml | kubectl apply -f -
+
+  echo "🚀 Deploying inventory-service (memory-hungry app with tight limits)..."
+  kubectl apply -f inventory-service.yaml -n app-214
+
+  echo "⏳ Waiting for initial pods to start (they will OOMKill)..."
+  # We need at least one pod to exist, even if it's crashing
+  POD_EXISTS=false
+  for i in {1..60}; do
+    POD_COUNT=$(kubectl get pods -n app-214 -l app=inventory-service --no-headers 2>/dev/null | wc -l)
+    if [ "$POD_COUNT" -gt "0" ]; then
+      echo "✅ Found $POD_COUNT pods!"
+      POD_EXISTS=true
+      break
+    fi
+    sleep 1
+  done
+  if [ "$POD_EXISTS" = false ]; then
+    echo "❌ No pods created"
+    exit 1
+  fi
+
+  echo "⏳ Waiting for OOMKill events to appear..."
+  OOMKILL_FOUND=false
+  for i in {1..90}; do
+    # Check for OOMKilled in pod status
+    if kubectl get pods -n app-214 -l app=inventory-service -o jsonpath='{.items[*].status.containerStatuses[*].lastState.terminated.reason}' 2>/dev/null | grep -q "OOMKilled"; then
+      echo "✅ OOMKill detected in pod status!"
+      OOMKILL_FOUND=true
+      break
+    fi
+    sleep 1
+  done
+  if [ "$OOMKILL_FOUND" = false ]; then
+    echo "⚠️ No OOMKill detected yet, checking pod states..."
+    kubectl get pods -n app-214 -o wide
+    kubectl describe pods -n app-214 -l app=inventory-service | tail -30
+  fi
+
+  echo "📊 Applying HPA..."
+  kubectl apply -f hpa.yaml -n app-214
+
+  echo "📋 Final state:"
+  kubectl get pods -n app-214
+  kubectl get events -n app-214 --sort-by='.lastTimestamp' | tail -15
+
+  echo "✅ Test setup completed"
+
+after_test: |
+  kubectl delete namespace app-214 || true
