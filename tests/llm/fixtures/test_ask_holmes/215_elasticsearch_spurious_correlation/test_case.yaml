@@ -1,0 +1,188 @@
+# Test: Elasticsearch Subtle Memory Drift Detection in Cyclic Data
+#
+# 14 days of hourly system metrics (336 data points). All metrics follow a
+# strong diurnal pattern (business hours high, night low). Memory has a subtle
+# upward drift of ~0.5%/day starting on day 8, superimposed on the daily cycle.
+#
+# NO marker fields. The LLM must detect the drift by comparing daily statistics
+# (peak or average memory per day) across the 14-day window.
+#
+# The challenge:
+# - Daily cycle amplitude is ~25% (memory swings 35%-60% during business hours)
+# - The drift is only 0.5%/day, so day-over-day peaks increase by ~0.5%
+# - After 7 days of drift, memory peak is ~63.5% vs normal ~60% peak
+# - CPU, request_count, and gc_pause_ms do NOT drift - only memory
+# - The LLM must compute daily averages or peaks to see the 0.5%/day trend
+# - A simple max() across the entire dataset won't reveal WHEN the drift started
+#
+# Anti-hallucination: No marker fields. Must compare per-day statistics to find
+# the inflection point and compute the drift rate.
+#
+# Requirements:
+# - ELASTICSEARCH_URL: URL to Elasticsearch cluster
+# - ELASTICSEARCH_API_KEY: API key for authentication
+
+user_prompt: "Analyze the 14-day system metrics in app-215-sysmetrics. All metrics have daily cycles. We suspect one metric has a slow continuous upward drift (memory leak pattern) starting partway through the window. Compare daily peak values or daily averages for each metric across all 14 days. Be careful: a one-time step increase (level shift) is NOT a continuous drift/leak - a leak means the metric keeps going up day after day. Which metric shows a continuous upward drift (not a one-time step change)? On approximately which day did the drift begin? What is the approximate drift rate?"
+
+expected_output:
+  - "Must identify memory_usage_pct as the continuously drifting metric (not gc_pause_ms which has a step change, not a continuous drift)"
+  - "Must identify that the memory drift started around day 8 (approximately 2024-03-17)"
+  - "Must report the drift rate as approximately 0.5 percentage points per day"
+  - "Must NOT incorrectly identify gc_pause_ms as the leaking metric - gc_pause_ms has a one-time step increase on day 10, not a continuous drift"
+
+tags:
+  - elasticsearch
+  - hard
+  - benchmark
+  - fast
+
+setup_timeout: 300
+
+before_test: |
+  source ../../shared/es_test_utils.sh
+  es_setup
+  set -e
+
+  echo "Creating system metrics index for subtle drift detection..."
+
+  curl -sf -X DELETE "${ELASTICSEARCH_URL}/app-215-sysmetrics" \
+    -H "Authorization: ApiKey ${ELASTICSEARCH_API_KEY}" || true
+
+  CREATE_RESPONSE=$(curl -sf -X PUT "${ELASTICSEARCH_URL}/app-215-sysmetrics" \
+    -H "Content-Type: application/json" \
+    -H "Authorization: ApiKey ${ELASTICSEARCH_API_KEY}" \
+    -d '{
+      "settings": {
+        "number_of_shards": 1,
+        "number_of_replicas": 0
+      },
+      "mappings": {
+        "properties": {
+          "@timestamp": {"type": "date"},
+          "cpu_usage_pct": {"type": "float"},
+          "memory_usage_pct": {"type": "float"},
+          "request_count": {"type": "integer"},
+          "gc_pause_ms": {"type": "float"},
+          "hour_of_day": {"type": "integer"},
+          "day_number": {"type": "integer"}
+        }
+      }
+    }')
+
+  if ! echo "$CREATE_RESPONSE" | grep -q '"acknowledged":true'; then
+    echo "Failed to create index: $CREATE_RESPONSE"
+    exit 1
+  fi
+
+  echo "Generating 14 days of hourly system metrics with subtle memory drift..."
+
+  cat > /tmp/es_gen_215.py << 'PYSCRIPT'
+  import json, random, math
+
+  random.seed(777)
+
+  docs = []
+
+  # 14 days * 24 hours = 336 data points
+  for day in range(14):
+      for hour in range(24):
+          ts = f"2024-03-{10+day:02d}T{hour:02d}:00:00Z"
+
+          # Business hours load factor: peak at 13:00, low at 3:00
+          load_factor = 0.3 + 0.7 * max(0, math.sin((hour - 4) * math.pi / 14)) if 6 <= hour <= 20 else 0.1
+          # Weekends (days 5,6,12,13) have 30% of weekday load
+          if day % 7 >= 5:
+              load_factor *= 0.3
+
+          request_count = int(1000 * load_factor + random.gauss(0, 30))
+          request_count = max(request_count, 20)
+
+          # CPU follows load closely (no drift)
+          cpu = 15 + 45 * load_factor + random.gauss(0, 3)
+          cpu = round(min(max(cpu, 5), 95), 1)
+
+          # Memory follows load BUT has subtle drift starting day 8
+          memory_base = 30 + 30 * load_factor + random.gauss(0, 2.5)
+          # Add drift: 0.5% per day starting from day 7 (0-indexed)
+          drift = 0
+          if day >= 7:
+              drift = 0.5 * (day - 7 + hour / 24.0)
+          memory = round(min(max(memory_base + drift, 20), 95), 1)
+
+          # GC pauses: nightly batch at 2-3am, anti-correlated with load
+          # CONFOUND: one-time step increase on day 10 (looks like drift if you only compare start vs end)
+          gc_base = 0
+          if day >= 9:  # day 10 onwards (0-indexed day 9)
+              gc_base = 25  # one-time +25ms step increase, NOT a continuous drift
+          if 2 <= hour <= 3:
+              gc_pause = 150 + gc_base + random.gauss(0, 20)
+          else:
+              gc_pause = 15 + gc_base + random.gauss(0, 5)
+          gc_pause = round(max(gc_pause, 1), 1)
+
+          doc = {
+              "@timestamp": ts,
+              "cpu_usage_pct": cpu,
+              "memory_usage_pct": memory,
+              "request_count": request_count,
+              "gc_pause_ms": gc_pause,
+              "hour_of_day": hour,
+              "day_number": day + 1
+          }
+
+          docs.append(doc)
+
+  with open("/tmp/es_spurious_215.ndjson", "w") as f:
+      for doc in docs:
+          f.write(json.dumps({"index": {"_index": "app-215-sysmetrics"}}) + "\n")
+          f.write(json.dumps(doc) + "\n")
+
+  print(f"Generated {len(docs)} hourly data points over 14 days")
+
+  # Show daily memory peaks to verify drift
+  for day in range(14):
+      day_docs = [d for d in docs if d["day_number"] == day + 1]
+      mem_peak = max(d["memory_usage_pct"] for d in day_docs)
+      mem_avg = sum(d["memory_usage_pct"] for d in day_docs) / len(day_docs)
+      cpu_peak = max(d["cpu_usage_pct"] for d in day_docs)
+      print(f"  Day {day+1}: mem_peak={mem_peak:.1f}%, mem_avg={mem_avg:.1f}%, cpu_peak={cpu_peak:.1f}%")
+  PYSCRIPT
+  python3 /tmp/es_gen_215.py
+  rm -f /tmp/es_gen_215.py
+
+  RESPONSE=$(curl -sf -X POST "${ELASTICSEARCH_URL}/_bulk" \
+    -H "Content-Type: application/x-ndjson" \
+    -H "Authorization: ApiKey ${ELASTICSEARCH_API_KEY}" \
+    --data-binary @"/tmp/es_spurious_215.ndjson")
+
+  if echo "$RESPONSE" | grep -q '"errors":true'; then
+    echo "Errors during bulk insert"
+    exit 1
+  fi
+
+  rm -f /tmp/es_spurious_215.ndjson
+
+  curl -sf -X POST "${ELASTICSEARCH_URL}/app-215-sysmetrics/_refresh" \
+    -H "Authorization: ApiKey ${ELASTICSEARCH_API_KEY}" > /dev/null
+
+  sleep 2
+
+  TOTAL=$(curl -sf -X POST "${ELASTICSEARCH_URL}/app-215-sysmetrics/_count" \
+    -H "Content-Type: application/json" \
+    -H "Authorization: ApiKey ${ELASTICSEARCH_API_KEY}" \
+    -d '{"query": {"match_all": {}}}' | python3 -c "import sys,json; print(json.load(sys.stdin)['count'])")
+  echo "Total documents: $TOTAL"
+
+  if [ "$TOTAL" -ne 336 ]; then
+    echo "Expected 336 data points, got $TOTAL"
+    exit 1
+  fi
+
+  echo "Setup complete!"
+
+after_test: |
+  echo "Cleaning up sysmetrics index..."
+  curl -sf -X DELETE "${ELASTICSEARCH_URL}/app-215-sysmetrics" \
+    -H "Authorization: ApiKey ${ELASTICSEARCH_API_KEY}" || true
+  rm -f /tmp/es_spurious_215*.ndjson
+  echo "Cleanup complete"
