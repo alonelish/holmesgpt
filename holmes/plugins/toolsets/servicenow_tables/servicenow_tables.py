@@ -84,15 +84,33 @@ class ServiceNowTablesToolset(Toolset):
             return False, f"Failed to validate ServiceNow configuration: {str(e)}"
 
     def _perform_health_check(self) -> Tuple[bool, str]:
-        """Perform a health check by making a minimal API call."""
+        """Perform a two-tier health check.
+
+        First verifies authentication using a low-privilege table (sys_user),
+        then checks access to the sys_db_object table used for table discovery.
+        This distinguishes between an invalid API key and missing permissions.
+        """
+        # Step 1: Verify authentication with a low-privilege API call
+        auth_ok, auth_message = self._check_authentication()
+        if not auth_ok:
+            return False, auth_message
+
+        # Step 2: Check sys_db_object access (used for table discovery)
+        return self._check_table_discovery_access()
+
+    def _check_authentication(self) -> Tuple[bool, str]:
+        """Verify that the API key is valid by querying the sys_user table.
+
+        The sys_user table is accessible to most ServiceNow API keys and serves
+        as a reliable low-privilege endpoint for authentication verification.
+        """
         try:
-            # Query sys_db_object table with minimal data
-            data, headers = self._make_api_request(
-                endpoint="api/now/v2/table/sys_db_object",
+            self._make_api_request(
+                endpoint="api/now/v2/table/sys_user",
                 query_params={"sysparm_limit": 1, "sysparm_fields": "sys_id"},
                 timeout=10,
             )
-            return True, "ServiceNow configuration is valid and API is accessible."
+            return True, "ServiceNow authentication successful."
 
         except requests.exceptions.HTTPError as e:
             if e.response.status_code == 401:
@@ -103,7 +121,9 @@ class ServiceNowTablesToolset(Toolset):
             elif e.response.status_code == 403:
                 return (
                     False,
-                    "ServiceNow access denied. Please ensure your user has Table API access.",
+                    "ServiceNow authentication failed. The API key was rejected. "
+                    "Please verify the API key and the api_key_header setting "
+                    f"(currently: '{self.servicenow_config.api_key_header}').",
                 )
             else:
                 return (
@@ -113,12 +133,50 @@ class ServiceNowTablesToolset(Toolset):
         except requests.exceptions.ConnectionError:
             return (
                 False,
-                f"Failed to connect to ServiceNow instance at {self.config.api_url if self.config else 'unknown'}",
+                f"Failed to connect to ServiceNow instance at {self.servicenow_config.api_url}",
             )
         except requests.exceptions.Timeout:
-            return False, "ServiceNow health check timed out"
+            return False, "ServiceNow health check timed out."
         except Exception as e:
             return False, f"ServiceNow health check failed: {str(e)}"
+
+    def _check_table_discovery_access(self) -> Tuple[bool, str]:
+        """Check access to the sys_db_object table used for table discovery.
+
+        If this fails due to permissions, the toolset is still enabled since the
+        user may have access to other tables they need. A warning is returned
+        to inform them that table discovery won't work.
+        """
+        try:
+            self._make_api_request(
+                endpoint="api/now/v2/table/sys_db_object",
+                query_params={"sysparm_limit": 1, "sysparm_fields": "sys_id"},
+                timeout=10,
+            )
+            return True, "ServiceNow configuration is valid and API is accessible."
+
+        except requests.exceptions.HTTPError as e:
+            if e.response.status_code in (401, 403):
+                return (
+                    True,
+                    "ServiceNow authentication is valid, but the API key does not have "
+                    "permission to access the sys_db_object table. Table discovery will "
+                    "not work, but you can still query tables you have access to.",
+                )
+            else:
+                return (
+                    True,
+                    f"ServiceNow authentication is valid, but the sys_db_object table "
+                    f"returned an error ({e.response.status_code}). Table discovery may "
+                    f"not work, but you can still query tables you have access to.",
+                )
+        except Exception:
+            # Auth succeeded, so don't block the toolset for secondary check failures
+            return (
+                True,
+                "ServiceNow authentication is valid. Could not verify sys_db_object "
+                "table access, but the toolset is enabled.",
+            )
 
     @property
     def servicenow_config(self) -> ServiceNowTablesConfig:
