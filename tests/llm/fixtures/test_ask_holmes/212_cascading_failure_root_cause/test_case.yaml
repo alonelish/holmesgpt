@@ -38,6 +38,7 @@ tags:
   - elasticsearch
   - chain-of-causation
   - hard
+  - regression
 
 setup_timeout: 300
 
