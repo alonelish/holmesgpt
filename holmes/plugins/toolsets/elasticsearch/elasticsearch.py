@@ -413,13 +413,13 @@ class ElasticsearchSearch(BaseElasticsearchTool):
                         "Fields to include/exclude in response. Supported formats:\n"
                         "• Array: ['field1', 'field2'] - Include only these fields\n"
                         "• String: 'field1' - Include single field\n"
-                        "• Object: {\"includes\": [\"trace.*\", \"span.*\"], \"excludes\": [\"*.body\", \"*.stack_trace\"]}\n"
+                        '• Object: {"includes": ["trace.*", "span.*"], "excludes": ["*.body", "*.stack_trace"]}\n'
                         "  - Use wildcards (*) for pattern matching\n"
                         "  - Excludes are useful for filtering large fields (http.request.body, error.stack_trace, http.response.*)\n"
                         "• Boolean: false - Exclude all source (metadata only)\n\n"
                         "Examples:\n"
-                        "- Trace query: {\"includes\": [\"trace.*\", \"span.*\", \"service.*\"], \"excludes\": [\"*.request.*\", \"*.response.*\"]}\n"
-                        "- Logs: [\"@timestamp\", \"message\", \"level\", \"service.name\"]"
+                        '- Trace query: {"includes": ["trace.*", "span.*", "service.*"], "excludes": ["*.request.*", "*.response.*"]}\n'
+                        '- Logs: ["@timestamp", "message", "level", "service.name"]'
                     ),
                     type="object",
                     required=False,

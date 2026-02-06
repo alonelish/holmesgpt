@@ -88,9 +88,7 @@ def test_sync_toolsets_no_cluster_name(mock_dal):
 
 
 @patch("subprocess.run")
-def test_sync_toolsets_with_config_schema(
-    mock_subprocess_run, mock_dal, mock_config
-):
+def test_sync_toolsets_with_config_schema(mock_subprocess_run, mock_dal, mock_config):
     mock_subprocess_run.return_value = Mock(stdout="success", returncode=0)
 
     # Create a toolset without config_classes - should have null schema

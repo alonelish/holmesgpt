@@ -161,21 +161,33 @@ def build_system_prompt(
     Build the system prompt for both CLI and server modes.
     Returns None if the rendered prompt is empty.
     """
-    toolset_instructions_enabled = is_prompt_enabled(PromptComponent.TOOLSET_INSTRUCTIONS)
+    toolset_instructions_enabled = is_prompt_enabled(
+        PromptComponent.TOOLSET_INSTRUCTIONS
+    )
 
     template_context = {
         "intro_enabled": is_prompt_enabled(PromptComponent.INTRO),
-        "ask_user_enabled": ask_user_enabled and is_prompt_enabled(PromptComponent.ASK_USER),
+        "ask_user_enabled": ask_user_enabled
+        and is_prompt_enabled(PromptComponent.ASK_USER),
         "todowrite_enabled": is_prompt_enabled(PromptComponent.TODOWRITE_INSTRUCTIONS),
         "ai_safety_enabled": is_prompt_enabled(PromptComponent.AI_SAFETY),
         "toolset_instructions_enabled": toolset_instructions_enabled,
-        "permission_errors_enabled": is_prompt_enabled(PromptComponent.PERMISSION_ERRORS),
-        "general_instructions_enabled": is_prompt_enabled(PromptComponent.GENERAL_INSTRUCTIONS),
+        "permission_errors_enabled": is_prompt_enabled(
+            PromptComponent.PERMISSION_ERRORS
+        ),
+        "general_instructions_enabled": is_prompt_enabled(
+            PromptComponent.GENERAL_INSTRUCTIONS
+        ),
         "style_guide_enabled": is_prompt_enabled(PromptComponent.STYLE_GUIDE),
-        "runbooks_enabled": bool(runbooks) and is_prompt_enabled(PromptComponent.TIME_RUNBOOKS),
-        "cluster_name": cluster_name if is_prompt_enabled(PromptComponent.CLUSTER_NAME) else None,
+        "runbooks_enabled": bool(runbooks)
+        and is_prompt_enabled(PromptComponent.TIME_RUNBOOKS),
+        "cluster_name": cluster_name
+        if is_prompt_enabled(PromptComponent.CLUSTER_NAME)
+        else None,
         "toolsets": toolsets if toolset_instructions_enabled else [],
-        "system_prompt_additions": system_prompt_additions if is_prompt_enabled(PromptComponent.SYSTEM_PROMPT_ADDITIONS) else "",
+        "system_prompt_additions": system_prompt_additions
+        if is_prompt_enabled(PromptComponent.SYSTEM_PROMPT_ADDITIONS)
+        else "",
     }
 
     result = load_and_render_prompt("builtin://generic_ask.jinja2", template_context)
@@ -203,7 +215,9 @@ def build_user_prompt(
         user_prompt = append_all_files_to_user_prompt(user_prompt, file_paths)
 
     # Handle todowrite reminder (CLI mode passes True, server mode passes False)
-    if include_todowrite_reminder and is_prompt_enabled(PromptComponent.TODOWRITE_REMINDER):
+    if include_todowrite_reminder and is_prompt_enabled(
+        PromptComponent.TODOWRITE_REMINDER
+    ):
         user_prompt += get_tasks_management_system_reminder()
 
     # Enrich with runbooks (if TIME_RUNBOOKS component is enabled)

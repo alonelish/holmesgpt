@@ -8,7 +8,6 @@ access the data using bash commands (cat, grep, jq, head, tail, etc.).
 
 import json
 import logging
-import os
 import shutil
 import uuid
 from pathlib import Path
@@ -78,7 +77,7 @@ def detect_file_extension(data: Any) -> str:
         data_str = data.strip()
 
         # Try JSON first
-        if data_str.startswith(('{', '[')):
+        if data_str.startswith(("{", "[")):
             try:
                 json.loads(data_str)
                 return ".json"
@@ -241,28 +240,34 @@ def format_filesystem_pointer_message(
     lines.append("Access with bash commands:")
 
     if extension == ".json":
-        lines.extend([
-            f"- View structure: jq 'keys' {file_path}",
-            f"- Filter: jq '.items[] | select(.name==\"foo\")' {file_path}",
-            f"- Search: grep -i \"error\" {file_path}",
-            f"- First 100 lines: head -100 {file_path}",
-            f"- Count lines: wc -l {file_path}",
-        ])
+        lines.extend(
+            [
+                f"- View structure: jq 'keys' {file_path}",
+                f"- Filter: jq '.items[] | select(.name==\"foo\")' {file_path}",
+                f'- Search: grep -i "error" {file_path}',
+                f"- First 100 lines: head -100 {file_path}",
+                f"- Count lines: wc -l {file_path}",
+            ]
+        )
     elif extension == ".yaml":
-        lines.extend([
-            f"- Search: grep -i \"error\" {file_path}",
-            f"- View start: head -100 {file_path}",
-            f"- View end: tail -100 {file_path}",
-            f"- Find sections: grep -n \"^[a-zA-Z]\" {file_path}",
-            f"- Count lines: wc -l {file_path}",
-        ])
+        lines.extend(
+            [
+                f'- Search: grep -i "error" {file_path}',
+                f"- View start: head -100 {file_path}",
+                f"- View end: tail -100 {file_path}",
+                f'- Find sections: grep -n "^[a-zA-Z]" {file_path}',
+                f"- Count lines: wc -l {file_path}",
+            ]
+        )
     else:  # .txt or other
-        lines.extend([
-            f"- Search: grep -i \"pattern\" {file_path}",
-            f"- View start: head -100 {file_path}",
-            f"- View end: tail -100 {file_path}",
-            f"- Count lines: wc -l {file_path}",
-        ])
+        lines.extend(
+            [
+                f'- Search: grep -i "pattern" {file_path}',
+                f"- View start: head -100 {file_path}",
+                f"- View end: tail -100 {file_path}",
+                f"- Count lines: wc -l {file_path}",
+            ]
+        )
 
     return "\n".join(lines)
 

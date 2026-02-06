@@ -155,7 +155,9 @@ TOOLSET_STATUS_REFRESH_INTERVAL_SECONDS = int(
 
 # Filesystem storage for large tool results
 # When tool results exceed context window, save to filesystem instead of dropping
-HOLMES_TOOL_RESULT_STORAGE_ENABLED = load_bool("HOLMES_TOOL_RESULT_STORAGE_ENABLED", True)
+HOLMES_TOOL_RESULT_STORAGE_ENABLED = load_bool(
+    "HOLMES_TOOL_RESULT_STORAGE_ENABLED", True
+)
 HOLMES_TOOL_RESULT_STORAGE_PATH = os.environ.get(
     "HOLMES_TOOL_RESULT_STORAGE_PATH", "/tmp/holmes/tool_results"
 )

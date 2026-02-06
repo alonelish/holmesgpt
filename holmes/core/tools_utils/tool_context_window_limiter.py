@@ -84,7 +84,9 @@ def prevent_overly_big_tool_response(
             )
         else:
             # Filesystem storage disabled or failed - fall back to error message
-            relative_pct = ((messages_token - max_tokens_allowed) / messages_token) * 100
+            relative_pct = (
+                (messages_token - max_tokens_allowed) / messages_token
+            ) * 100
             error_message = (
                 f"The tool call result is too large to return: {messages_token} tokens.\n"
                 f"The maximum allowed tokens is {max_tokens_allowed} which is {format(relative_pct, '.1f')}% smaller.\n"

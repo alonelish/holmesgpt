@@ -48,7 +48,9 @@ class ServiceNowTablesConfig(ToolsetConfig):
 
 
 class ServiceNowTablesToolset(Toolset):
-    config_classes: ClassVar[list[Type[ServiceNowTablesConfig]]] = [ServiceNowTablesConfig]
+    config_classes: ClassVar[list[Type[ServiceNowTablesConfig]]] = [
+        ServiceNowTablesConfig
+    ]
 
     def __init__(self):
         super().__init__(

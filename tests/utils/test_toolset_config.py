@@ -3,7 +3,6 @@
 import logging
 from typing import ClassVar, Dict, Optional
 
-import pytest
 from pydantic import Field
 
 from holmes.utils.pydantic_utils import ToolsetConfig
@@ -101,7 +100,10 @@ class TestPrometheusConfigBackwardCompatibility:
 
         assert config.query_timeout_seconds_default == 45
         assert config.verify_ssl is False
-        assert "default_query_timeout_seconds -> query_timeout_seconds_default" in caplog.text
+        assert (
+            "default_query_timeout_seconds -> query_timeout_seconds_default"
+            in caplog.text
+        )
         assert "prometheus_ssl_enabled -> verify_ssl" in caplog.text
 
     def test_new_prometheus_fields_no_warning(self, caplog):

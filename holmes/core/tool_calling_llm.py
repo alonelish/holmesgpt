@@ -852,9 +852,7 @@ class ToolCallingLLM:
             tool_name=tool_call_result.tool_name,
             tool_call_id=tool_call_result.tool_call_id,
         )
-        approval = tool.requires_approval(
-            tool_call_result.result.params or {}, context
-        )
+        approval = tool.requires_approval(tool_call_result.result.params or {}, context)
         return not approval or not approval.needs_approval
 
     def _handle_tool_call_approval(
@@ -882,9 +880,7 @@ class ToolCallingLLM:
 
         # Re-check if approval is still needed (prefix may have been approved by another tool call)
         if self._is_tool_call_already_approved(tool_call_result):
-            logging.info(
-                f"Approval no longer needed for {tool_call_result.tool_name}"
-            )
+            logging.info(f"Approval no longer needed for {tool_call_result.tool_name}")
             with trace_span.start_span(type="tool") as tool_span:
                 tool_call_result.result = self._directly_invoke_tool_call(
                     tool_name=tool_call_result.tool_name,

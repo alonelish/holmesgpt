@@ -214,7 +214,7 @@ def test_format_tool_result_data_with_extra_metadata():
     tool_name = "test_tool"
     extra_metadata = {"bash_session_approved_prefixes": ["kubectl get"]}
     # With extra_metadata, the metadata prefix is included
-    expected = f'tool_call_metadata={json.dumps(extra_metadata)}\nhello'
+    expected = f"tool_call_metadata={json.dumps(extra_metadata)}\nhello"
     assert (
         format_tool_result_data(result, tool_call_id, tool_name, extra_metadata)
         == expected
@@ -282,7 +282,7 @@ def test_as_tool_call_message_with_extra_metadata():
     extra_metadata = {"bash_session_approved_prefixes": ["kubectl get"]}
     message = tcr.as_tool_call_message(extra_metadata=extra_metadata)
     # With extra_metadata, the metadata prefix IS included
-    expected_content = f'tool_call_metadata={json.dumps(extra_metadata)}\nhello'
+    expected_content = f"tool_call_metadata={json.dumps(extra_metadata)}\nhello"
     assert message == {
         "tool_call_id": "call1",
         "role": "tool",
