@@ -29,10 +29,15 @@ from holmes.config import (
     SourceFactory,
     SupportedTicketSources,
 )
-from holmes.core.prompt import build_initial_ask_messages, build_system_prompt, generate_user_prompt
+from holmes.core.prompt import (
+    build_initial_ask_messages,
+    build_system_prompt,
+    generate_user_prompt,
+)
 from holmes.core.resource_instruction import ResourceInstructionDocument
 from holmes.core.tools import pretty_print_toolset_status
 from holmes.core.tracing import SpanType, TracingFactory
+from holmes.init_wizard import run_init_wizard
 from holmes.interactive import run_interactive_loop
 from holmes.plugins.destinations import DestinationType
 from holmes.plugins.interfaces import Issue
@@ -332,7 +337,9 @@ def ask(
 
     if include_file:
         for file_path in include_file:
-            console.print(f"[bold yellow]Adding file {file_path} to context[/bold yellow]")
+            console.print(
+                f"[bold yellow]Adding file {file_path} to context[/bold yellow]"
+            )
 
     messages = build_initial_ask_messages(
         prompt,  # type: ignore
@@ -986,6 +993,22 @@ def refresh_toolsets(
     config = Config.load_from_file(config_file)
     cli_toolsets = config.toolset_manager.list_console_toolsets(refresh_status=True)
     pretty_print_toolset_status(cli_toolsets, console)
+
+
+@app.command()
+def init(
+    config_file: Optional[Path] = typer.Option(
+        None,
+        "--config",
+        help="Path to write the config file (default: ~/.holmes/config.yaml)",
+    ),
+    verbose: Optional[List[bool]] = opt_verbose,
+):
+    """
+    Interactive setup wizard to configure HolmesGPT
+    """
+    console = init_logging(verbose)
+    run_init_wizard(console, config_path=config_file)
 
 
 @app.command()
