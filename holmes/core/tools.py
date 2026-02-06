@@ -91,7 +91,8 @@ class StructuredToolResult(BaseModel):
     invocation: Optional[str] = None
     params: Optional[Dict] = None
     icon_url: Optional[str] = None
-    
+    images: Optional[List[Dict[str, Any]]] = None
+
     def get_stringified_data(self) -> str:
         if self.data is None:
             return ""
@@ -816,7 +817,6 @@ class Toolset(BaseModel):
         if not silent:
             logger.info(f"✅ Toolset {self.name}")
 
-
     def get_config_example(self) -> Optional[Dict[str, Any]]:
         """Returns a JSON-serializable example object for the toolset's configuration.
 
@@ -825,7 +825,6 @@ class Toolset(BaseModel):
         if self.config_classes:
             return build_config_example(self.config_classes[0])
         return None
-        
 
     def get_config_schema(self) -> Optional[Dict[str, Any]]:
         """Returns JSON Schema for the toolset's configuration.

@@ -29,16 +29,27 @@ class ToolCallResult(BaseModel):
     size: Optional[int] = None
 
     def as_tool_call_message(self, extra_metadata: Optional[Dict[str, Any]] = None):
+        text_content = format_tool_result_data(
+            tool_result=self.result,
+            tool_call_id=self.tool_call_id,
+            tool_name=self.tool_name,
+            extra_metadata=extra_metadata,
+        )
+        if self.result.images:
+            content: List[Dict[str, Any]] = [{"type": "text", "text": text_content}]
+            for img in self.result.images:
+                content.append({"type": "image_url", "image_url": img})
+            return {
+                "tool_call_id": self.tool_call_id,
+                "role": "tool",
+                "name": self.tool_name,
+                "content": content,
+            }
         return {
             "tool_call_id": self.tool_call_id,
             "role": "tool",
             "name": self.tool_name,
-            "content": format_tool_result_data(
-                tool_result=self.result,
-                tool_call_id=self.tool_call_id,
-                tool_name=self.tool_name,
-                extra_metadata=extra_metadata,
-            ),
+            "content": text_content,
         }
 
     def as_tool_result_response(self):
@@ -229,6 +240,7 @@ class IssueChatRequest(ChatRequestBaseModel):
     ask: str
     investigation_result: IssueInvestigationResult
     issue_type: str
+
 
 class ChatRequest(ChatRequestBaseModel):
     ask: str
