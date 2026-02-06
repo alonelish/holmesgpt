@@ -73,7 +73,7 @@ before_test: |
 
   echo "⏳ Waiting for HPA to attempt scale-up and hit quota..."
   QUOTA_HIT=false
-  for i in {1..120}; do
+  for i in {1..30}; do
     # Check if ReplicaSet has FailedCreate events from quota
     if kubectl get events -n app-212 --field-selector reason=FailedCreate 2>/dev/null | grep -q "exceeded quota"; then
       echo "✅ Quota exceeded events detected!"
@@ -83,7 +83,7 @@ before_test: |
     # Also check HPA desired vs current
     DESIRED=$(kubectl get hpa order-gateway-hpa -n app-212 -o jsonpath='{.status.desiredReplicas}' 2>/dev/null || echo "0")
     CURRENT=$(kubectl get hpa order-gateway-hpa -n app-212 -o jsonpath='{.status.currentReplicas}' 2>/dev/null || echo "0")
-    echo "⏳ HPA: desired=$DESIRED current=$CURRENT (attempt $i/120)"
+    echo "⏳ HPA: desired=$DESIRED current=$CURRENT (attempt $i/30)"
     sleep 2
   done
   if [ "$QUOTA_HIT" = false ]; then
