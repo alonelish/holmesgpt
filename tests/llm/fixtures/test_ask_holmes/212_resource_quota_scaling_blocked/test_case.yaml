@@ -89,13 +89,21 @@ before_test: |
   if [ "$QUOTA_HIT" = false ]; then
     echo "⚠️ Quota was not hit organically, forcing scale to ensure test state..."
     kubectl scale deployment/order-gateway --replicas=8 -n app-212
+    FORCED_QUOTA=false
     for i in {1..30}; do
       if kubectl get events -n app-212 --field-selector reason=FailedCreate 2>/dev/null | grep -q "exceeded quota"; then
         echo "✅ Quota exceeded events detected after forced scale!"
+        FORCED_QUOTA=true
         break
       fi
       sleep 1
     done
+    if [ "$FORCED_QUOTA" = false ]; then
+      echo "❌ Failed to trigger quota exceeded events"
+      kubectl get events -n app-212 --sort-by='.lastTimestamp' | tail -10
+      kubectl get resourcequota -n app-212
+      exit 1
+    fi
   fi
 
   echo "🧹 Cleaning up traffic generator..."

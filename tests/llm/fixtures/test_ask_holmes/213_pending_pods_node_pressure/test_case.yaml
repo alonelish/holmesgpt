@@ -45,13 +45,20 @@ before_test: |
   fi
 
   echo "⏳ Waiting for supporting service pods..."
-  for i in {1..30}; do
+  INFRA_READY=false
+  for i in {1..60}; do
     if kubectl wait --for=condition=ready pod -l tier=infra -n app-213 --timeout=5s 2>/dev/null; then
       echo "✅ Supporting services are ready!"
+      INFRA_READY=true
       break
     fi
     sleep 1
   done
+  if [ "$INFRA_READY" = false ]; then
+    echo "❌ Supporting services failed to become ready"
+    kubectl get pods -n app-213
+    exit 1
+  fi
 
   echo "🐛 Deploying noisy error-logging service (red herring)..."
   kubectl apply -f noisy-sidecar.yaml -n app-213

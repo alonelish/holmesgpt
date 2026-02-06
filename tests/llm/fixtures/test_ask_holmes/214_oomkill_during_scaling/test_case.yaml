@@ -45,13 +45,20 @@ before_test: |
   fi
 
   echo "⏳ Waiting for supporting services..."
-  for i in {1..30}; do
+  INFRA_READY=false
+  for i in {1..60}; do
     if kubectl wait --for=condition=ready pod -l tier=infra -n app-214 --timeout=5s 2>/dev/null; then
       echo "✅ Supporting services are ready!"
+      INFRA_READY=true
       break
     fi
     sleep 1
   done
+  if [ "$INFRA_READY" = false ]; then
+    echo "❌ Supporting services failed to become ready"
+    kubectl get pods -n app-214
+    exit 1
+  fi
 
   echo "📊 Applying HPA..."
   kubectl apply -f hpa.yaml -n app-214
@@ -70,9 +77,10 @@ before_test: |
     sleep 1
   done
   if [ "$OOMKILL_FOUND" = false ]; then
-    echo "⚠️ No OOMKill detected yet, checking pod states..."
+    echo "❌ No OOMKill detected after 120 seconds"
     kubectl get pods -n app-214 -o wide
     kubectl describe pods -n app-214 -l app=inventory-service | tail -30
+    exit 1
   fi
 
   echo "📋 Final state:"

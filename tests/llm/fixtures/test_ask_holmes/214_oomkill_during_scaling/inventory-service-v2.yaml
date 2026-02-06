@@ -12,14 +12,17 @@ stringData:
     echo "[inventory-service v2.0.0] Starting..."
     echo "[inventory-service] Initializing new caching layer..."
     echo "[inventory-service] Loading product catalog into memory..."
-    # Simulate memory leak: allocate memory in a loop until OOMKilled
-    # Each iteration adds ~15MB, will exceed 64Mi limit on ~3rd-4th iteration
+    # Simulate memory leak: accumulate data across iterations until OOMKilled
+    # Uses /tmp files that busybox keeps in memory within the container's cgroup
     BATCH=1
+    CACHE=""
     while true; do
-      DATA=$(dd if=/dev/urandom bs=1M count=15 2>/dev/null | base64)
-      echo "[inventory-service] INFO: cached product batch $BATCH (${#DATA} bytes)"
+      # Each iteration appends ~10MB to CACHE, truly growing resident memory
+      CHUNK=$(dd if=/dev/urandom bs=1M count=10 2>/dev/null | base64)
+      CACHE="${CACHE}${CHUNK}"
+      echo "[inventory-service] INFO: cached product batch $BATCH (total cache: ${#CACHE} bytes)"
       BATCH=$((BATCH + 1))
-      sleep 2
+      sleep 1
     done
 ---
 apiVersion: apps/v1

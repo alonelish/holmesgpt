@@ -70,12 +70,12 @@ before_test: |
   kubectl apply -f hpa.yaml -n app-215
 
   echo "📈 Generating CPU load on all pods to saturate HPA..."
-  kubectl apply -f cpu-stress.yaml -n app-215
+  kubectl apply -f analytics-worker.yaml -n app-215
 
   echo "⏳ Waiting for stress job pods to start..."
   STRESS_READY=false
   for i in {1..60}; do
-    RUNNING=$(kubectl get pods -n app-215 -l app=cpu-stress --no-headers 2>/dev/null | grep -c "Running" || echo "0")
+    RUNNING=$(kubectl get pods -n app-215 -l app=analytics-worker --no-headers 2>/dev/null | grep -c "Running" || echo "0")
     if [ "$RUNNING" -gt "0" ]; then
       echo "✅ Stress generators running!"
       STRESS_READY=true
@@ -106,7 +106,7 @@ before_test: |
   sleep 30
 
   echo "🧹 Cleaning up stress generators..."
-  kubectl delete -f cpu-stress.yaml -n app-215 --ignore-not-found=true
+  kubectl delete -f analytics-worker.yaml -n app-215 --ignore-not-found=true
 
   echo "📋 Final state:"
   kubectl get pods -n app-215

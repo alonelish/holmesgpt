@@ -1,19 +1,19 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: cpu-stress
+  name: analytics-worker
   namespace: app-215
   labels:
-    app: cpu-stress
+    app: analytics-worker
 spec:
   replicas: 3
   selector:
     matchLabels:
-      app: cpu-stress
+      app: analytics-worker
   template:
     metadata:
       labels:
-        app: cpu-stress
+        app: analytics-worker
     spec:
       containers:
       - name: stress
