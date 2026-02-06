@@ -1,10 +1,19 @@
 """Interactive setup wizard for HolmesGPT configuration."""
 
+import logging
 import os
+from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Set
 
 import yaml  # type: ignore
+from prompt_toolkit import Application
+from prompt_toolkit.key_binding import KeyBindings
+from prompt_toolkit.keys import Keys
+from prompt_toolkit.layout import Layout
+from prompt_toolkit.layout.containers import Window
+from prompt_toolkit.layout.controls import FormattedTextControl
+from prompt_toolkit.styles import Style as PTStyle
 from rich.console import Console
 from rich.panel import Panel
 from rich.prompt import Confirm, Prompt
@@ -50,128 +59,317 @@ AI_PROVIDERS: List[Dict[str, Any]] = [
     },
 ]
 
-CONFIGURABLE_TOOLSETS: List[Dict[str, Any]] = [
-    {
-        "display_name": "Prometheus",
-        "description": "Query metrics and alerting rules",
-        "toolset_names": ["prometheus/metrics"],
-        "fields": [
+# Internal/utility toolsets hidden from the wizard
+_INTERNAL_TOOLSETS = {
+    "core_investigation",
+    "bash",
+    "connectivity_check",
+    "robusta",
+    "runbook",
+    "kubectl_run",
+    "opensearch_query_assist",
+    "internet",
+    "internet/notion",
+}
+
+# Field name patterns indicating connection/auth parameters worth prompting
+_CONNECTION_FIELD_PATTERNS = {
+    "url",
+    "key",
+    "token",
+    "host",
+    "domain",
+    "account",
+    "password",
+    "username",
+    "endpoint",
+    "site",
+    "api_base",
+}
+
+# Field name patterns indicating secrets (masked input)
+_SECRET_FIELD_PATTERNS = {"key", "token", "password", "secret"}
+
+
+@dataclass
+class ToolsetEntry:
+    """Metadata about a discoverable toolset for the wizard."""
+
+    name: str
+    description: str
+    has_config: bool
+    config_fields: List[Dict[str, Any]] = field(default_factory=list)
+    env_vars: List[str] = field(default_factory=list)
+
+
+def _is_secret_field(field_name: str, prop: Dict[str, Any]) -> bool:
+    """Check if a config field should be treated as a secret."""
+    if prop.get("format") == "password" or prop.get("writeOnly"):
+        return True
+    name_lower = field_name.lower()
+    return any(p in name_lower for p in _SECRET_FIELD_PATTERNS)
+
+
+def _is_user_facing_field(field_name: str, is_required: bool) -> bool:
+    """Check if a config field should be shown to the user."""
+    if is_required:
+        return True
+    name_lower = field_name.lower()
+    return any(p in name_lower for p in _CONNECTION_FIELD_PATTERNS)
+
+
+def _resolve_field_type(prop: Dict[str, Any]) -> str:
+    """Extract the simple type from a JSON Schema property (handles Optional/anyOf)."""
+    if "type" in prop:
+        return str(prop["type"])
+    if "anyOf" in prop:
+        for option in prop["anyOf"]:
+            if isinstance(option, dict) and option.get("type") != "null":
+                return str(option.get("type", "string"))
+    return "string"
+
+
+def _extract_config_fields(toolset: Any) -> List[Dict[str, Any]]:
+    """Extract promptable config fields from a toolset's config schema."""
+    if not toolset.config_classes:
+        return []
+
+    config_cls = toolset.config_classes[0]
+    try:
+        schema = config_cls.model_json_schema()
+    except Exception:
+        return []
+
+    properties = schema.get("properties", {})
+    required_set = set(schema.get("required", []))
+
+    fields: List[Dict[str, Any]] = []
+    for name, prop in properties.items():
+        if not isinstance(prop, dict):
+            continue
+        if not _is_user_facing_field(name, name in required_set):
+            continue
+
+        field_type = _resolve_field_type(prop)
+        if field_type in ("object", "array"):
+            continue
+
+        raw_default = prop.get("default")
+        default = str(raw_default) if raw_default is not None else ""
+        if default == "None":
+            default = ""
+
+        title = prop.get("title", name.replace("_", " ").title())
+
+        fields.append(
             {
-                "key": "prometheus_url",
-                "prompt": "Prometheus URL",
-                "default": "http://localhost:9090",
-                "secret": False,
-            },
-        ],
-    },
-    {
-        "display_name": "Grafana",
-        "description": "Dashboards, Loki logs, and Tempo traces",
-        "toolset_names": ["grafana/dashboards", "grafana/loki", "grafana/tempo"],
-        "fields": [
-            {
-                "key": "url",
-                "prompt": "Grafana URL",
-                "default": "http://localhost:3000",
-                "secret": False,
-            },
-            {
-                "key": "api_key",
-                "prompt": "Grafana API key (optional, Enter to skip)",
-                "default": "",
-                "secret": True,
-            },
-        ],
-    },
-    {
-        "display_name": "Datadog",
-        "description": "Query logs, metrics, and traces",
-        "toolset_names": ["datadog/general"],
-        "fields": [
-            {
-                "key": "dd_api_key",
-                "prompt": "Datadog API key",
-                "default": "",
-                "secret": True,
-            },
-            {
-                "key": "dd_app_key",
-                "prompt": "Datadog application key",
-                "default": "",
-                "secret": True,
-            },
-            {
-                "key": "site_api_url",
-                "prompt": "Datadog site API URL",
-                "default": "https://api.datadoghq.com",
-                "secret": False,
-            },
-        ],
-    },
-    {
-        "display_name": "Elasticsearch / OpenSearch",
-        "description": "Search and query log data",
-        "toolset_names": ["elasticsearch/data"],
-        "fields": [
-            {
-                "key": "url",
-                "prompt": "Elasticsearch URL",
-                "default": "",
-                "secret": False,
-            },
-            {
-                "key": "api_key",
-                "prompt": "API key (optional, Enter to skip)",
-                "default": "",
-                "secret": True,
-            },
-        ],
-    },
-    {
-        "display_name": "New Relic",
-        "description": "Query application monitoring data via NRQL",
-        "toolset_names": ["newrelic"],
-        "fields": [
-            {
-                "key": "api_key",
-                "prompt": "New Relic API key (NRAK-...)",
-                "default": "",
-                "secret": True,
-            },
-            {
-                "key": "account_id",
-                "prompt": "New Relic account ID",
-                "default": "",
-                "secret": False,
-            },
-        ],
-    },
-    {
-        "display_name": "Coralogix",
-        "description": "Query logs and observability data",
-        "toolset_names": ["coralogix"],
-        "fields": [
-            {
-                "key": "team_hostname",
-                "prompt": "Team hostname (e.g., my-team)",
-                "default": "",
-                "secret": False,
-            },
-            {
-                "key": "domain",
-                "prompt": "Domain (e.g., eu2.coralogix.com)",
-                "default": "",
-                "secret": False,
-            },
-            {
-                "key": "api_key",
-                "prompt": "API key (cxuw_...)",
-                "default": "",
-                "secret": True,
-            },
-        ],
-    },
-]
+                "key": name,
+                "prompt": title,
+                "default": default,
+                "secret": _is_secret_field(name, prop),
+                "required": name in required_set,
+            }
+        )
+
+    return fields
+
+
+def _extract_env_vars(toolset: Any) -> List[str]:
+    """Extract required environment variable names from toolset prerequisites."""
+    env_vars: List[str] = []
+    for prereq in toolset.prerequisites:
+        if hasattr(prereq, "env") and isinstance(prereq.env, list):
+            env_vars.extend(prereq.env)
+    return env_vars
+
+
+def _discover_toolsets() -> List[ToolsetEntry]:
+    """Discover all available toolsets at runtime."""
+    from holmes.plugins.toolsets import load_builtin_toolsets
+
+    try:
+        all_toolsets = load_builtin_toolsets(dal=None)
+    except Exception:
+        logging.warning("Failed to load builtin toolsets", exc_info=True)
+        return []
+
+    entries: List[ToolsetEntry] = []
+    for ts in all_toolsets:
+        if ts.name in _INTERNAL_TOOLSETS:
+            continue
+
+        config_fields = _extract_config_fields(ts)
+        env_vars = _extract_env_vars(ts)
+
+        entries.append(
+            ToolsetEntry(
+                name=ts.name,
+                description=ts.description,
+                has_config=bool(ts.config_classes),
+                config_fields=config_fields,
+                env_vars=env_vars,
+            )
+        )
+
+    entries.sort(key=lambda e: e.name)
+    return entries
+
+
+def _run_searchable_multiselect(
+    items: List[ToolsetEntry],
+    console: Console,
+) -> List[int]:
+    """Run an interactive searchable multi-select list.
+
+    Returns list of selected indices into `items`, or empty list if cancelled.
+    """
+    if not items:
+        return []
+
+    search_text = [""]
+    cursor_pos = [0]
+    selected: Set[int] = set()
+    result: List[Optional[List[int]]] = [None]
+
+    max_visible = 15
+
+    def get_filtered() -> List[tuple[int, ToolsetEntry]]:
+        query = search_text[0].lower()
+        if not query:
+            return list(enumerate(items))
+        return [
+            (i, item)
+            for i, item in enumerate(items)
+            if query in item.name.lower() or query in item.description.lower()
+        ]
+
+    def clamp_cursor(filtered: List[tuple[int, ToolsetEntry]]) -> None:
+        if not filtered:
+            cursor_pos[0] = 0
+        elif cursor_pos[0] >= len(filtered):
+            cursor_pos[0] = max(0, len(filtered) - 1)
+
+    def get_scroll_offset(filtered_len: int) -> int:
+        if filtered_len <= max_visible:
+            return 0
+        if cursor_pos[0] < max_visible:
+            return 0
+        return min(cursor_pos[0] - max_visible + 1, filtered_len - max_visible)
+
+    def get_display() -> List[tuple[str, str]]:
+        filtered = get_filtered()
+        clamp_cursor(filtered)
+        lines: List[tuple[str, str]] = []
+
+        lines.append(("bold", "  Search: "))
+        lines.append(("", search_text[0]))
+        lines.append(("class:cursor", "\u258f"))
+        lines.append(("", "\n\n"))
+
+        if not filtered:
+            lines.append(("class:dim", "  No matches found.\n"))
+        else:
+            scroll_off = get_scroll_offset(len(filtered))
+            visible_end = min(scroll_off + max_visible, len(filtered))
+
+            if scroll_off > 0:
+                lines.append(("class:dim", f"    ... {scroll_off} more above\n"))
+
+            for j in range(scroll_off, visible_end):
+                orig_idx, item = filtered[j]
+                check = "x" if orig_idx in selected else " "
+                is_cursor = j == cursor_pos[0]
+
+                if is_cursor:
+                    lines.append(("bold", f"  > [{check}] {item.name}"))
+                else:
+                    lines.append(("", f"    [{check}] {item.name}"))
+                lines.append(("class:dim", f"  {item.description}\n"))
+
+            remaining = len(filtered) - visible_end
+            if remaining > 0:
+                lines.append(("class:dim", f"    ... {remaining} more below\n"))
+
+        lines.append(("", "\n"))
+        lines.append(("class:hint", f"  Selected: {len(selected)}"))
+        lines.append(("class:dim", f" | Showing {len(filtered)} of {len(items)}\n"))
+        lines.append(
+            (
+                "class:hint",
+                "  Space: toggle | Enter: confirm | Esc: cancel\n",
+            )
+        )
+
+        return lines
+
+    bindings = KeyBindings()
+
+    @bindings.add("up")
+    def _up(event: Any) -> None:
+        filtered = get_filtered()
+        if filtered and cursor_pos[0] > 0:
+            cursor_pos[0] -= 1
+
+    @bindings.add("down")
+    def _down(event: Any) -> None:
+        filtered = get_filtered()
+        if filtered and cursor_pos[0] < len(filtered) - 1:
+            cursor_pos[0] += 1
+
+    @bindings.add("space")
+    def _toggle(event: Any) -> None:
+        filtered = get_filtered()
+        if filtered and 0 <= cursor_pos[0] < len(filtered):
+            orig_idx = filtered[cursor_pos[0]][0]
+            if orig_idx in selected:
+                selected.discard(orig_idx)
+            else:
+                selected.add(orig_idx)
+
+    @bindings.add("enter")
+    def _confirm(event: Any) -> None:
+        result[0] = sorted(selected)
+        event.app.exit()
+
+    @bindings.add("escape")
+    @bindings.add("c-c")
+    def _cancel(event: Any) -> None:
+        result[0] = []
+        event.app.exit()
+
+    @bindings.add("c-h")
+    @bindings.add("backspace")
+    def _backspace(event: Any) -> None:
+        if search_text[0]:
+            search_text[0] = search_text[0][:-1]
+            cursor_pos[0] = 0
+
+    @bindings.add(Keys.Any)
+    def _char(event: Any) -> None:
+        char = event.data
+        if char.isprintable() and len(char) == 1:
+            search_text[0] += char
+            cursor_pos[0] = 0
+
+    style = PTStyle.from_dict(
+        {
+            "cursor": "#00ff00",
+            "dim": "#888888",
+            "hint": "#888888",
+        }
+    )
+
+    layout = Layout(Window(FormattedTextControl(get_display, show_cursor=False)))
+
+    app: Application[None] = Application(
+        layout=layout,
+        key_bindings=bindings,
+        style=style,
+        full_screen=False,
+    )
+
+    app.run()
+    return result[0] if result[0] is not None else []
 
 
 def _prompt_ai_provider(console: Console) -> Dict[str, Any]:
@@ -267,62 +465,73 @@ def _prompt_ai_provider(console: Console) -> Dict[str, Any]:
     return config
 
 
+def _prompt_toolset_config(
+    entry: ToolsetEntry, console: Console
+) -> Optional[Dict[str, str]]:
+    """Prompt user for a toolset's configuration values.
+
+    Returns dict of config values, or None if no values were provided.
+    """
+    if not entry.config_fields:
+        return None
+
+    console.print(f"\n  [bold]{entry.name}[/bold]")
+    field_values: Dict[str, str] = {}
+    for cfg_field in entry.config_fields:
+        label = cfg_field["prompt"]
+        if not cfg_field["required"]:
+            label += " (optional, Enter to skip)"
+        value = Prompt.ask(
+            f"  {label}",
+            default=cfg_field.get("default", ""),
+            password=cfg_field.get("secret", False),
+        )
+        if value:
+            field_values[cfg_field["key"]] = value
+
+    return field_values if field_values else None
+
+
 def _prompt_toolsets(console: Console) -> Dict[str, Dict[str, Any]]:
     """Prompt user to select and configure data source toolsets."""
     console.print("\n[bold]Step 2: Data Sources[/bold]\n")
     console.print(
         "HolmesGPT auto-detects tools like kubectl, helm, and docker.\n"
-        "You can also connect additional data sources:\n"
+        "Select additional data sources to configure:\n"
     )
 
-    for i, ts in enumerate(CONFIGURABLE_TOOLSETS, 1):
-        console.print(f"  {i}. {ts['display_name']} - {ts['description']}")
-
-    console.print()
-    console.print(
-        "Enter numbers to configure (comma-separated), or press Enter to skip:"
-    )
-    selection = Prompt.ask("Data sources", default="")
-
-    if not selection.strip():
+    entries = _discover_toolsets()
+    if not entries:
+        console.print("  [dim]No additional toolsets found. Continuing...[/dim]")
         return {}
 
-    selected_indices: List[int] = []
-    for part in selection.split(","):
-        part = part.strip()
-        try:
-            idx = int(part)
-            if 1 <= idx <= len(CONFIGURABLE_TOOLSETS):
-                selected_indices.append(idx - 1)
-        except ValueError:
-            pass
+    selected_indices = _run_searchable_multiselect(entries, console)
 
     if not selected_indices:
         return {}
 
     toolsets_config: Dict[str, Dict[str, Any]] = {}
 
+    # Configure each selected toolset
     for idx in selected_indices:
-        ts = CONFIGURABLE_TOOLSETS[idx]
-        console.print(f"\n  [bold]{ts['display_name']}[/bold]")
+        entry = entries[idx]
 
-        field_values: Dict[str, str] = {}
-        for field in ts["fields"]:
-            value = Prompt.ask(
-                f"  {field['prompt']}",
-                default=field.get("default", ""),
-                password=field.get("secret", False),
-            )
-            if value:
-                field_values[field["key"]] = value
-
-        if field_values:
-            toolset_names: List[str] = ts["toolset_names"]  # type: ignore[assignment]
-            for toolset_name in toolset_names:
-                toolsets_config[toolset_name] = {
+        if entry.config_fields:
+            config_values = _prompt_toolset_config(entry, console)
+            if config_values:
+                toolsets_config[entry.name] = {
                     "enabled": True,
-                    "config": dict(field_values),
+                    "config": config_values,
                 }
+            else:
+                toolsets_config[entry.name] = {"enabled": True}
+        else:
+            toolsets_config[entry.name] = {"enabled": True}
+
+        # Mention required env vars
+        if entry.env_vars:
+            env_list = ", ".join(f"${v}" for v in entry.env_vars)
+            console.print(f"  [dim]{entry.name} requires env vars: {env_list}[/dim]")
 
     return toolsets_config
 
@@ -344,9 +553,7 @@ def _build_config_dict(
     return config
 
 
-def run_init_wizard(
-    console: Console, config_path: Optional[Path] = None
-) -> None:
+def run_init_wizard(console: Console, config_path: Optional[Path] = None) -> None:
     """Run the interactive setup wizard to create a HolmesGPT config file."""
     if config_path is None:
         config_path = Path(config_path_dir) / "config.yaml"
