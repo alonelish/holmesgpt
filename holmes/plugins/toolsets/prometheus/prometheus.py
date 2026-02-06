@@ -44,7 +44,6 @@ from holmes.plugins.toolsets.utils import (
     standard_start_datetime_tool_param_description,
     toolset_name_for_one_liner,
 )
-from holmes.utils.cache import TTLCache
 from holmes.utils.pydantic_utils import ToolsetConfig
 
 PROMETHEUS_RULES_CACHE_KEY = "cached_prometheus_rules"
@@ -174,7 +173,6 @@ class PrometheusConfig(ToolsetConfig):
 
     @model_validator(mode="after")
     def validate_prom_config(self):
-
         # If openshift is enabled, and the user didn't configure auth headers, we will try to load the token from the service account.
         if IS_OPENSHIFT:
             if self.headers.get("Authorization"):
