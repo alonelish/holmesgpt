@@ -4,43 +4,39 @@ Connect HolmesGPT to Prometheus for metrics analysis and query generation.
 
 ## Quick Setup with AI Assistance
 
-If you need help setting up Prometheus and AlertManager in your Kubernetes cluster, copy this prompt to an AI assistant like Claude:
+If you need help connecting your existing Prometheus and AlertManager to HolmesGPT, copy this prompt to an AI assistant like Claude:
 
 ??? note "AI Setup Prompt (click to expand)"
 
     ```text
-    Help me set up Prometheus and AlertManager in my Kubernetes cluster for use with HolmesGPT.
+    Help me connect my existing Prometheus and AlertManager to HolmesGPT.
 
     My environment:
     - Kubernetes cluster: [DESCRIBE: e.g., EKS, GKE, AKS, on-prem, minikube]
-    - Current monitoring: [DESCRIBE: e.g., none, basic metrics, existing Prometheus]
-    - Namespace preference: [e.g., monitoring, observability, or suggest one]
+    - Prometheus deployment: [DESCRIBE: e.g., kube-prometheus-stack, standalone, managed service]
+    - Prometheus namespace: [e.g., monitoring, prometheus, observability]
+    - HolmesGPT deployment: [DESCRIBE: e.g., Helm chart, CLI on local machine, running in-cluster]
+    - Authentication: [DESCRIBE: e.g., none, basic auth, bearer token, OAuth]
 
     Please help me:
 
-    1. **Install Prometheus Stack**: Use kube-prometheus-stack Helm chart with:
-       - Prometheus server with appropriate retention (7 days default)
-       - AlertManager with basic configuration
-       - Standard Kubernetes recording rules and alerts
-       - ServiceMonitor CRDs for autodiscovery
+    1. **Find my Prometheus URL**: Determine the correct internal DNS URL or endpoint
+       for my Prometheus server that HolmesGPT can reach.
 
-    2. **Configure AlertManager**: Set up AlertManager with:
-       - A catch-all receiver (for testing)
-       - Grouping by alertname and namespace
-       - Reasonable group_wait (30s) and group_interval (5m)
+    2. **Find my AlertManager URL**: Determine the AlertManager endpoint for
+       investigating alerts with `holmes investigate alertmanager`.
 
-    3. **Verify the installation**: Show me commands to:
-       - Check all pods are running
-       - Port-forward to Prometheus UI
-       - Port-forward to AlertManager UI
-       - Test a simple PromQL query
+    3. **Configure authentication**: If my Prometheus requires authentication,
+       show me how to configure the headers in HolmesGPT.
 
-    4. **Generate HolmesGPT config**: Provide the toolset configuration for:
-       - Prometheus URL (cluster-internal DNS)
-       - Any required authentication headers
+    4. **Generate HolmesGPT config**: Provide the complete toolset configuration
+       I need to add to my Holmes config or Helm values.
 
-    Please provide step-by-step commands I can run, and explain any decisions
-    you're making based on my environment.
+    5. **Test the connection**: Give me commands to verify HolmesGPT can
+       successfully query Prometheus and fetch alerts from AlertManager.
+
+    Please provide step-by-step commands I can run to discover my endpoints
+    and verify the connection works.
     ```
 
 ## Prerequisites
