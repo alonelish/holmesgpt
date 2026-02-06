@@ -97,12 +97,14 @@ class RunBashCommand(Tool):
         super().__init__(
             name="bash",
             description=(
-                "Executes a simple one-liner bash command and returns its output. "
-                "Only supports: single commands, pipes (|), && , ||, ;, &. "
-                "NOT supported: for/while/until loops, if/case statements, subshells $() or backticks. "
+                "Executes a bash command and returns its output. "
+                "Supports: single commands, pipes (|), &&, ||, ;, &. "
+                "Also supports (requires user approval): for/while/until loops, if/case statements, "
+                "subshells $() and backticks. "
                 "You must provide suggested_prefixes - one prefix per command segment. "
                 "Example: for 'kubectl get pods | grep error', provide "
-                "suggested_prefixes=['kubectl get', 'grep']."
+                "suggested_prefixes=['kubectl get', 'grep']. "
+                "For scripts with loops/conditionals, provide prefixes for the key operations inside."
             ),
             parameters={
                 "command": ToolParameter(

@@ -19,6 +19,7 @@ from holmes.plugins.toolsets.bash.validation import (
     DenyReason,
     ValidationStatus,
     check_hardcoded_blocks,
+    check_hardcoded_blocks_in_raw_command,
     detect_subshells,
     get_effective_lists,
     match_prefix,
@@ -234,6 +235,35 @@ class TestCheckHardcodedBlocks:
         assert check_hardcoded_blocks("su -") == "su"
 
 
+class TestCheckHardcodedBlocksInRawCommand:
+    """Tests for hardcoded block detection in raw (unparsed) commands."""
+
+    def test_sudo_in_compound_detected(self):
+        """Test that sudo inside a compound command is detected."""
+        assert check_hardcoded_blocks_in_raw_command("for i in 1 2; do sudo echo $i; done") == "sudo"
+
+    def test_su_in_compound_detected(self):
+        """Test that su inside a compound command is detected."""
+        assert check_hardcoded_blocks_in_raw_command("if true; then su - root; fi") == "su"
+
+    def test_sudo_in_subshell_detected(self):
+        """Test that sudo inside a subshell is detected."""
+        assert check_hardcoded_blocks_in_raw_command("echo $(sudo whoami)") == "sudo"
+
+    def test_normal_compound_not_blocked(self):
+        """Test that normal compound commands are not blocked."""
+        assert check_hardcoded_blocks_in_raw_command("for i in 1 2 3; do echo $i; done") is None
+
+    def test_no_false_positives_from_substring(self):
+        """Test that words containing 'su' as substring are NOT blocked."""
+        assert check_hardcoded_blocks_in_raw_command("for f in issue result; do echo $f; done") is None
+        assert check_hardcoded_blocks_in_raw_command("echo sum") is None
+
+    def test_case_insensitive(self):
+        """Test that blocking is case-insensitive."""
+        assert check_hardcoded_blocks_in_raw_command("for i in 1; do SUDO echo $i; done") == "sudo"
+
+
 class TestGetEffectiveLists:
     """Tests for effective allow/deny list computation."""
 
@@ -371,8 +401,8 @@ class TestValidateCommand:
         assert result.status == ValidationStatus.DENIED
         assert result.deny_reason == DenyReason.DENY_LIST
 
-    def test_subshell_detection(self):
-        """Test that subshells are blocked."""
+    def test_subshell_requires_approval(self):
+        """Test that subshells require user approval."""
         config = BashExecutorConfig(allow=["echo"])
         allow_list, deny_list = get_effective_lists(config)
         result = validate_command(
@@ -381,8 +411,8 @@ class TestValidateCommand:
             allow_list,
             deny_list,
         )
-        assert result.status == ValidationStatus.DENIED
-        assert result.deny_reason == DenyReason.SUBSHELL_DETECTED
+        assert result.status == ValidationStatus.APPROVAL_REQUIRED
+        assert result.prefixes_needing_approval == ["echo"]
 
     def test_prefix_count_does_not_need_to_match_segment_count(self):
         """Test that prefix count doesn't need to match segment count."""
@@ -662,103 +692,103 @@ class TestCompoundStatements:
         )
         assert result.status == ValidationStatus.ALLOWED
 
-    # ==================== NOT SUPPORTED: Compound statements ====================
+    # ==================== REQUIRES APPROVAL: Compound statements ====================
 
-    def test_for_loop_rejected(self):
-        """For loop is NOT supported."""
+    def test_for_loop_requires_approval(self):
+        """For loop requires user approval."""
         config = BashExecutorConfig(allow=["for", "echo"])
         allow_list, deny_list = get_effective_lists(config)
         result = validate_command(
             'for i in 1 2 3 4 5; do echo "Iteration: $i"; done',
-            ["for"],
+            ["echo"],
             allow_list,
             deny_list,
         )
-        assert result.status == ValidationStatus.DENIED
-        assert result.deny_reason == DenyReason.COMPOUND_STATEMENT
+        assert result.status == ValidationStatus.APPROVAL_REQUIRED
+        assert result.prefixes_needing_approval == ["echo"]
 
-    def test_for_loop_with_command_rejected(self):
-        """For loop iterating over command output is NOT supported."""
+    def test_for_loop_with_command_requires_approval(self):
+        """For loop iterating over command output requires user approval."""
         config = BashExecutorConfig(allow=["for", "kubectl"])
         allow_list, deny_list = get_effective_lists(config)
         result = validate_command(
             "for pod in pod1 pod2; do kubectl logs $pod; done",
-            ["for"],
+            ["kubectl logs"],
             allow_list,
             deny_list,
         )
-        assert result.status == ValidationStatus.DENIED
-        assert result.deny_reason == DenyReason.COMPOUND_STATEMENT
+        assert result.status == ValidationStatus.APPROVAL_REQUIRED
+        assert result.prefixes_needing_approval == ["kubectl logs"]
 
-    def test_while_loop_rejected(self):
-        """While loop is NOT supported."""
+    def test_while_loop_requires_approval(self):
+        """While loop requires user approval."""
         config = BashExecutorConfig(allow=["while", "echo"])
         allow_list, deny_list = get_effective_lists(config)
         result = validate_command(
             "while true; do echo 'running'; sleep 1; done",
-            ["while"],
+            ["echo"],
             allow_list,
             deny_list,
         )
-        assert result.status == ValidationStatus.DENIED
-        assert result.deny_reason == DenyReason.COMPOUND_STATEMENT
+        assert result.status == ValidationStatus.APPROVAL_REQUIRED
+        assert result.prefixes_needing_approval == ["echo"]
 
-    def test_until_loop_rejected(self):
-        """Until loop is NOT supported."""
+    def test_until_loop_requires_approval(self):
+        """Until loop requires user approval."""
         config = BashExecutorConfig(allow=["until", "echo"])
         allow_list, deny_list = get_effective_lists(config)
         result = validate_command(
             "until false; do echo 'running'; done",
-            ["until"],
+            ["echo"],
             allow_list,
             deny_list,
         )
-        assert result.status == ValidationStatus.DENIED
-        assert result.deny_reason == DenyReason.COMPOUND_STATEMENT
+        assert result.status == ValidationStatus.APPROVAL_REQUIRED
+        assert result.prefixes_needing_approval == ["echo"]
 
-    def test_if_statement_rejected(self):
-        """If statement is NOT supported."""
+    def test_if_statement_requires_approval(self):
+        """If statement requires user approval."""
         config = BashExecutorConfig(allow=["if", "echo"])
         allow_list, deny_list = get_effective_lists(config)
         result = validate_command(
             "if [ -f /tmp/test ]; then echo 'exists'; fi",
-            ["if"],
+            ["echo"],
             allow_list,
             deny_list,
         )
-        assert result.status == ValidationStatus.DENIED
-        assert result.deny_reason == DenyReason.COMPOUND_STATEMENT
+        assert result.status == ValidationStatus.APPROVAL_REQUIRED
+        assert result.prefixes_needing_approval == ["echo"]
 
-    def test_if_else_statement_rejected(self):
-        """If-else statement is NOT supported."""
+    def test_if_else_statement_requires_approval(self):
+        """If-else statement requires user approval."""
         config = BashExecutorConfig(allow=["if", "echo"])
         allow_list, deny_list = get_effective_lists(config)
         result = validate_command(
             "if [ -f /tmp/test ]; then echo 'yes'; else echo 'no'; fi",
-            ["if"],
+            ["echo"],
             allow_list,
             deny_list,
         )
-        assert result.status == ValidationStatus.DENIED
-        assert result.deny_reason == DenyReason.COMPOUND_STATEMENT
+        assert result.status == ValidationStatus.APPROVAL_REQUIRED
+        assert result.prefixes_needing_approval == ["echo"]
 
-    def test_case_statement_rejected(self):
-        """Case statement is NOT supported."""
+    def test_case_statement_requires_approval(self):
+        """Case statement requires user approval."""
         config = BashExecutorConfig(allow=["case", "echo"])
         allow_list, deny_list = get_effective_lists(config)
         result = validate_command(
             "case $x in 1) echo one;; 2) echo two;; esac",
-            ["case"],
+            ["echo"],
             allow_list,
             deny_list,
         )
-        assert result.status == ValidationStatus.DENIED
-        assert result.deny_reason == DenyReason.COMPOUND_STATEMENT
+        assert result.status == ValidationStatus.APPROVAL_REQUIRED
+        assert result.prefixes_needing_approval == ["echo"]
 
-    # ==================== NOT SUPPORTED: Subshells ====================
+    # ==================== REQUIRES APPROVAL: Subshells ====================
 
-    def test_command_substitution_dollar_paren_rejected(self):
-        """Command substitution $() is NOT supported."""
+    def test_command_substitution_dollar_paren_requires_approval(self):
+        """Command substitution $() requires user approval."""
         config = BashExecutorConfig(allow=["echo"])
         allow_list, deny_list = get_effective_lists(config)
         result = validate_command(
@@ -767,11 +797,11 @@ class TestCompoundStatements:
             allow_list,
             deny_list,
         )
-        assert result.status == ValidationStatus.DENIED
-        assert result.deny_reason == DenyReason.SUBSHELL_DETECTED
+        assert result.status == ValidationStatus.APPROVAL_REQUIRED
+        assert result.prefixes_needing_approval == ["echo"]
 
-    def test_command_substitution_backticks_rejected(self):
-        """Command substitution with backticks is NOT supported."""
+    def test_command_substitution_backticks_requires_approval(self):
+        """Command substitution with backticks requires user approval."""
         config = BashExecutorConfig(allow=["echo"])
         allow_list, deny_list = get_effective_lists(config)
         result = validate_command(
@@ -780,11 +810,11 @@ class TestCompoundStatements:
             allow_list,
             deny_list,
         )
-        assert result.status == ValidationStatus.DENIED
-        assert result.deny_reason == DenyReason.SUBSHELL_DETECTED
+        assert result.status == ValidationStatus.APPROVAL_REQUIRED
+        assert result.prefixes_needing_approval == ["echo"]
 
-    def test_process_substitution_rejected(self):
-        """Process substitution <() and >() is NOT supported."""
+    def test_process_substitution_requires_approval(self):
+        """Process substitution <() and >() requires user approval."""
         config = BashExecutorConfig(allow=["diff", "cat"])
         allow_list, deny_list = get_effective_lists(config)
         result = validate_command(
@@ -793,8 +823,49 @@ class TestCompoundStatements:
             allow_list,
             deny_list,
         )
+        assert result.status == ValidationStatus.APPROVAL_REQUIRED
+        assert result.prefixes_needing_approval == ["diff"]
+
+    # ==================== STILL BLOCKED: Hardcoded blocks inside scripts ====================
+
+    def test_subshell_with_sudo_still_denied(self):
+        """Subshell containing sudo is still blocked."""
+        config = BashExecutorConfig(allow=["echo"])
+        allow_list, deny_list = get_effective_lists(config)
+        result = validate_command(
+            "echo $(sudo whoami)",
+            ["echo"],
+            allow_list,
+            deny_list,
+        )
         assert result.status == ValidationStatus.DENIED
-        assert result.deny_reason == DenyReason.SUBSHELL_DETECTED
+        assert result.deny_reason == DenyReason.HARDCODED_BLOCK
+
+    def test_compound_with_sudo_still_denied(self):
+        """Compound statement containing sudo is still blocked."""
+        config = BashExecutorConfig(allow=["echo"])
+        allow_list, deny_list = get_effective_lists(config)
+        result = validate_command(
+            "for i in 1 2 3; do sudo echo $i; done",
+            ["echo"],
+            allow_list,
+            deny_list,
+        )
+        assert result.status == ValidationStatus.DENIED
+        assert result.deny_reason == DenyReason.HARDCODED_BLOCK
+
+    def test_compound_with_su_still_denied(self):
+        """Compound statement containing su is still blocked."""
+        config = BashExecutorConfig(allow=["su"])
+        allow_list, deny_list = get_effective_lists(config)
+        result = validate_command(
+            "if true; then su - root; fi",
+            ["su"],
+            allow_list,
+            deny_list,
+        )
+        assert result.status == ValidationStatus.DENIED
+        assert result.deny_reason == DenyReason.HARDCODED_BLOCK
 
     # ==================== Error detection via parse_command_segments ====================
 
