@@ -4,9 +4,9 @@ Connect HolmesGPT to Prometheus for metrics analysis and query generation.
 
 ## Quick Setup with AI Assistance
 
-If you need help connecting your existing Prometheus and AlertManager to HolmesGPT, copy this prompt to an AI assistant like Claude:
+If you need help connecting your existing Prometheus and AlertManager to HolmesGPT, copy this prompt to an AI agent like Claude:
 
-??? note "AI Setup Prompt (click to expand)"
+??? note "Prompt for AI Agents (click to expand)"
 
     ```text
     Help me connect my existing Prometheus and AlertManager to HolmesGPT.
