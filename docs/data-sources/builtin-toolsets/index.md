@@ -13,6 +13,7 @@ HolmesGPT includes pre-built integrations for popular monitoring and observabili
 -   [:material-microsoft-azure:{ .lg .middle } **Azure Kubernetes Service**](aks.md)
 -   [:material-database:{ .lg .middle } **Azure SQL Database**](azure-sql.md)
 -   [:material-console:{ .lg .middle } **Bash**](bash.md)
+-   [:material-source-pull:{ .lg .middle } **Coding Agent**](coding-agent.md)
 -   [:simple-cilium:{ .lg .middle } **Cilium**](cilium.md)
 -   [:simple-confluence:{ .lg .middle } **Confluence**](confluence.md)
 -   [:material-network:{ .lg .middle } **Connectivity Check**](connectivity-check.md)
