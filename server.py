@@ -48,12 +48,9 @@ from holmes.core.models import (
     ChatResponse,
     FollowUpAction,
     InvestigateRequest,
-    InvestigationResult,
     IssueChatRequest,
 )
-from holmes.core.prompt import generate_user_prompt
 from holmes.core.scheduled_prompts import ScheduledPromptsExecutor
-from holmes.plugins.prompts import load_and_render_prompt
 from holmes.utils.connection_utils import patch_socket_create_connection
 from holmes.utils.holmes_status import update_holmes_status_in_db
 from holmes.utils.holmes_sync_toolsets import holmes_sync_toolsets_status
@@ -357,11 +354,17 @@ def chat(chat_request: ChatRequest, http_request: Request):
             f"streaming={chat_request.stream}"
         )
 
+        ask = chat_request.ask
+        if chat_request.robusta_issue_id:
+            issue_data = dal.get_issue_data(chat_request.robusta_issue_id)
+            if issue_data:
+                ask = f"{ask}\n\n#This is context from the issue:\n{json.dumps(issue_data)}"
+
         runbooks = config.get_runbook_catalog()
         ai = config.create_toolcalling_llm(dal=dal, model=chat_request.model)
         global_instructions = dal.get_global_instructions_for_account()
         messages = build_chat_messages(
-            chat_request.ask,
+            ask,
             chat_request.conversation_history,
             ai=ai,
             config=config,

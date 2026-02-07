@@ -230,8 +230,13 @@ class IssueChatRequest(ChatRequestBaseModel):
     investigation_result: IssueInvestigationResult
     issue_type: str
 
+
 class ChatRequest(ChatRequestBaseModel):
     ask: str
+    robusta_issue_id: Optional[str] = Field(
+        default=None,
+        description="Optional Robusta issue ID. When provided, the backend enriches the prompt with issue data and evidence from the database.",
+    )
     images: Optional[List[Union[str, Dict[str, Any]]]] = Field(
         default=None,
         description=(
