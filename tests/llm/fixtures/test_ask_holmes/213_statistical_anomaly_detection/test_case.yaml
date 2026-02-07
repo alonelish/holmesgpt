@@ -42,9 +42,9 @@ tags:
 setup_timeout: 300
 
 before_test: |
+  set -e
   source ../../shared/es_test_utils.sh
   es_setup
-  set -e
 
   INDICES=(
     "app-213-request-logs"
@@ -348,7 +348,12 @@ before_test: |
     -H "Authorization: ApiKey ${ELASTICSEARCH_API_KEY}" \
     -d '{"query":{"term":{"routing_group":"routing-group-5"}}}' \
     | grep -o '"count":[0-9]*' | cut -d':' -f2)
-  echo "  ✅ routing-group-5: ${RG5_ERRORS}/${RG5_TOTAL} errors (target: ~85%)"
+  if [ "$RG5_TOTAL" -ge 30 ] && [ "$RG5_ERRORS" -ge 25 ]; then
+    echo "  ✅ routing-group-5: ${RG5_ERRORS}/${RG5_TOTAL} errors (target: ~85%)"
+  else
+    echo "  ❌ routing-group-5: ${RG5_ERRORS}/${RG5_TOTAL} errors - expected ~85% error rate with 30+ requests"
+    ALL_GOOD=false
+  fi
 
   # Verify config audit code exists
   VERIFY=$(curl -sf -X POST "${ELASTICSEARCH_URL}/app-213-backend-config/_search" \
