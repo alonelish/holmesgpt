@@ -6,7 +6,7 @@ import os
 import re
 from dataclasses import dataclass
 from typing import Any, Dict, List, Optional, Tuple
-from urllib.parse import urlencode
+from urllib.parse import quote, urlencode
 
 from holmes.core.tools import (
     CallablePrerequisite,
@@ -402,9 +402,28 @@ def build_endpoint_from_template(
                 f"endpoint_template '{endpoint_template}' requires resource_id parameter",
                 "",
             )
-        # Substitute the placeholder with resource_id
-        # Find the placeholder name and replace it
-        endpoint = re.sub(r"\{[^}]+\}", resource_id, endpoint_template)
+
+        # Security: Validate resource_id to prevent path traversal and injection attacks
+        # Check for path traversal sequences and URL-encoded variants
+        resource_id_lower = resource_id.lower()
+        if (
+            "/" in resource_id
+            or ".." in resource_id
+            or "%2f" in resource_id_lower
+            or "%2e" in resource_id_lower
+        ):
+            return (
+                False,
+                f"resource_id '{resource_id}' contains invalid characters (path traversal not allowed)",
+                "",
+            )
+
+        # URL-encode the resource_id for safe path inclusion
+        safe_resource_id = quote(resource_id, safe="")
+
+        # Substitute the placeholder with resource_id using lambda to prevent
+        # backreference injection (e.g., \1, \g<name> sequences)
+        endpoint = re.sub(r"\{[^}]+\}", lambda _: safe_resource_id, endpoint_template)
     else:
         # Template has no placeholder - resource_id should be empty/None
         if resource_id:
