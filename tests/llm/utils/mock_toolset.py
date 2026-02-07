@@ -8,7 +8,7 @@ import threading
 import urllib
 from enum import Enum
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Type
+from typing import Dict, List, Optional, Type
 
 import pytest
 from pydantic import BaseModel

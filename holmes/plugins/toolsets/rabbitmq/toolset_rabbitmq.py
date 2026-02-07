@@ -30,9 +30,7 @@ class RabbitMQConfig(ToolsetConfig):
     clusters: List[RabbitMQClusterConfig] = Field(
         title="Clusters",
         description="List of RabbitMQ clusters to connect to",
-        examples=[
-            [build_config_example(RabbitMQClusterConfig)]
-        ],
+        examples=[[build_config_example(RabbitMQClusterConfig)]],
     )
 
 

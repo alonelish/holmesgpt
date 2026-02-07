@@ -114,7 +114,6 @@ Configure your test by defining these fields in `test_case.yaml`:
 - `test_env_vars`: Environment variables during test execution
 - `mock_policy`: Control mock behavior (`always_mock`, `never_mock`, or `inherit`)
 - `conversation_history`: For multi-turn conversation tests
-- `expected_sections`: For investigation tests only
 
 ## Mock Data Usage
 

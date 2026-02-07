@@ -318,7 +318,7 @@ Main configuration class for HolmesGPT.
 
 - `api_key` (str, optional) - LLM API key (can also use environment variables)
 - `model` (str, optional) - Model to use (default: "gpt-4.1")
-- `max_steps` (int, optional) - Maximum investigation steps (default: 10)
+- `max_steps` (int, optional) - Maximum tool-calling steps (default: 10)
 - `custom_toolsets` (list, optional) - Custom toolset file paths
 - `custom_runbooks` (list, optional) - Custom runbook file paths
 
@@ -329,11 +329,11 @@ Main configuration class for HolmesGPT.
 
 **Instance Methods:**
 
-- `create_console_toolcalling_llm()` - Create AI instance for investigations
+- `create_console_toolcalling_llm()` - Create AI instance for chat
 
 ### ToolCallingLLM
 
-Main AI instance for running investigations.
+Main AI instance for running troubleshooting sessions.
 
 **Methods:**
 

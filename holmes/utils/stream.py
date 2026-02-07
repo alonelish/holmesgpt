@@ -9,9 +9,7 @@ from litellm.litellm_core_utils.streaming_handler import CustomStreamWrapper
 from litellm.types.utils import ModelResponse, TextCompletionResponse
 from pydantic import BaseModel, Field
 
-from holmes.core.investigation_structured_output import process_response_into_sections
 from holmes.core.llm import TokenCountMetadata, get_llm_usage
-from holmes.utils import sentry_helper
 
 
 class StreamEvents(str, Enum):
@@ -53,35 +51,6 @@ create_rate_limit_error_message = partial(
     error_code=5204,
     msg="Rate limit exceeded",
 )
-
-
-def stream_investigate_formatter(
-    call_stream: Generator[StreamMessage, None, None],
-):
-    try:
-        for message in call_stream:
-            if message.event == StreamEvents.ANSWER_END:
-                (text_response, sections) = process_response_into_sections(  # type: ignore
-                    message.data.get("content")
-                )
-
-                if sections is None:
-                    sentry_helper.capture_sections_none(
-                        content=message.data.get("content"),
-                    )
-
-                yield create_sse_message(
-                    StreamEvents.ANSWER_END.value,
-                    {
-                        "sections": sections or {},
-                        "analysis": text_response,
-                        "metadata": message.data.get("metadata") or {},
-                    },
-                )
-            else:
-                yield create_sse_message(message.event.value, message.data)
-    except litellm.exceptions.RateLimitError as e:
-        yield create_rate_limit_error_message(str(e))
 
 
 def stream_chat_formatter(

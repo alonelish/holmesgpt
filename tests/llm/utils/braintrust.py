@@ -185,7 +185,7 @@ def log_to_braintrust(
     eval_span,
     test_case: HolmesTestCase,
     model: str,
-    result: Optional[Any] = None,  # Can be LLMResult or InvestigationResult
+    result: Optional[Any] = None,  # Can be LLMResult or CompactionResult
     scores: Optional[dict] = None,
     error: Optional[Exception] = None,
     mock_generation_config: Optional[Any] = None,
@@ -194,14 +194,14 @@ def log_to_braintrust(
 
     Args:
         eval_span: The Braintrust evaluation span
-        test_case: The test case being evaluated (AskHolmesTestCase or InvestigateTestCase)
+        test_case: The test case being evaluated
         model: The model being tested
-        result: The result object (LLMResult for ask, InvestigationResult for investigate)
+        result: The result object (LLMResult or CompactionResult)
         scores: Dictionary of scores (e.g., correctness)
         error: Exception if the test failed
         mock_generation_config: Mock configuration for additional context
     """
-    from tests.llm.utils.test_case_utils import AskHolmesTestCase, InvestigateTestCase
+    from tests.llm.utils.test_case_utils import AskHolmesTestCase
 
     # Prepare tags
     tags = (test_case.tags or []).copy()
@@ -209,26 +209,14 @@ def log_to_braintrust(
 
     # Determine output based on test type and error state
     if error:
-        if hasattr(
-            result, "result"
-        ):  # AskHolmesTestCase with LLMResult or CompactionResult
+        if hasattr(result, "result"):  # LLMResult or CompactionResult
             output = result.result if result else str(error)
-        elif hasattr(
-            result, "analysis"
-        ):  # InvestigateTestCase with InvestigationResult
-            output = result.analysis if result else str(error)
         else:
             output = str(error)
         scores = scores or {}
     else:
-        if hasattr(
-            result, "result"
-        ):  # AskHolmesTestCase with LLMResult or CompactionResult
+        if hasattr(result, "result"):  # LLMResult or CompactionResult
             output = result.result if result else ""
-        elif hasattr(
-            result, "analysis"
-        ):  # InvestigateTestCase with InvestigationResult
-            output = result.analysis if result else ""
         else:
             output = ""
 
@@ -243,8 +231,7 @@ def log_to_braintrust(
         ):
             # Find the first message with role "system"
             system_msg = next(
-                (m for m in result.messages if m.get("role") == "system"),
-                None
+                (m for m in result.messages if m.get("role") == "system"), None
             )
             prompt = system_msg["content"] if system_msg else "<NO SYSTEM PROMPT FOUND>"
         elif result and hasattr(result, "prompt"):
@@ -324,9 +311,6 @@ def log_to_braintrust(
             if isinstance(test_case.expected_output, str)
             else str(test_case.expected_output)
         )
-    elif isinstance(test_case, InvestigateTestCase):
-        input_data = str(test_case.investigate_request)
-        expected = str(test_case.expected_output)
     elif test_case.conversation_history:  # compaction test case
         from tests.llm.utils.conversation_formatter import (
             format_conversation_as_markdown,
@@ -361,9 +345,6 @@ def get_braintrust_url(
     """Generate Braintrust URL for a test.
 
     Args:
-        test_suite: Either "ask_holmes" or "investigate"
-        test_id: Test ID like "01"
-        test_name: Test name like "how_many_pods"
         span_id: Optional span ID for direct linking
         root_span_id: Optional root span ID for direct linking
 

@@ -2,7 +2,6 @@ import concurrent.futures
 import json
 import logging
 import re
-import textwrap
 from typing import Any, Callable, Dict, List, Optional, Type, Union
 
 import sentry_sdk
@@ -11,28 +10,18 @@ from openai.types.chat.chat_completion_message_tool_call import (
     ChatCompletionMessageToolCall,
 )
 from pydantic import BaseModel, Field
-from rich.console import Console
 
 from holmes.common.env_vars import (
     LOG_LLM_USAGE_RESPONSE,
     RESET_REPEATED_TOOL_CALL_CHECK_AFTER_COMPACTION,
     TEMPERATURE,
 )
-from holmes.core.investigation_structured_output import (
-    DEFAULT_SECTIONS,
-    REQUEST_STRUCTURED_OUTPUT_FROM_LLM,
-    InputSectionsDataType,
-    get_output_format_for_investigation,
-    is_response_an_incorrect_tool_call,
-)
-from holmes.core.issue import Issue
 from holmes.core.llm import LLM
 from holmes.core.models import (
     PendingToolApproval,
     ToolApprovalDecision,
     ToolCallResult,
 )
-from holmes.core.prompt import generate_user_prompt
 from holmes.core.safeguards import prevent_overly_repeated_tool_call
 from holmes.core.tools import (
     StructuredToolResult,
@@ -47,14 +36,7 @@ from holmes.core.tracing import DummySpan
 from holmes.core.truncation.input_context_window_limiter import (
     limit_input_context_window,
 )
-from holmes.plugins.prompts import load_and_render_prompt
-from holmes.plugins.runbooks import RunbookCatalog
-from holmes.utils import sentry_helper
 from holmes.utils.colors import AI_COLOR
-from holmes.utils.global_instructions import (
-    Instructions,
-    generate_runbooks_args,
-)
 from holmes.utils.stream import (
     StreamEvents,
     StreamMessage,
@@ -370,7 +352,6 @@ class ToolCallingLLM:
         system_prompt: str,
         user_prompt: str,
         response_format: Optional[Union[dict, Type[BaseModel]]] = None,
-        sections: Optional[InputSectionsDataType] = None,
         trace_span=DummySpan(),
         request_context: Optional[Dict[str, Any]] = None,
     ) -> LLMResult:
@@ -382,7 +363,6 @@ class ToolCallingLLM:
             messages,
             response_format=response_format,
             user_prompt=user_prompt,
-            sections=sections,
             trace_span=trace_span,
             request_context=request_context,
         )
@@ -418,7 +398,6 @@ class ToolCallingLLM:
         messages: List[Dict[str, str]],
         response_format: Optional[Union[dict, Type[BaseModel]]] = None,
         user_prompt: Optional[str] = None,
-        sections: Optional[InputSectionsDataType] = None,
         trace_span=DummySpan(),
         tool_number_offset: int = 0,
         request_context: Optional[Dict[str, Any]] = None,
@@ -481,22 +460,6 @@ class ToolCallingLLM:
             response = full_response.choices[0]  # type: ignore
 
             response_message = response.message  # type: ignore
-            if response_message and response_format:
-                # Litellm API is bugged. Stringify and parsing ensures all attrs of the choice are available.
-                dict_response = json.loads(full_response.to_json())  # type: ignore
-                incorrect_tool_call = is_response_an_incorrect_tool_call(
-                    sections, dict_response.get("choices", [{}])[0]
-                )
-
-                if incorrect_tool_call:
-                    logging.warning(
-                        "Detected incorrect tool call. Structured output will be disabled. This can happen on models that do not support tool calling. For Azure AI, make sure the model name contains 'gpt-4.1' or other structured output compatible models. To disable this holmes behaviour, set REQUEST_STRUCTURED_OUTPUT_FROM_LLM to `false`."
-                    )
-                    # disable structured output going forward and and retry
-                    sentry_helper.capture_structured_output_incorrect_tool_call()
-                    response_format = None
-                    max_steps = max_steps + 1
-                    continue
 
             new_message = response_message.model_dump(
                 exclude_defaults=True, exclude_unset=True, exclude_none=True
@@ -826,9 +789,7 @@ class ToolCallingLLM:
             tool_name=tool_call_result.tool_name,
             tool_call_id=tool_call_result.tool_call_id,
         )
-        approval = tool.requires_approval(
-            tool_call_result.result.params or {}, context
-        )
+        approval = tool.requires_approval(tool_call_result.result.params or {}, context)
         return not approval or not approval.needs_approval
 
     def _handle_tool_call_approval(
@@ -856,9 +817,7 @@ class ToolCallingLLM:
 
         # Re-check if approval is still needed (prefix may have been approved by another tool call)
         if self._is_tool_call_already_approved(tool_call_result):
-            logging.info(
-                f"Approval no longer needed for {tool_call_result.tool_name}"
-            )
+            logging.info(f"Approval no longer needed for {tool_call_result.tool_name}")
             with trace_span.start_span(type="tool") as tool_span:
                 tool_call_result.result = self._directly_invoke_tool_call(
                     tool_name=tool_call_result.tool_name,
@@ -907,7 +866,6 @@ class ToolCallingLLM:
         system_prompt: str = "",
         user_prompt: Optional[str] = None,
         response_format: Optional[Union[dict, Type[BaseModel]]] = None,
-        sections: Optional[InputSectionsDataType] = None,
         msgs: Optional[list[dict]] = None,
         enable_tool_approval: bool = False,
         tool_decisions: List[ToolApprovalDecision] | None = None,
@@ -987,22 +945,6 @@ class ToolCallingLLM:
                     raise
 
             response_message = full_response.choices[0].message  # type: ignore
-            if response_message and response_format:
-                # Litellm API is bugged. Stringify and parsing ensures all attrs of the choice are available.
-                dict_response = json.loads(full_response.to_json())  # type: ignore
-                incorrect_tool_call = is_response_an_incorrect_tool_call(
-                    sections, dict_response.get("choices", [{}])[0]
-                )
-
-                if incorrect_tool_call:
-                    logging.warning(
-                        "Detected incorrect tool call. Structured output will be disabled. This can happen on models that do not support tool calling. For Azure AI, make sure the model name contains 'gpt-4.1' or other structured output compatible models. To disable this holmes behaviour, set REQUEST_STRUCTURED_OUTPUT_FROM_LLM to `false`."
-                    )
-                    # disable structured output going forward and and retry
-                    sentry_helper.capture_structured_output_incorrect_tool_call()
-                    response_format = None
-                    max_steps = max_steps + 1
-                    continue
 
             messages.append(
                 response_message.model_dump(
@@ -1171,97 +1113,3 @@ class ToolCallingLLM:
         raise Exception(
             f"Failed to find assistant request for a tool_call in conversation history. tool_call_id={tool_call_id}"
         )
-
-
-# TODO: consider getting rid of this entirely and moving templating into the cmds in holmes_cli.py
-class IssueInvestigator(ToolCallingLLM):
-    """
-    Thin wrapper around ToolCallingLLM which:
-    1) Provides a default prompt for RCA
-    2) Accepts Issue objects
-    """
-
-    def __init__(
-        self,
-        tool_executor: ToolExecutor,
-        max_steps: int,
-        llm: LLM,
-        cluster_name: Optional[str],
-    ):
-        super().__init__(tool_executor, max_steps, llm)
-        self.cluster_name = cluster_name
-
-    def investigate(
-        self,
-        issue: Issue,
-        prompt: str,
-        console: Optional[Console] = None,
-        global_instructions: Optional[Instructions] = None,
-        sections: Optional[InputSectionsDataType] = None,
-        trace_span=DummySpan(),
-        runbooks: Optional[RunbookCatalog] = None,
-        request_context: Optional[Dict[str, Any]] = None,
-    ) -> LLMResult:
-        request_structured_output_from_llm = True
-        response_format = None
-
-        # This section is about setting vars to request the LLM to return structured output.
-        # It does not mean that Holmes will not return structured sections for investigation as it is
-        # capable of splitting the markdown into sections
-        if not sections or len(sections) == 0:
-            # If no sections are passed, we will not ask the LLM for structured output
-            sections = DEFAULT_SECTIONS
-            request_structured_output_from_llm = False
-            logging.info(
-                "No section received from the client. Default sections will be used."
-            )
-        elif self.llm.model and self.llm.model.startswith("bedrock"):
-            # Structured output does not work well with Bedrock Anthropic Sonnet 3.5 through litellm
-            request_structured_output_from_llm = False
-
-        if not REQUEST_STRUCTURED_OUTPUT_FROM_LLM:
-            request_structured_output_from_llm = False
-
-        if request_structured_output_from_llm:
-            response_format = get_output_format_for_investigation(sections)
-            logging.info("Structured output is enabled for this request")
-        else:
-            logging.info("Structured output is disabled for this request")
-
-        system_prompt = load_and_render_prompt(
-            prompt,
-            {
-                "issue": issue,
-                "sections": sections,
-                "structured_output": request_structured_output_from_llm,
-                "toolsets": self.tool_executor.toolsets,
-                "cluster_name": self.cluster_name,
-                "runbooks_enabled": True if runbooks else False,
-            },
-        )
-
-        base_user = ""
-        base_user = f"{base_user}\n #This is context from the issue:\n{issue.raw}"
-
-        runbooks_ctx = generate_runbooks_args(
-            runbook_catalog=runbooks,
-            global_instructions=global_instructions,
-        )
-        user_prompt = generate_user_prompt(
-            base_user,
-            runbooks_ctx,
-        )
-        logging.debug(
-            "Rendered system prompt:\n%s", textwrap.indent(system_prompt, "    ")
-        )
-        logging.debug("Rendered user prompt:\n%s", textwrap.indent(user_prompt, "    "))
-
-        res = self.prompt_call(
-            system_prompt,
-            user_prompt,
-            response_format=response_format,
-            sections=sections,
-            trace_span=trace_span,
-            request_context=request_context,
-        )
-        return res

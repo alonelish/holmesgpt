@@ -91,10 +91,10 @@ mcp_servers:
 When making requests to HolmesGPT, include the required header:
 
 ```bash
-curl -X POST http://holmes-server/api/investigate \
+curl -X POST http://holmes-server/api/chat \
   -H "X-Auth-Token: your-auth-token-here" \
   -H "Content-Type: application/json" \
-  -d '{"question": "Check system status"}'
+  -d '{"ask": "Check system status"}'
 ```
 
 ### URL Format

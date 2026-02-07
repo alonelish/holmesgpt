@@ -38,26 +38,18 @@ from holmes.common.env_vars import (
     TOOLSET_STATUS_REFRESH_INTERVAL_SECONDS,
 )
 from holmes.config import DEFAULT_CONFIG_LOCATION, Config
-from holmes.core import investigation
-from holmes.core.conversations import (
-    build_chat_messages,
-    build_issue_chat_messages,
-)
+from holmes.core.conversations import build_chat_messages
 from holmes.core.models import (
     ChatRequest,
     ChatResponse,
     FollowUpAction,
-    InvestigateRequest,
-    IssueChatRequest,
 )
 from holmes.core.scheduled_prompts import ScheduledPromptsExecutor
 from holmes.utils.connection_utils import patch_socket_create_connection
 from holmes.utils.holmes_status import update_holmes_status_in_db
 from holmes.utils.holmes_sync_toolsets import holmes_sync_toolsets_status
 from holmes.utils.log import EndpointFilter
-from holmes.utils.stream import stream_chat_formatter, stream_investigate_formatter
-
-# removed: add_runbooks_to_user_prompt
+from holmes.utils.stream import stream_chat_formatter
 
 
 def init_logging():
@@ -218,90 +210,6 @@ if LOG_PERFORMANCE:
             logging.info(
                 f"Request completed {request.method} {request.url.path} status={status_code} latency={process_time}ms"
             )
-
-
-@app.post("/api/investigate")
-def investigate_issues(investigate_request: InvestigateRequest, http_request: Request):
-    try:
-        runbooks = config.get_runbook_catalog()
-        request_context = extract_passthrough_headers(http_request)
-        result = investigation.investigate_issues(
-            investigate_request=investigate_request,
-            dal=dal,
-            config=config,
-            model=investigate_request.model,
-            runbooks=runbooks,
-            request_context=request_context,
-        )
-        return result
-
-    except AuthenticationError as e:
-        raise HTTPException(status_code=401, detail=e.message)
-    except litellm.exceptions.RateLimitError as e:
-        raise HTTPException(status_code=429, detail=e.message)
-    except Exception as e:
-        logging.error(f"Error in /api/investigate: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=str(e))
-
-
-@app.post("/api/stream/investigate")
-def stream_investigate_issues(req: InvestigateRequest, http_request: Request):
-    try:
-        ai, system_prompt, user_prompt, response_format, sections = (
-            investigation.get_investigation_context(req, dal, config)
-        )
-        request_context = extract_passthrough_headers(http_request)
-
-        return StreamingResponse(
-            stream_investigate_formatter(
-                ai.call_stream(
-                    system_prompt=system_prompt,
-                    user_prompt=user_prompt,
-                    response_format=response_format,
-                    sections=sections,
-                    request_context=request_context,
-                ),
-            ),
-            media_type="text/event-stream",
-        )
-
-    except AuthenticationError as e:
-        raise HTTPException(status_code=401, detail=e.message)
-    except Exception as e:
-        logging.exception(f"Error in /api/stream/investigate: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
-
-
-@app.post("/api/issue_chat")
-def issue_conversation(issue_chat_request: IssueChatRequest, http_request: Request):
-    try:
-        runbooks = config.get_runbook_catalog()
-        ai = config.create_toolcalling_llm(dal=dal, model=issue_chat_request.model)
-        global_instructions = dal.get_global_instructions_for_account()
-
-        messages = build_issue_chat_messages(
-            issue_chat_request=issue_chat_request,
-            ai=ai,
-            config=config,
-            global_instructions=global_instructions,
-            runbooks=runbooks,
-        )
-        request_context = extract_passthrough_headers(http_request)
-        llm_call = ai.messages_call(messages=messages, request_context=request_context)
-
-        return ChatResponse(
-            analysis=llm_call.result,
-            tool_calls=llm_call.tool_calls,
-            conversation_history=llm_call.messages,
-            metadata=llm_call.metadata,
-        )
-    except AuthenticationError as e:
-        raise HTTPException(status_code=401, detail=e.message)
-    except litellm.exceptions.RateLimitError as e:
-        raise HTTPException(status_code=429, detail=e.message)
-    except Exception as e:
-        logging.error(f"Error in /api/issue_chat: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=str(e))
 
 
 def already_answered(conversation_history: Optional[List[dict]]) -> bool:
