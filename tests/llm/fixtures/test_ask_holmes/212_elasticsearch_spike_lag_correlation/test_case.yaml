@@ -41,6 +41,7 @@ tags:
   - hard
   - benchmark
   - fast
+  - regression
 
 setup_timeout: 300
 
