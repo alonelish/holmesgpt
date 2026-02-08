@@ -12,6 +12,7 @@ if add_custom_certificate(ADDITIONAL_CERTIFICATE):
 import sys
 from holmes.utils.colors import USER_COLOR
 import json
+import logging
 import socket
 import uuid
 from pathlib import Path
@@ -22,6 +23,8 @@ from holmes import get_version  # type: ignore
 from holmes.config import (
     DEFAULT_CONFIG_LOCATION,
     Config,
+    SourceFactory,
+    SupportedTicketSources,
 )
 from holmes.core.prompt import build_initial_ask_messages
 from holmes.core.resource_instruction import ResourceInstructionDocument
@@ -30,6 +33,7 @@ from holmes.core.tracing import SpanType, TracingFactory
 from holmes.interactive import run_interactive_loop
 from holmes.plugins.destinations import DestinationType
 from holmes.plugins.interfaces import Issue
+from holmes.plugins.sources.opsgenie import OPSGENIE_TEAM_INTEGRATION_KEY_HELP
 from holmes.utils.console.logging import init_logging
 from holmes.utils.console.result import handle_result
 from holmes.utils.file_utils import write_json_file
@@ -37,6 +41,13 @@ from holmes.utils.file_utils import write_json_file
 app = typer.Typer(add_completion=False, pretty_exceptions_show_locals=False)
 
 
+investigate_app = typer.Typer(
+    add_completion=False,
+    name="investigate",
+    no_args_is_help=True,
+    help="Investigate firing alerts or tickets",
+)
+app.add_typer(investigate_app, name="investigate")
 generate_app = typer.Typer(
     add_completion=False,
     name="generate",
@@ -346,6 +357,450 @@ def ask(
 
     if trace_url:
         console.print(f"🔍 View trace: {trace_url}")
+
+
+def _investigate_issues(
+    ai,
+    issues: list,
+    config: Config,
+    console,
+    source=None,
+    update: bool = False,
+    json_output_file: Optional[str] = None,
+    source_name: str = "issue",
+):
+    """Shared logic for all investigate subcommands: loop over issues, ask Holmes about each one."""
+    results = []
+    for i, issue in enumerate(issues):
+        console.print(
+            f"[bold yellow]Analyzing {source_name} {i+1}/{len(issues)}: {issue.name}...[/bold yellow]"
+        )
+
+        prompt = f"Investigate this alert / issue and provide root cause analysis.\n\nTitle: {issue.name}"
+        if getattr(issue, "description", None):
+            prompt += f"\nDescription: {issue.description}"
+        prompt += f"\n\nContext:\n{json.dumps(issue.raw, indent=2)}"
+
+        messages = build_initial_ask_messages(
+            prompt, [], ai.tool_executor, config.get_runbook_catalog(), None
+        )
+        result = ai.call(messages)
+
+        handle_result(result, console, DestinationType.CLI, config, issue, False, True)
+
+        if update and source:
+            source.write_back_result(issue.id, result)
+            console.print(f"[bold]Updated {issue.url}.[/bold]")
+
+        results.append({"issue": issue.model_dump(), "result": result.model_dump()})
+
+    if json_output_file:
+        write_json_file(json_output_file, results)
+
+
+@investigate_app.command()
+def alertmanager(
+    alertmanager_url: Optional[str] = typer.Option(None, help="AlertManager url"),
+    alertmanager_alertname: Optional[str] = typer.Option(
+        None,
+        help="Investigate all alerts with this name (can be regex that matches multiple alerts). If not given, defaults to all firing alerts",
+    ),
+    alertmanager_label: Optional[List[str]] = typer.Option(
+        [],
+        help="For filtering alerts with a specific label. Must be of format key=value. If --alertmanager-label is passed multiple times, alerts must match ALL labels",
+    ),
+    alertmanager_username: Optional[str] = typer.Option(
+        None, help="Username to use for basic auth"
+    ),
+    alertmanager_password: Optional[str] = typer.Option(
+        None, help="Password to use for basic auth"
+    ),
+    alertmanager_file: Optional[Path] = typer.Option(
+        None, help="Load alertmanager alerts from a file (used by the test framework)"
+    ),
+    alertmanager_limit: Optional[int] = typer.Option(
+        None, "-n", help="Limit the number of alerts to process"
+    ),
+    # common options
+    api_key: Optional[str] = opt_api_key,
+    model: Optional[str] = opt_model,
+    config_file: Optional[Path] = opt_config_file,
+    custom_toolsets: Optional[List[Path]] = opt_custom_toolsets,
+    max_steps: Optional[int] = opt_max_steps,
+    verbose: Optional[List[bool]] = opt_verbose,
+    # advanced options
+    destination: Optional[DestinationType] = opt_destination,
+    slack_token: Optional[str] = opt_slack_token,
+    slack_channel: Optional[str] = opt_slack_channel,
+    json_output_file: Optional[str] = opt_json_output_file,
+):
+    """
+    Investigate Prometheus/Alertmanager alerts
+    """
+    console = init_logging(verbose)
+    config = Config.load_from_file(
+        config_file,
+        api_key=api_key,
+        model=model,
+        max_steps=max_steps,
+        alertmanager_url=alertmanager_url,
+        alertmanager_username=alertmanager_username,
+        alertmanager_password=alertmanager_password,
+        alertmanager_alertname=alertmanager_alertname,
+        alertmanager_label=alertmanager_label,
+        alertmanager_file=alertmanager_file,
+        slack_token=slack_token,
+        slack_channel=slack_channel,
+        custom_toolsets_from_cli=custom_toolsets,
+    )
+    ai = config.create_console_toolcalling_llm(dal=None, model_name=model)
+
+    source = config.create_alertmanager_source()
+    try:
+        issues = source.fetch_issues()
+    except Exception as e:
+        logging.error("Failed to fetch issues from alertmanager", exc_info=e)
+        return
+
+    if alertmanager_limit is not None:
+        console.print(
+            f"[bold yellow]Limiting to {alertmanager_limit}/{len(issues)} issues.[/bold yellow]"
+        )
+        issues = issues[:alertmanager_limit]
+
+    console.print(
+        f"[bold yellow]Analyzing {len(issues)} alerts.[/bold yellow] [red]Press Ctrl+C to stop.[/red]"
+    )
+    _investigate_issues(
+        ai,
+        issues,
+        config,
+        console,
+        json_output_file=json_output_file,
+        source_name="alert",
+    )
+
+
+@investigate_app.command()
+def jira(
+    jira_url: Optional[str] = typer.Option(
+        None,
+        help="Jira url - e.g. https://your-company.atlassian.net",
+        envvar="JIRA_URL",
+    ),
+    jira_username: Optional[str] = typer.Option(
+        None,
+        help="The email address with which you log into Jira",
+        envvar="JIRA_USERNAME",
+    ),
+    jira_api_key: str = typer.Option(None, envvar="JIRA_API_KEY"),
+    jira_query: Optional[str] = typer.Option(
+        None,
+        help="Investigate tickets matching a JQL query (e.g. 'project=DEFAULT_PROJECT')",
+    ),
+    update: Optional[bool] = typer.Option(False, help="Update Jira with AI results"),
+    # common options
+    api_key: Optional[str] = opt_api_key,
+    model: Optional[str] = opt_model,
+    config_file: Optional[Path] = opt_config_file,
+    custom_toolsets: Optional[List[Path]] = opt_custom_toolsets,
+    max_steps: Optional[int] = opt_max_steps,
+    verbose: Optional[List[bool]] = opt_verbose,
+    json_output_file: Optional[str] = opt_json_output_file,
+):
+    """
+    Investigate Jira tickets
+    """
+    console = init_logging(verbose)
+    config = Config.load_from_file(
+        config_file,
+        api_key=api_key,
+        model=model,
+        max_steps=max_steps,
+        jira_url=jira_url,
+        jira_username=jira_username,
+        jira_api_key=jira_api_key,
+        jira_query=jira_query,
+        custom_toolsets_from_cli=custom_toolsets,
+    )
+    ai = config.create_console_toolcalling_llm(dal=None, model_name=model)
+    source = config.create_jira_source()
+    try:
+        issues = source.fetch_issues()
+    except Exception as e:
+        logging.error("Failed to fetch issues from Jira", exc_info=e)
+        return
+
+    console.print(
+        f"[bold yellow]Analyzing {len(issues)} Jira tickets.[/bold yellow] [red]Press Ctrl+C to stop.[/red]"
+    )
+    _investigate_issues(
+        ai,
+        issues,
+        config,
+        console,
+        source=source,
+        update=update,
+        json_output_file=json_output_file,
+        source_name="Jira ticket",
+    )
+
+
+@investigate_app.command()
+def ticket(
+    prompt: str = typer.Argument(help="What to ask the LLM (user prompt)"),
+    source: SupportedTicketSources = typer.Option(
+        ...,
+        help=f"Source system to investigate the ticket from. Supported sources: {', '.join(s.value for s in SupportedTicketSources)}",
+    ),
+    ticket_url: Optional[str] = typer.Option(
+        None, help="URL - e.g. https://your-company.atlassian.net", envvar="TICKET_URL"
+    ),
+    ticket_username: Optional[str] = typer.Option(
+        None,
+        help="The email address with which you log into your Source",
+        envvar="TICKET_USERNAME",
+    ),
+    ticket_api_key: Optional[str] = typer.Option(None, envvar="TICKET_API_KEY"),
+    ticket_id: Optional[str] = typer.Option(
+        None, help="ticket ID to investigate (e.g., 'KAN-1')"
+    ),
+    config_file: Optional[Path] = opt_config_file,
+    model: Optional[str] = opt_model,
+):
+    """
+    Fetch and investigate a ticket from the specified source
+    """
+    console = init_logging([])
+    try:
+        ticket_source = SourceFactory.create_source(
+            source=source,
+            config_file=config_file,
+            ticket_url=ticket_url,
+            ticket_username=ticket_username,
+            ticket_api_key=ticket_api_key,
+            ticket_id=ticket_id,
+        )
+    except Exception as e:
+        console.print(f"[bold red]Error: {str(e)}[/bold red]")
+        return
+
+    try:
+        issue_to_investigate = ticket_source.source.fetch_issue(id=ticket_id)
+        if issue_to_investigate is None:
+            raise Exception(f"Issue {ticket_id} Not found")
+    except Exception as e:
+        logging.error(f"Failed to fetch issue from {source}", exc_info=e)
+        console.print(
+            f"[bold red]Error: Failed to fetch issue {ticket_id} from {source}.[/bold red]"
+        )
+        return
+
+    ai = ticket_source.config.create_console_toolcalling_llm(dal=None, model_name=model)
+
+    full_prompt = (
+        f"{prompt} for issue '{issue_to_investigate.name}'"
+        f" with description: '{issue_to_investigate.description}'"
+    )
+    messages = build_initial_ask_messages(
+        full_prompt,
+        [],
+        ai.tool_executor,
+        ticket_source.config.get_runbook_catalog(),
+        None,
+    )
+    result = ai.call(messages)
+
+    handle_result(
+        result,
+        console,
+        DestinationType.CLI,
+        ticket_source.config,
+        issue_to_investigate,
+        False,
+        True,
+    )
+    ticket_source.source.write_back_result(issue_to_investigate.id, result)
+    console.print(f"[bold]Updated ticket {issue_to_investigate.url}.[/bold]")
+
+
+@investigate_app.command()
+def github(
+    github_url: str = typer.Option(
+        "https://api.github.com", help="The GitHub api base url"
+    ),
+    github_owner: Optional[str] = typer.Option(
+        None, help="The GitHub repository owner"
+    ),
+    github_pat: str = typer.Option(None),
+    github_repository: Optional[str] = typer.Option(
+        None, help="The GitHub repository name"
+    ),
+    update: Optional[bool] = typer.Option(False, help="Update GitHub with AI results"),
+    github_query: Optional[str] = typer.Option(
+        "is:issue is:open", help="Investigate tickets matching a GitHub query"
+    ),
+    # common options
+    api_key: Optional[str] = opt_api_key,
+    model: Optional[str] = opt_model,
+    config_file: Optional[Path] = opt_config_file,
+    custom_toolsets: Optional[List[Path]] = opt_custom_toolsets,
+    max_steps: Optional[int] = opt_max_steps,
+    verbose: Optional[List[bool]] = opt_verbose,
+):
+    """
+    Investigate GitHub issues
+    """
+    console = init_logging(verbose)
+    config = Config.load_from_file(
+        config_file,
+        api_key=api_key,
+        model=model,
+        max_steps=max_steps,
+        github_url=github_url,
+        github_owner=github_owner,
+        github_pat=github_pat,
+        github_repository=github_repository,
+        github_query=github_query,
+        custom_toolsets_from_cli=custom_toolsets,
+    )
+    ai = config.create_console_toolcalling_llm(dal=None, model_name=model)
+    source = config.create_github_source()
+    try:
+        issues = source.fetch_issues()
+    except Exception as e:
+        logging.error("Failed to fetch issues from GitHub", exc_info=e)
+        return
+
+    console.print(
+        f"[bold yellow]Analyzing {len(issues)} GitHub issues.[/bold yellow] [red]Press Ctrl+C to stop.[/red]"
+    )
+    _investigate_issues(
+        ai,
+        issues,
+        config,
+        console,
+        source=source,
+        update=update,
+        source_name="GitHub issue",
+    )
+
+
+@investigate_app.command()
+def pagerduty(
+    pagerduty_api_key: str = typer.Option(None, help="The PagerDuty API key"),
+    pagerduty_user_email: Optional[str] = typer.Option(
+        None,
+        help="When --update is set, which user will be listed as the updater",
+    ),
+    pagerduty_incident_key: Optional[str] = typer.Option(
+        None,
+        help="If provided, only analyze a single PagerDuty incident matching this key",
+    ),
+    update: Optional[bool] = typer.Option(
+        False, help="Update PagerDuty with AI results"
+    ),
+    # common options
+    api_key: Optional[str] = opt_api_key,
+    model: Optional[str] = opt_model,
+    config_file: Optional[Path] = opt_config_file,
+    custom_toolsets: Optional[List[Path]] = opt_custom_toolsets,
+    max_steps: Optional[int] = opt_max_steps,
+    verbose: Optional[List[bool]] = opt_verbose,
+    json_output_file: Optional[str] = opt_json_output_file,
+):
+    """
+    Investigate PagerDuty incidents
+    """
+    console = init_logging(verbose)
+    config = Config.load_from_file(
+        config_file,
+        api_key=api_key,
+        model=model,
+        max_steps=max_steps,
+        pagerduty_api_key=pagerduty_api_key,
+        pagerduty_user_email=pagerduty_user_email,
+        pagerduty_incident_key=pagerduty_incident_key,
+        custom_toolsets_from_cli=custom_toolsets,
+    )
+    ai = config.create_console_toolcalling_llm(dal=None, model_name=model)
+    source = config.create_pagerduty_source()
+    try:
+        issues = source.fetch_issues()
+    except Exception as e:
+        logging.error("Failed to fetch issues from PagerDuty", exc_info=e)
+        return
+
+    console.print(
+        f"[bold yellow]Analyzing {len(issues)} PagerDuty incidents.[/bold yellow] [red]Press Ctrl+C to stop.[/red]"
+    )
+    _investigate_issues(
+        ai,
+        issues,
+        config,
+        console,
+        source=source,
+        update=update,
+        json_output_file=json_output_file,
+        source_name="PagerDuty incident",
+    )
+
+
+@investigate_app.command()
+def opsgenie(
+    opsgenie_api_key: str = typer.Option(None, help="The OpsGenie API key"),
+    opsgenie_team_integration_key: str = typer.Option(
+        None, help=OPSGENIE_TEAM_INTEGRATION_KEY_HELP
+    ),
+    opsgenie_query: Optional[str] = typer.Option(
+        None,
+        help="E.g. 'message: Foo' (see https://support.atlassian.com/opsgenie/docs/search-queries-for-alerts/)",
+    ),
+    update: Optional[bool] = typer.Option(
+        False, help="Update OpsGenie with AI results"
+    ),
+    # common options
+    api_key: Optional[str] = opt_api_key,
+    model: Optional[str] = opt_model,
+    config_file: Optional[Path] = opt_config_file,
+    custom_toolsets: Optional[List[Path]] = opt_custom_toolsets,
+    max_steps: Optional[int] = opt_max_steps,
+    verbose: Optional[List[bool]] = opt_verbose,
+):
+    """
+    Investigate OpsGenie alerts
+    """
+    console = init_logging(verbose)
+    config = Config.load_from_file(
+        config_file,
+        api_key=api_key,
+        model=model,
+        max_steps=max_steps,
+        opsgenie_api_key=opsgenie_api_key,
+        opsgenie_team_integration_key=opsgenie_team_integration_key,
+        opsgenie_query=opsgenie_query,
+        custom_toolsets_from_cli=custom_toolsets,
+    )
+    ai = config.create_console_toolcalling_llm(dal=None, model_name=model)
+    source = config.create_opsgenie_source()
+    try:
+        issues = source.fetch_issues()
+    except Exception as e:
+        logging.error("Failed to fetch issues from OpsGenie", exc_info=e)
+        return
+
+    console.print(
+        f"[bold yellow]Analyzing {len(issues)} OpsGenie alerts.[/bold yellow] [red]Press Ctrl+C to stop.[/red]"
+    )
+    _investigate_issues(
+        ai,
+        issues,
+        config,
+        console,
+        source=source,
+        update=update,
+        source_name="OpsGenie alert",
+    )
 
 
 @generate_app.command("alertmanager-tests")
