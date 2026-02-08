@@ -84,7 +84,7 @@ before_test: |
   echo "Generating minutely metric data with noise bursts..."
 
   cat > /tmp/es_gen_212.py << 'PYSCRIPT'
-  import json, math, random
+  import json, random
 
   random.seed(42)
 
@@ -198,6 +198,7 @@ before_test: |
 
     if echo "$RESPONSE" | grep -q '"errors":true'; then
       echo "Errors in bulk insert chunk"
+      exit 1
     fi
   done
 
@@ -206,7 +207,7 @@ before_test: |
   curl -sf -X POST "${ELASTICSEARCH_URL}/app-212-metrics-*/_refresh" \
     -H "Authorization: ApiKey ${ELASTICSEARCH_API_KEY}" > /dev/null
 
-  sleep 2
+  sleep 1
 
   for service in alpha beta gamma delta epsilon; do
     COUNT=$(curl -sf -X POST "${ELASTICSEARCH_URL}/app-212-metrics-service-${service}/_count" \
@@ -214,6 +215,10 @@ before_test: |
       -H "Authorization: ApiKey ${ELASTICSEARCH_API_KEY}" \
       -d '{"query": {"match_all": {}}}' | python3 -c "import sys,json; print(json.load(sys.stdin)['count'])")
     echo "service-${service}: $COUNT documents"
+    if [ "$COUNT" -ne 1440 ]; then
+      echo "Expected 1440 documents for service-${service}, got $COUNT"
+      exit 1
+    fi
   done
 
   echo "Setup complete!"

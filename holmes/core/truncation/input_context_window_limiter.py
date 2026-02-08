@@ -161,13 +161,13 @@ def limit_input_context_window(
             compacted_messages = compact_conversation_history(
                 original_conversation_history=messages, llm=llm
             )
-        except ContextWindowExceededError:
+        except ContextWindowExceededError as e:
             raise ContextWindowExceededError(
                 message=f"Conversation history ({initial_tokens.total_tokens} tokens) exceeds the model's context window ({max_context_size} tokens) and is too large even for compaction. "
-                f"This typically happens when tool call responses contain too much data. Consider using aggregations or filters to reduce the amount of data returned by tools.",
+                f"This is a bug in HolmesGPT - please report it at https://github.com/robusta-dev/holmesgpt/issues",
                 model=llm.model,
                 llm_provider=getattr(llm, "provider", "unknown"),
-            )
+            ) from e
         compacted_tokens = llm.count_tokens(compacted_messages, tools=tools)
         compacted_total_tokens = compacted_tokens.total_tokens
 
