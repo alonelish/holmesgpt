@@ -270,7 +270,7 @@ poetry run pytest -m "llm and not easy" --no-cov  # Non-regression tests
 3. Use descriptive, hyphenated names (e.g., `grafana-dashboard`, not `grafana_dashboard`)
 
 **Tag naming conventions**:
-- Service-specific: `grafana-dashboard`, `prometheus-metrics`, `loki`
+- Service-specific: `grafana-dashboard`, `prometheus`, `loki`
 - Functionality: `question-answer`, `chain-of-causation` 
 - Difficulty: `easy`, `medium`, `hard`
 - Infrastructure: `kubernetes`, `database`, `traces`
