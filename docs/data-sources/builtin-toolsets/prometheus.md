@@ -9,34 +9,18 @@ If you need help connecting your existing Prometheus and AlertManager to HolmesG
 ??? note "Prompt for AI Agents (click to expand)"
 
     ```text
-    Help me connect my existing Prometheus and AlertManager to HolmesGPT.
+    Help me find my Prometheus URL and generate the HolmesGPT configuration.
 
     My environment:
     - Kubernetes cluster: [DESCRIBE: e.g., EKS, GKE, AKS, on-prem, minikube]
     - Prometheus deployment: [DESCRIBE: e.g., kube-prometheus-stack, standalone, managed service]
     - Prometheus namespace: [e.g., monitoring, prometheus, observability]
-    - HolmesGPT deployment: [DESCRIBE: e.g., Helm chart, CLI on local machine, running in-cluster]
     - Authentication: [DESCRIBE: e.g., none, basic auth, bearer token, OAuth]
 
-    Please help me:
-
-    1. **Find my Prometheus URL**: Determine the correct internal DNS URL or endpoint
-       for my Prometheus server that HolmesGPT can reach.
-
-    2. **Find my AlertManager URL**: Determine the AlertManager endpoint for
-       investigating alerts with `holmes investigate alertmanager`.
-
-    3. **Configure authentication**: If my Prometheus requires authentication,
-       show me how to configure the headers in HolmesGPT.
-
-    4. **Generate HolmesGPT config**: Provide the complete toolset configuration
-       I need to add to my Holmes config or Helm values.
-
-    5. **Test the connection**: Give me commands to verify HolmesGPT can
-       successfully query Prometheus and fetch alerts from AlertManager.
-
-    Please provide step-by-step commands I can run to discover my endpoints
-    and verify the connection works.
+    Please:
+    1. Run kubectl commands to find my Prometheus service and its cluster DNS URL
+    2. Check if authentication is required
+    3. Output the HolmesGPT toolset configuration I should use
     ```
 
 ## Prerequisites
