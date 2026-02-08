@@ -1,0 +1,26 @@
+# yaml-language-server: $schema=https://coderabbit.ai/integrations/schema.v2.json
+language: en-US
+reviews:
+  path_instructions:
+    - path: "tests/llm/**"
+      instructions: |
+        Eval test markers (tags) are defined in pyproject.toml under [tool.pytest.ini_options] markers.
+        ONLY markers listed there are valid. Do NOT suggest markers that are not in that list.
+
+        Current valid markers: llm, datetime, logs, metrics, context_window, network, runbooks,
+        chain-of-causation, slackbot, numerical, counting, kubernetes, easy, medium, hard,
+        transparency, kafka, leaked-information, port-forward, toolset-limitation, database,
+        traces, datadog, storage, question-answer, prometheus, newrelic, no-cicd, compaction,
+        embeds, one-test, loki, coralogix, fast, frontend, grafana-dashboard, elasticsearch,
+        integration, confluence, regression, benchmark.
+
+        When reviewing test_case.yaml files:
+        - Do NOT suggest adding tags/markers that are not in the list above.
+        - Do NOT suggest renaming existing tags.
+        - The "easy" marker means the test reliably passes 20/20+ runs - do not suggest adding it lightly.
+        - The "regression" marker requires passing 30+ iterations with Sonnet-4.5.
+        - The "port-forward" marker is automatically added by the test framework for tests with port_forwards.
+    - path: "pyproject.toml"
+      instructions: |
+        The [tool.pytest.ini_options] markers section is the single source of truth for all eval
+        test markers/tags. Any new marker must be added here before being used in test files.
