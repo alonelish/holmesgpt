@@ -22,6 +22,21 @@
   **Key Point:** Always prefer the Grafana toolset for any URL pointing to a Grafana instance. This gives you access to the dashboard structure, panel queries, and metadata - not just HTML content.
 
 
+## **IMPORTANT: Searching for Metrics/Queries Inside Dashboards**
+
+  **When the user asks whether a metric, label, or query expression is used in any Grafana dashboard:**
+
+  - **DO NOT use `grafana_search_dashboards`** — it only searches dashboard **titles**, not their content. A dashboard using `container_cpu_usage_seconds_total` in its panels will NOT appear if you search for that metric name with `grafana_search_dashboards`.
+  - **USE `grafana_search_inside_all_dashboards`** instead — it fetches every dashboard's full definition and searches inside panel queries, expressions, and templating variables.
+
+  ### **Example:**
+  User: "Is the metric `node_memory_MemAvailable_bytes` used in any Grafana dashboard?"
+  ↓
+  1. Call `grafana_search_inside_all_dashboards(search_text="node_memory_MemAvailable_bytes")`
+  2. Review the results showing which dashboards and panels reference that metric
+  3. Report findings to the user
+
+
 ## **Instruction: Prometheus Dashboard Query Execution**
 
 **When running Prometheus queries from Grafana dashboards:**
