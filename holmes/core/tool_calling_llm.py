@@ -31,9 +31,9 @@ from holmes.core.models import (
     ToolApprovalDecision,
     ToolCallResult,
 )
+from holmes.core.policy import PolicyEnforcer, get_policy_enforcer
 from holmes.core.prompt import generate_user_prompt
 from holmes.core.runbooks import RunbookManager
-from holmes.core.policy import PolicyEnforcer, get_policy_enforcer
 from holmes.core.safeguards import prevent_overly_repeated_tool_call
 from holmes.core.tools import (
     StructuredToolResult,
