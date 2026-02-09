@@ -7,7 +7,14 @@ from typing import TYPE_CHECKING, Any, List, Optional, Union
 
 import sentry_sdk
 import yaml  # type: ignore
-from pydantic import BaseModel, ConfigDict, FilePath, PrivateAttr, SecretStr, model_validator
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    FilePath,
+    PrivateAttr,
+    SecretStr,
+    model_validator,
+)
 
 from holmes.common.env_vars import ROBUSTA_CONFIG_PATH
 from holmes.core.llm import DefaultLLM, LLMModelRegistry

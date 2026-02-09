@@ -5,7 +5,6 @@ import re
 from datetime import datetime
 from typing import Any, Optional, Tuple
 
-
 from holmes.core.tools import (
     CallablePrerequisite,
     ClassVar,

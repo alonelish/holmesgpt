@@ -90,7 +90,7 @@ class KafkaConfig(ToolsetConfig):
     kafka_clusters: List[KafkaClusterConfig] = Field(
         title="Clusters",
         description="List of Kafka clusters to connect to",
-        examples=[[build_config_example(KafkaClusterConfig)]]
+        examples=[[build_config_example(KafkaClusterConfig)]],
     )
 
 
