@@ -25,8 +25,9 @@ jobs:
           restore-keys: |
             mkdocs-material-
       - name: Install Poetry
+        uses: asdf-vm/actions/install@v4
+      - name: Configure Poetry and install dependencies
         run: |
-          curl -sSL https://install.python-poetry.org | python3 - --version 1.4.0
           poetry config virtualenvs.create false
-      - run: poetry install --with dev
+          poetry install --with dev
       - run: poetry run mkdocs gh-deploy --force

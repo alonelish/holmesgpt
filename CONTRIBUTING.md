@@ -7,8 +7,17 @@
 Please make sure to read and observe our [Governance](./GOVERNANCE.md) docs.
 
 ### Install requirements
+
+Install [asdf](https://asdf-vm.com/) to manage tool versions, then run:
+
+```bash
+asdf install
+```
+
+This will install the correct versions of all required tools (e.g., Poetry) as specified in `.tool-versions`.
+
+**Additional requirements:**
 - Python `3.11`
-  - poetry `1.8.4` & up
 - A LLM API key is required to use and test HolmesGPT
   - OpenAI's `gpt4-o` is recommended.
   - For details see [Getting an API Key](https://holmesgpt.dev/ai-providers/).
