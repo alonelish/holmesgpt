@@ -937,3 +937,202 @@ class TestRealWorldScenarios:
         # Exec always blocked
         result = enforcer.check("kubectl_exec", {"namespace": "team-a-prod"})
         assert not result.allowed
+
+
+class TestHttpHelpers:
+    """Tests for HTTP helper functions."""
+
+    def test_env_function(self, monkeypatch):
+        """env() function retrieves environment variables."""
+        monkeypatch.setenv("TEST_POLICY_VAR", "test_value")
+
+        config = PolicyConfig(
+            rules=[
+                PolicyRule(
+                    name="env-test",
+                    match=["*"],
+                    allow_if=AllowCondition(python='env("TEST_POLICY_VAR") == "test_value"'),
+                )
+            ],
+        )
+        enforcer = PolicyEnforcer(config)
+
+        result = enforcer.check("test_tool", {})
+        assert result.allowed
+
+    def test_env_function_default(self):
+        """env() function returns default for missing variables."""
+        config = PolicyConfig(
+            rules=[
+                PolicyRule(
+                    name="env-default-test",
+                    match=["*"],
+                    allow_if=AllowCondition(
+                        python='env("NONEXISTENT_VAR_12345", "fallback") == "fallback"'
+                    ),
+                )
+            ],
+        )
+        enforcer = PolicyEnforcer(config)
+
+        result = enforcer.check("test_tool", {})
+        assert result.allowed
+
+    def test_http_get_success(self, responses):
+        """http_get() makes GET request and returns JSON."""
+        responses.add(
+            responses.GET,
+            "https://api.example.com/user",
+            json={"id": "123", "name": "test"},
+            status=200,
+        )
+
+        config = PolicyConfig(
+            rules=[
+                PolicyRule(
+                    name="http-get-test",
+                    match=["*"],
+                    allow_if=AllowCondition(
+                        python='http_get("https://api.example.com/user").get("id") == "123"'
+                    ),
+                )
+            ],
+        )
+        enforcer = PolicyEnforcer(config)
+
+        result = enforcer.check("test_tool", {})
+        assert result.allowed
+
+    def test_http_get_with_params(self, responses):
+        """http_get() passes query parameters."""
+        responses.add(
+            responses.GET,
+            "https://api.example.com/search",
+            json={"results": [{"email": "user@example.com"}]},
+            status=200,
+        )
+
+        config = PolicyConfig(
+            rules=[
+                PolicyRule(
+                    name="http-get-params-test",
+                    match=["*"],
+                    allow_if=AllowCondition(
+                        python='len(http_get("https://api.example.com/search", params={"q": "test"}).get("results", [])) > 0'
+                    ),
+                )
+            ],
+        )
+        enforcer = PolicyEnforcer(config)
+
+        result = enforcer.check("test_tool", {})
+        assert result.allowed
+
+    def test_http_get_failure_returns_empty(self, responses):
+        """http_get() returns empty dict on failure."""
+        responses.add(
+            responses.GET,
+            "https://api.example.com/error",
+            status=500,
+        )
+
+        config = PolicyConfig(
+            rules=[
+                PolicyRule(
+                    name="http-get-error-test",
+                    match=["*"],
+                    allow_if=AllowCondition(
+                        python='http_get("https://api.example.com/error") == {}'
+                    ),
+                )
+            ],
+        )
+        enforcer = PolicyEnforcer(config)
+
+        result = enforcer.check("test_tool", {})
+        assert result.allowed
+
+    def test_http_post_success(self, responses):
+        """http_post() makes POST request and returns JSON."""
+        responses.add(
+            responses.POST,
+            "https://api.example.com/check",
+            json={"hasPermission": True},
+            status=200,
+        )
+
+        config = PolicyConfig(
+            rules=[
+                PolicyRule(
+                    name="http-post-test",
+                    match=["*"],
+                    allow_if=AllowCondition(
+                        python='http_post("https://api.example.com/check", json_data={"user": "test"}).get("hasPermission", False)'
+                    ),
+                )
+            ],
+        )
+        enforcer = PolicyEnforcer(config)
+
+        result = enforcer.check("test_tool", {})
+        assert result.allowed
+
+    def test_http_post_with_auth(self, responses):
+        """http_post() supports basic auth."""
+        responses.add(
+            responses.POST,
+            "https://api.example.com/secure",
+            json={"allowed": True},
+            status=200,
+        )
+
+        config = PolicyConfig(
+            rules=[
+                PolicyRule(
+                    name="http-post-auth-test",
+                    match=["*"],
+                    allow_if=AllowCondition(
+                        python='http_post("https://api.example.com/secure", json_data={}, auth=("user", "pass")).get("allowed", False)'
+                    ),
+                )
+            ],
+        )
+        enforcer = PolicyEnforcer(config)
+
+        result = enforcer.check("test_tool", {})
+        assert result.allowed
+
+    def test_http_functions_with_context(self, responses):
+        """HTTP functions can use context and params."""
+        responses.add(
+            responses.GET,
+            "https://api.example.com/user",
+            json={"accountId": "acc-123"},
+            status=200,
+        )
+        responses.add(
+            responses.POST,
+            "https://api.example.com/permission",
+            json={"hasPermission": True},
+            status=200,
+        )
+
+        config = PolicyConfig(
+            rules=[
+                PolicyRule(
+                    name="api-permission-check",
+                    match=["*"],
+                    allow_if=AllowCondition(
+                        python='http_get("https://api.example.com/user", params={"email": context.get("user_email")}).get("accountId") and http_post("https://api.example.com/permission", json_data={"page_id": params.get("page_id")}).get("hasPermission", False)'
+                    ),
+                )
+            ],
+        )
+        enforcer = PolicyEnforcer(config)
+
+        result = enforcer.check(
+            "confluence_get_page",
+            {"page_id": "page-456"},
+            {"user_email": "user@example.com"},
+        )
+        assert result.allowed

@@ -48,6 +48,26 @@ Example policy configuration (whitelist mode - default deny):
           allow_if:
             bash: 'kubectl auth can-i get {{ params.kind }} -n {{ params.namespace }} --as={{ context.user_email }}'
 
+Example using HTTP functions for API-based permission checks:
+
+    policy:
+      rules:
+        # Check Confluence page access via API
+        - name: confluence-access
+          match: ["confluence_*"]
+          allow_if:
+            python: |
+              account = http_get(
+                f"{env('CONFLUENCE_URL')}/wiki/rest/api/search/user",
+                params={"cql": f"type=user and email={context.get('user_email')}"},
+                auth=(env('CONFLUENCE_USER'), env('CONFLUENCE_TOKEN'))
+              ).get('results', [{}])[0]
+              and http_post(
+                f"{env('CONFLUENCE_URL')}/wiki/rest/api/content/{params.get('page_id')}/permission/check",
+                json_data={"subject": {"type": "user", "identifier": account.get('accountId')}, "operation": "read"},
+                auth=(env('CONFLUENCE_USER'), env('CONFLUENCE_TOKEN'))
+              ).get('hasPermission', False)
+
 Semantics:
 - Tools matching NO rules → use `default` (allow or deny)
 - Tools matching rules → ALL matching rules' `allow_if` must pass
@@ -57,12 +77,14 @@ Semantics:
 import fnmatch
 import json
 import logging
+import os
 import re
 import shlex
 import subprocess
 from dataclasses import dataclass
-from typing import Any, Dict, List, Literal, Optional
+from typing import Any, Dict, List, Literal, Optional, Tuple, Union
 
+import requests  # type: ignore[import-untyped]
 from pydantic import BaseModel, ConfigDict, model_validator
 from simpleeval import EvalWithCompoundTypes, NameNotDefined
 
@@ -148,12 +170,16 @@ class PolicyEnforcer:
     - Available variables: `tool`, `params`, `context`, plus rule `vars`
     - Built-in functions: len, str, int, bool, any, all, etc.
     - Helper functions: match(), regex(), startswith(), endswith(), contains()
+    - HTTP functions: http_get(), http_post() for API-based permission checks
 
     For Bash conditions:
     - Jinja2 templating: {{ params.X }}, {{ context.X }}, {{ tool }}
     - Exit code 0 = allow, non-zero = deny
     - Stderr captured for denial message
     """
+
+    # Default timeout for HTTP requests (seconds)
+    HTTP_TIMEOUT = 10
 
     # Safe built-in functions for Python expressions
     SAFE_FUNCTIONS = {
@@ -199,6 +225,11 @@ class PolicyEnforcer:
             suffix
         )
         self._evaluator.functions["contains"] = lambda s, sub: sub in (s or "")
+
+        # Add HTTP helper functions for API-based permission checks
+        self._evaluator.functions["http_get"] = self._http_get
+        self._evaluator.functions["http_post"] = self._http_post
+        self._evaluator.functions["env"] = self._get_env
 
     def check(
         self,
@@ -471,6 +502,124 @@ class PolicyEnforcer:
             if fnmatch.fnmatch(tool_name, pattern):
                 return True
         return False
+
+    @staticmethod
+    def _get_env(name: str, default: str = "") -> str:
+        """
+        Get environment variable value.
+
+        Args:
+            name: Environment variable name
+            default: Default value if not set
+
+        Returns:
+            Environment variable value or default
+        """
+        return os.environ.get(name, default)
+
+    @staticmethod
+    def _http_get(
+        url: str,
+        params: Optional[Dict[str, Any]] = None,
+        headers: Optional[Dict[str, str]] = None,
+        auth: Optional[Union[Tuple[str, str], str]] = None,
+        timeout: int = 10,
+    ) -> Dict[str, Any]:
+        """
+        Make an HTTP GET request and return JSON response.
+
+        Args:
+            url: URL to request
+            params: Query parameters
+            headers: Request headers
+            auth: Authentication tuple (username, password) or bearer token string
+            timeout: Request timeout in seconds
+
+        Returns:
+            Parsed JSON response as dict, or empty dict on error
+
+        Example:
+            http_get("https://api.example.com/user", params={"email": "user@example.com"})
+        """
+        try:
+            request_headers = headers or {}
+            request_auth = None
+
+            # Handle auth - tuple for basic auth, string for bearer token
+            if isinstance(auth, tuple):
+                request_auth = auth
+            elif isinstance(auth, str):
+                request_headers["Authorization"] = f"Bearer {auth}"
+
+            response = requests.get(
+                url,
+                params=params,
+                headers=request_headers,
+                auth=request_auth,
+                timeout=timeout,
+            )
+            response.raise_for_status()
+            return response.json()
+        except requests.exceptions.RequestException as e:
+            logger.warning(f"HTTP GET failed for {url}: {e}")
+            return {}
+        except json.JSONDecodeError as e:
+            logger.warning(f"HTTP GET response not JSON for {url}: {e}")
+            return {}
+
+    @staticmethod
+    def _http_post(
+        url: str,
+        json_data: Optional[Dict[str, Any]] = None,
+        data: Optional[Dict[str, Any]] = None,
+        headers: Optional[Dict[str, str]] = None,
+        auth: Optional[Union[Tuple[str, str], str]] = None,
+        timeout: int = 10,
+    ) -> Dict[str, Any]:
+        """
+        Make an HTTP POST request and return JSON response.
+
+        Args:
+            url: URL to request
+            json_data: JSON body (will set Content-Type: application/json)
+            data: Form data body
+            headers: Request headers
+            auth: Authentication tuple (username, password) or bearer token string
+            timeout: Request timeout in seconds
+
+        Returns:
+            Parsed JSON response as dict, or empty dict on error
+
+        Example:
+            http_post("https://api.example.com/check",
+                      json_data={"subject": {"type": "user", "id": "123"}})
+        """
+        try:
+            request_headers = headers or {}
+            request_auth = None
+
+            # Handle auth - tuple for basic auth, string for bearer token
+            if isinstance(auth, tuple):
+                request_auth = auth
+            elif isinstance(auth, str):
+                request_headers["Authorization"] = f"Bearer {auth}"
+
+            response = requests.post(
+                url,
+                json=json_data,
+                data=data,
+                headers=request_headers,
+                auth=request_auth,
+                timeout=timeout,
+            )
+            response.raise_for_status()
+            return response.json()
+        except requests.exceptions.RequestException as e:
+            logger.warning(f"HTTP POST failed for {url}: {e}")
+            return {}
+        except json.JSONDecodeError as e:
+            logger.warning(f"HTTP POST response not JSON for {url}: {e}")
+            return {}
 
 
 # Global default enforcer (can be replaced via config)

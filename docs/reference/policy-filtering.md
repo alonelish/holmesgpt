@@ -89,6 +89,8 @@ Bash conditions:
 
 ### Built-in Functions
 
+**String helpers:**
+
 | Function | Description |
 |----------|-------------|
 | `match(pattern, string)` | Glob pattern matching (fnmatch) |
@@ -96,6 +98,16 @@ Bash conditions:
 | `startswith(s, prefix)` | String prefix check |
 | `endswith(s, suffix)` | String suffix check |
 | `contains(s, sub)` | Substring check |
+
+**HTTP helpers (for API-based permission checks):**
+
+| Function | Description |
+|----------|-------------|
+| `http_get(url, params=None, headers=None, auth=None)` | Make HTTP GET request, returns JSON dict |
+| `http_post(url, json_data=None, headers=None, auth=None)` | Make HTTP POST request, returns JSON dict |
+| `env(name, default="")` | Get environment variable |
+
+The `auth` parameter accepts either a tuple `(username, password)` for basic auth or a string for bearer token.
 
 Standard Python functions are also available: `len`, `str`, `int`, `bool`, `list`, `dict`, `any`, `all`, `min`, `max`, etc.
 
@@ -172,6 +184,77 @@ policy:
       allow_if:
         bash: 'kubectl auth can-i get {{ params.kind | default:"pods" }} -n {{ params.namespace | default:"default" }} --as={{ context.user_email }}'
       message: "User does not have RBAC permission for this operation"
+```
+
+### Confluence Page Access Control
+
+Check if a user can access a Confluence page before allowing the tool call. Both Python and Bash approaches are shown below - choose the one that fits your setup.
+
+**Option A: Python with HTTP helpers (recommended)**
+
+Uses the built-in `http_get` and `http_post` functions for cleaner syntax:
+
+```yaml
+policy:
+  rules:
+    - name: confluence-access-check
+      match: ["confluence_get_page", "confluence_search"]
+      allow_if:
+        python: |
+          http_post(
+            env("CONFLUENCE_URL") + "/wiki/rest/api/content/" + str(params.get("page_id")) + "/permission/check",
+            json_data={
+              "subject": {"type": "user", "identifier": context.get("user_account_id")},
+              "operation": "read"
+            },
+            auth=(env("CONFLUENCE_USER"), env("CONFLUENCE_TOKEN"))
+          ).get("hasPermission", False)
+      message: "User does not have access to this Confluence page"
+```
+
+If you need to resolve user email to account ID first:
+
+```yaml
+policy:
+  rules:
+    - name: confluence-access-check
+      match: ["confluence_get_page"]
+      allow_if:
+        python: |
+          (account := http_get(
+            env("CONFLUENCE_URL") + "/wiki/rest/api/search/user",
+            params={"cql": "type=user and email=" + context.get("user_email", "")},
+            auth=(env("CONFLUENCE_USER"), env("CONFLUENCE_TOKEN"))
+          ).get("results", [{}])[0].get("accountId"))
+          and http_post(
+            env("CONFLUENCE_URL") + "/wiki/rest/api/content/" + str(params.get("page_id")) + "/permission/check",
+            json_data={"subject": {"type": "user", "identifier": account}, "operation": "read"},
+            auth=(env("CONFLUENCE_USER"), env("CONFLUENCE_TOKEN"))
+          ).get("hasPermission", False)
+      message: "User does not have access to this Confluence page"
+```
+
+**Option B: Bash with curl**
+
+Uses shell commands for environments where you prefer external tools:
+
+```yaml
+policy:
+  rules:
+    - name: confluence-access-check
+      match: ["confluence_get_page"]
+      allow_if:
+        bash: |
+          ACCOUNT_ID=$(curl -s -u "${CONFLUENCE_USER}:${CONFLUENCE_TOKEN}" \
+            "${CONFLUENCE_URL}/wiki/rest/api/search/user?cql=type=user%20and%20email={{ context.user_email | quote }}" \
+            | jq -r '.results[0].accountId') && \
+          [ -n "$ACCOUNT_ID" ] && [ "$ACCOUNT_ID" != "null" ] && \
+          curl -s -u "${CONFLUENCE_USER}:${CONFLUENCE_TOKEN}" \
+            -X POST -H "Content-Type: application/json" \
+            -d "{\"subject\":{\"type\":\"user\",\"identifier\":\"$ACCOUNT_ID\"},\"operation\":\"read\"}" \
+            "${CONFLUENCE_URL}/wiki/rest/api/content/{{ params.page_id }}/permission/check" \
+            | jq -e '.hasPermission == true'
+      message: "User does not have access to this Confluence page"
 ```
 
 ### Block Sensitive Resources
