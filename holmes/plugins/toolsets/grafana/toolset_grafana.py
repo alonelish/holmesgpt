@@ -1,8 +1,6 @@
-import json
-import logging
 import os
 from abc import ABC
-from typing import Any, ClassVar, Dict, List, Optional, Tuple, Type, cast
+from typing import Any, ClassVar, Dict, Optional, Tuple, Type, cast
 from urllib.parse import urlencode, urljoin
 
 import requests  # type: ignore
@@ -22,8 +20,6 @@ from holmes.plugins.toolsets.grafana.common import (
 )
 from holmes.plugins.toolsets.json_filter_mixin import JsonFilterMixin
 from holmes.plugins.toolsets.utils import toolset_name_for_one_liner
-
-logger = logging.getLogger(__name__)
 
 
 class GrafanaDashboardConfig(GrafanaConfig):
@@ -62,7 +58,6 @@ class GrafanaToolset(BaseGrafanaToolset):
             docs_url="https://holmesgpt.dev/data-sources/builtin-toolsets/grafanadashboards/",
             tools=[
                 SearchDashboards(self),
-                SearchInsideAllDashboards(self),
                 GetDashboardByUID(self),
                 GetHomeDashboard(self),
                 GetDashboardTags(self),
@@ -143,10 +138,10 @@ class SearchDashboards(BaseGrafanaTool):
         super().__init__(
             toolset=toolset,
             name="grafana_search_dashboards",
-            description="Search for Grafana dashboards and folders by title using the /api/search endpoint. WARNING: This only searches dashboard titles and metadata (tags, folders), NOT the content of dashboard panels or queries. To find dashboards containing a specific metric or query expression, use grafana_search_inside_all_dashboards instead.",
+            description="Search for Grafana dashboards and folders by title using the /api/search endpoint. WARNING: This only searches dashboard titles and metadata (tags, folders), NOT the content of dashboard panels or queries. To check whether a metric or query expression is used inside a dashboard, first list dashboards with this tool, then use grafana_get_dashboard_by_uid to inspect each dashboard's panel definitions.",
             parameters={
                 "query": ToolParameter(
-                    description="Search text to filter dashboards",
+                    description="Search text to filter dashboards by title (does NOT search inside panel queries or expressions, only dashboard titles)",
                     type="string",
                     required=False,
                 ),
@@ -249,149 +244,6 @@ class SearchDashboards(BaseGrafanaTool):
 
     def get_parameterized_one_liner(self, params: Dict) -> str:
         return f"{toolset_name_for_one_liner(self._toolset.name)}: Search Dashboards"
-
-
-class SearchInsideAllDashboards(BaseGrafanaTool):
-    """Search for a text pattern (e.g. a metric name) inside all dashboard definitions.
-
-    This fetches every dashboard's full JSON definition and searches for the
-    given text within panel targets, expressions, and templates.  Use this when
-    you need to find which dashboards reference a specific metric, label, or
-    query expression.
-    """
-
-    _SEARCH_LIMIT_PER_PAGE = 1000
-    _MAX_DASHBOARDS = 5000
-
-    def __init__(self, toolset: GrafanaToolset):
-        super().__init__(
-            toolset=toolset,
-            name="grafana_search_inside_all_dashboards",
-            description=(
-                "Search inside all Grafana dashboard definitions for a text pattern "
-                "(e.g. a metric name or label). Unlike grafana_search_dashboards which "
-                "only searches titles, this tool inspects every dashboard's panel queries, "
-                "expressions, and templating variables to find matches."
-            ),
-            parameters={
-                "search_text": ToolParameter(
-                    description=(
-                        "The text to search for inside dashboard definitions "
-                        "(e.g. a Prometheus metric name like 'container_cpu_usage_seconds_total')"
-                    ),
-                    type="string",
-                    required=True,
-                ),
-            },
-        )
-
-    def _fetch_all_dashboard_uids(self, params: dict) -> List[Dict[str, Any]]:
-        """Fetch all dashboard summaries using paginated search."""
-        all_dashboards: List[Dict[str, Any]] = []
-        page = 1
-        while len(all_dashboards) < self._MAX_DASHBOARDS:
-            query_params = {
-                "type": "dash-db",
-                "limit": self._SEARCH_LIMIT_PER_PAGE,
-                "page": page,
-            }
-            result = self._make_grafana_request("api/search", params, query_params)
-            if not result.data:
-                break
-            all_dashboards.extend(result.data)
-            if len(result.data) < self._SEARCH_LIMIT_PER_PAGE:
-                break
-            page += 1
-        return all_dashboards
-
-    @staticmethod
-    def _extract_matching_panels(
-        dashboard_json: Dict[str, Any], search_text_lower: str
-    ) -> List[str]:
-        """Return panel titles whose targets/expressions contain *search_text_lower*."""
-        matching_panels: List[str] = []
-        panels = dashboard_json.get("panels", [])
-        for panel in panels:
-            # Panels can be nested inside rows
-            inner_panels = panel.get("panels", [])
-            for p in [panel] + inner_panels:
-                panel_json = json.dumps(p.get("targets", []))
-                if search_text_lower in panel_json.lower():
-                    matching_panels.append(p.get("title", "<untitled>"))
-                    continue
-                # Also check datasource expressions stored at panel level
-                expr = p.get("expression", "")
-                if isinstance(expr, str) and search_text_lower in expr.lower():
-                    matching_panels.append(p.get("title", "<untitled>"))
-        return matching_panels
-
-    @staticmethod
-    def _search_templating(
-        dashboard_json: Dict[str, Any], search_text_lower: str
-    ) -> bool:
-        """Return True if *search_text_lower* appears in any templating variable."""
-        templating = dashboard_json.get("templating", {})
-        templating_str = json.dumps(templating)
-        return search_text_lower in templating_str.lower()
-
-    def _invoke(self, params: dict, context: ToolInvokeContext) -> StructuredToolResult:
-        search_text = params["search_text"]
-        search_text_lower = search_text.lower()
-
-        dashboards = self._fetch_all_dashboard_uids(params)
-        total_dashboards = len(dashboards)
-
-        matches: List[Dict[str, Any]] = []
-
-        for dashboard_summary in dashboards:
-            uid = dashboard_summary.get("uid")
-            if not uid:
-                continue
-
-            try:
-                detail = self._make_grafana_request(f"api/dashboards/uid/{uid}", params)
-            except Exception:
-                logger.debug(
-                    "Failed to fetch dashboard uid=%s, skipping", uid, exc_info=True
-                )
-                continue
-
-            dashboard_json = (detail.data or {}).get("dashboard", {})
-
-            matching_panels = self._extract_matching_panels(
-                dashboard_json, search_text_lower
-            )
-            in_templating = self._search_templating(dashboard_json, search_text_lower)
-
-            if matching_panels or in_templating:
-                match_info: Dict[str, Any] = {
-                    "uid": uid,
-                    "title": dashboard_summary.get("title"),
-                    "folderTitle": dashboard_summary.get("folderTitle"),
-                    "url": dashboard_summary.get("url"),
-                }
-                if matching_panels:
-                    match_info["matching_panels"] = matching_panels
-                if in_templating:
-                    match_info["found_in_templating_variables"] = True
-                matches.append(match_info)
-
-        config = self._toolset.grafana_config
-        search_url = _build_grafana_dashboard_url(config)
-
-        return StructuredToolResult(
-            status=StructuredToolResultStatus.SUCCESS,
-            data={
-                "search_text": search_text,
-                "total_dashboards_searched": total_dashboards,
-                "matching_dashboards": matches,
-            },
-            params=params,
-            url=search_url,
-        )
-
-    def get_parameterized_one_liner(self, params: Dict) -> str:
-        return f"{toolset_name_for_one_liner(self._toolset.name)}: Search Inside All Dashboards for '{params.get('search_text', '')}'"
 
 
 class GetDashboardByUID(JsonFilterMixin, BaseGrafanaTool):
