@@ -45,5 +45,5 @@ def test_RunbookFetcher_with_additional_search_paths():
                 "type": "md_file",
             }
         )
-        == "Runbook: Fetch Runbook test_runbook.md"
+        == 'Runbook: Fetch Runbook "test_runbook.md"'
     )
