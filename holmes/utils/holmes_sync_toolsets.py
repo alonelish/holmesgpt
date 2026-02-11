@@ -51,7 +51,7 @@ def holmes_sync_toolsets_status(dal: SupabaseDal, config: Config) -> None:
             toolset.installation_instructions = instructions
         db_toolsets.append(
             ToolsetDBModel(
-                **toolset.model_dump(exclude_none=True),
+                **toolset.model_dump(exclude_none=True, exclude={"account_id", "cluster_id", "name"}),
                 toolset_name=toolset.name,
                 cluster_id=config.cluster_name,
                 account_id=dal.account_id,
