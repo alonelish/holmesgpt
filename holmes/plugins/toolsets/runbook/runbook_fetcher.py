@@ -233,7 +233,7 @@ class RunbookFetcher(Tool):
     def get_parameterized_one_liner(self, params) -> str:
         runbook_id: str = params.get("runbook_id", "")
         friendly_name = self._runbook_names.get(runbook_id, runbook_id)
-        return f"{toolset_name_for_one_liner(self.toolset.name)}: Fetch Runbook \"{friendly_name}\""
+        return f"Read {toolset_name_for_one_liner(self.toolset.name)}: {friendly_name}"
 
 
 class RunbookToolset(Toolset):
