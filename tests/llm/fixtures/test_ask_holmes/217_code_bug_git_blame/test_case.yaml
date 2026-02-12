@@ -3,24 +3,20 @@ user_prompt:
   - "A pod named order-processor in namespace app-217 keeps crashing. Look at the logs, find the buggy line of code in the git repository, and tell me who introduced the bug and in which commit."
 
 expected_output:
-  - "Must identify the TypeError or type conversion error in process_order function around line 17 of order_processor.py where total_price is compared or concatenated with a string instead of being treated as a numeric value"
-  - "Must identify commit authored by charlie.martinez@acme-corp.dev (or charlie.martinez) as the one that introduced the bug"
+  - "Must identify the TypeError or type conversion error in format_discount_line function around line 24 of order_processor.py where string concatenation is attempted with a float value"
+  - "Must identify commit authored by charlie.martinez@acme-corp.dev (or Charlie Martinez) as the one that introduced the bug"
   - "Must mention the commit message contains 'Add discount string formatting' or reference the specific commit SHA that introduced the bug"
-  - "Must explain the fix involves converting the type properly (e.g., using float() or str() conversion, or fixing the string formatting)"
+  - "Must explain the fix involves converting the type properly (e.g., using str() conversion, or f-string formatting)"
 
 tags:
-  - kubernetes
   - hard
   - chain-of-causation
   - logs
 
-setup_timeout: 180
+setup_timeout: 60
 
 before_test: |
   set -e
-
-  # Create namespace
-  kubectl create namespace app-217 --dry-run=client -o yaml | kubectl apply -f -
 
   # Create the git repository with realistic commit history
   REPO_DIR="/tmp/holmesgpt-eval-217-repo"
@@ -28,6 +24,7 @@ before_test: |
   mkdir -p "$REPO_DIR"
   cd "$REPO_DIR"
   git init
+  git config commit.gpgsign false
 
   # Commit 1: Initial project structure (alice)
   git config user.name "Alice Chen"
@@ -128,7 +125,7 @@ before_test: |
   git add -A
   git commit -m "Add order validation checks"
 
-  # Commit 3: Charlie introduces the bug - string formatting with numeric type mismatch
+  # Commit 3: Charlie introduces the bug - string concatenation with numeric type
   git config user.name "Charlie Martinez"
   git config user.email "charlie.martinez@acme-corp.dev"
 
@@ -188,7 +185,7 @@ before_test: |
   git add -A
   git commit -m "Add discount string formatting to order summary"
 
-  # Commit 4: Unrelated change by diana (after the bug) so git log is non-trivial
+  # Commit 4: Unrelated change by diana (after the bug)
   git config user.name "Diana Patel"
   git config user.email "diana.patel@acme-corp.dev"
 
@@ -204,61 +201,8 @@ before_test: |
   git add -A
   git commit -m "Add configuration module for environment settings"
 
-  # Now create the k8s resources
-  cd /home/user/holmesgpt/tests/llm/fixtures/test_ask_holmes/217_code_bug_git_blame
-
-  # Create orders.json with a discount order that triggers the bug
-  cat > /tmp/holmesgpt-eval-217-orders.json << 'EOF'
-  [
-    {"id": "ORD-90281", "total_price": 149.99, "currency": "USD", "items": ["widget-a", "widget-b"], "discount_pct": 0},
-    {"id": "ORD-90282", "total_price": 299.50, "currency": "USD", "items": ["gadget-x"], "discount_pct": 0},
-    {"id": "ORD-90283", "total_price": 89.95, "currency": "USD", "items": ["part-7k", "part-8m"], "discount_pct": 15}
-  ]
-  EOF
-
-  # Create secrets for the app code and data
-  kubectl create secret generic order-processor-code \
-    --from-file=order_processor.py="$REPO_DIR/order_processor.py" \
-    -n app-217 --dry-run=client -o yaml | kubectl apply -f -
-
-  kubectl create configmap order-data \
-    --from-file=orders.json=/tmp/holmesgpt-eval-217-orders.json \
-    -n app-217 --dry-run=client -o yaml | kubectl apply -f -
-
-  # Deploy the crashing pod
-  kubectl apply -f manifest.yaml -n app-217
-
-  # Wait for crash loop
-  CRASH_DETECTED=false
-  for i in {1..40}; do
-    STATUS=$(kubectl get pod -l app=order-processor -n app-217 -o jsonpath='{.items[0].status.containerStatuses[0].state.waiting.reason}' 2>/dev/null || echo "")
-    TERMINATED=$(kubectl get pod -l app=order-processor -n app-217 -o jsonpath='{.items[0].status.containerStatuses[0].lastState.terminated.reason}' 2>/dev/null || echo "")
-    if [ "$STATUS" = "CrashLoopBackOff" ] || [ "$TERMINATED" = "Error" ]; then
-      echo "✅ Crash detected (status=$STATUS, terminated=$TERMINATED)"
-      CRASH_DETECTED=true
-      break
-    fi
-    echo "⏳ Attempt $i/40: waiting for crash..."
-    sleep 2
-  done
-  if [ "$CRASH_DETECTED" = false ]; then
-    echo "❌ Pod did not crash as expected"
-    kubectl get pods -n app-217
-    kubectl logs -l app=order-processor -n app-217 --tail=30 || true
-    exit 1
-  fi
-
-  # Verify logs contain the TypeError
-  LOGS=$(kubectl logs -l app=order-processor -n app-217 --previous --tail=50 2>/dev/null || kubectl logs -l app=order-processor -n app-217 --tail=50 2>/dev/null || echo "")
-  if echo "$LOGS" | grep -q "TypeError"; then
-    echo "✅ TypeError visible in pod logs"
-  else
-    echo "⚠️ Warning: TypeError not immediately visible in logs, test may still work via --previous"
-  fi
-
-  # Clean up temp file
-  rm -f /tmp/holmesgpt-eval-217-orders.json
+  echo "✅ Git repository created at $REPO_DIR with 4 commits"
+  git -C "$REPO_DIR" log --oneline
 
 after_test: |
-  kubectl delete namespace app-217 --ignore-not-found
   rm -rf /tmp/holmesgpt-eval-217-repo

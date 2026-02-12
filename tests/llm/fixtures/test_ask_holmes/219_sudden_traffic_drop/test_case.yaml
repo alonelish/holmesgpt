@@ -8,7 +8,6 @@ expected_output:
   - "Should suggest a possible cause such as deadlock, upstream failure, dependency issue, or the service being stuck - not a crash or restart"
 
 tags:
-  - kubernetes
   - hard
   - chain-of-causation
   - prometheus
@@ -16,32 +15,67 @@ tags:
 
 setup_timeout: 300
 
-port_forwards:
-  - namespace: app-219
-    service: prometheus
-    local_port: 10219
-    remote_port: 9090
-
 before_test: |
   set -e
+  WORKDIR="/tmp/holmesgpt-eval-219"
+  rm -rf "$WORKDIR"
+  mkdir -p "$WORKDIR"
 
-  kubectl create namespace app-219 --dry-run=client -o yaml | kubectl apply -f -
+  # Start the metrics exporter (redirect to file so subprocess.run pipe closes)
+  python3 ./metrics_exporter.py > "$WORKDIR/exporter.log" 2>&1 &
+  EXPORTER_PID=$!
+  echo "$EXPORTER_PID" > "$WORKDIR/exporter.pid"
+  sleep 2
 
-  # Create the metrics exporter secret
-  kubectl create secret generic payment-gateway-exporter \
-    --from-file=metrics_exporter.py=./metrics_exporter.py \
-    -n app-219 --dry-run=client -o yaml | kubectl apply -f -
+  if ! kill -0 "$EXPORTER_PID" 2>/dev/null; then
+    echo "❌ Metrics exporter failed to start"
+    exit 1
+  fi
+  echo "✅ Metrics exporter running on :9219 (PID $EXPORTER_PID)"
 
-  # Apply manifests
-  kubectl apply -f prometheus-config.yaml -n app-219
-  kubectl apply -f ../../shared/prometheus.yaml -n app-219
-  kubectl apply -f manifest.yaml -n app-219
+  # Create Prometheus config
+  cat > "$WORKDIR/prometheus.yml" << 'PROMEOF'
+  global:
+    scrape_interval: 5s
+    evaluation_interval: 5s
+  rule_files:
+    - alerts.yml
+  scrape_configs:
+  - job_name: 'payment-gateway'
+    metrics_path: /metrics
+    static_configs:
+    - targets: ['localhost:9219']
+  PROMEOF
 
-  # Wait for prometheus
+  cat > "$WORKDIR/alerts.yml" << 'ALERTEOF'
+  groups:
+  - name: payment-gateway-alerts
+    rules:
+    - alert: LowNetworkTraffic
+      expr: sum(rate(http_requests_total{service="payment-gateway"}[1m])) < 10
+      for: 30s
+      labels:
+        severity: critical
+        service: payment-gateway
+        namespace: app-219
+      annotations:
+        summary: "HTTP request rate dropped below 10 req/s"
+  ALERTEOF
+
+  # Start Prometheus
+  /tmp/prometheus-bin/prometheus \
+    --config.file="$WORKDIR/prometheus.yml" \
+    --storage.tsdb.path="$WORKDIR/data" \
+    --web.listen-address=":10219" \
+    --log.level=warn > "$WORKDIR/prometheus.log" 2>&1 &
+  PROM_PID=$!
+  echo "$PROM_PID" > "$WORKDIR/prometheus.pid"
+  sleep 3
+
   PROM_READY=false
-  for i in {1..60}; do
-    if kubectl wait --for=condition=ready pod -l app=prometheus -n app-219 --timeout=5s 2>/dev/null; then
-      echo "✅ Prometheus is ready"
+  for i in {1..30}; do
+    if curl -sf http://localhost:10219/-/ready >/dev/null 2>&1; then
+      echo "✅ Prometheus ready on :10219 (PID $PROM_PID)"
       PROM_READY=true
       break
     fi
@@ -49,42 +83,17 @@ before_test: |
   done
   if [ "$PROM_READY" = false ]; then
     echo "❌ Prometheus failed to start"
-    kubectl get pods -n app-219
     exit 1
   fi
 
-  # Wait for exporter pod
-  EXPORTER_READY=false
-  for i in {1..60}; do
-    if kubectl wait --for=condition=ready pod -l app=payment-gateway -n app-219 --timeout=5s 2>/dev/null; then
-      echo "✅ Exporter is ready"
-      EXPORTER_READY=true
-      break
-    fi
-    sleep 1
-  done
-  if [ "$EXPORTER_READY" = false ]; then
-    echo "❌ Exporter failed to start"
-    kubectl get pods -n app-219
-    kubectl logs -l app=payment-gateway -n app-219 --tail=20 || true
-    exit 1
-  fi
-
-  # Wait for traffic pattern: normal period + drop + some time after drop
-  # Need ~12 scrapes normal (60s) + ~12 scrapes after drop (60s) = 120s
+  # Wait for traffic drop pattern (normal ~60s then drop + ~60s after)
   echo "⏳ Waiting 130s for traffic drop pattern to develop..."
   sleep 130
 
-  # Verify the drop is visible
-  QUERY='rate(http_requests_total{service="payment-gateway",status="2xx"}[30s])'
-  RESULT=$(kubectl exec -n app-219 deploy/prometheus -- wget -q -O- "http://localhost:9090/api/v1/query?query=$(echo "$QUERY" | sed 's/ /%20/g; s/{/%7B/g; s/}/%7D/g; s/\[/%5B/g; s/\]/%5D/g; s/"/%22/g')" 2>/dev/null || echo "")
-  echo "Current rate query result: $RESULT"
-
-  if echo "$RESULT" | grep -q '"status":"success"'; then
-    echo "✅ Prometheus query succeeded - traffic drop pattern should be visible"
-  else
-    echo "⚠️ Prometheus query didn't return success, test may still work with range queries"
-  fi
+  echo "✅ Setup complete - traffic drop pattern should be visible"
 
 after_test: |
-  kubectl delete namespace app-219 --ignore-not-found
+  WORKDIR="/tmp/holmesgpt-eval-219"
+  kill $(cat "$WORKDIR/exporter.pid" 2>/dev/null) 2>/dev/null || true
+  kill $(cat "$WORKDIR/prometheus.pid" 2>/dev/null) 2>/dev/null || true
+  rm -rf "$WORKDIR"

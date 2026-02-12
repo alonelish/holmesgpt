@@ -152,6 +152,6 @@ class MetricsHandler(BaseHTTPRequestHandler):
 
 
 if __name__ == "__main__":
-    server = HTTPServer(("0.0.0.0", 9100), MetricsHandler)
-    print("Node metrics exporter running on :9100", flush=True)
+    server = HTTPServer(("0.0.0.0", 9221), MetricsHandler)
+    print("Node metrics exporter running on :9221", flush=True)
     server.serve_forever()

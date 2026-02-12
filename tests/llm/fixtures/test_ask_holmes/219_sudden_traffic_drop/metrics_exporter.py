@@ -72,17 +72,17 @@ class MetricsHandler(BaseHTTPRequestHandler):
         # HTTP request counter
         lines.append("# HELP http_requests_total Total number of HTTP requests processed.")
         lines.append("# TYPE http_requests_total counter")
-        lines.append(f'http_requests_total{{service="payment-gateway",status="2xx"}} {CUMULATIVE_REQUESTS["success"]:.1f}')
-        lines.append(f'http_requests_total{{service="payment-gateway",status="5xx"}} {CUMULATIVE_REQUESTS["error"]:.1f}')
+        lines.append(f'http_requests_total{{service="payment-gateway",namespace="app-219",status="2xx"}} {CUMULATIVE_REQUESTS["success"]:.1f}')
+        lines.append(f'http_requests_total{{service="payment-gateway",namespace="app-219",status="5xx"}} {CUMULATIVE_REQUESTS["error"]:.1f}')
 
         # Active connections gauge - drops to 0 when frozen
         lines.append("# HELP active_connections Current number of active connections.")
         lines.append("# TYPE active_connections gauge")
         if FROZEN:
-            lines.append('active_connections{service="payment-gateway"} 0')
+            lines.append('active_connections{service="payment-gateway",namespace="app-219"} 0')
         else:
             connections = 15 + 5 * math.sin(SCRAPE_COUNT * 0.3)
-            lines.append(f'active_connections{{service="payment-gateway"}} {connections:.0f}')
+            lines.append(f'active_connections{{service="payment-gateway",namespace="app-219"}} {connections:.0f}')
 
         # Request duration histogram
         lines.append("# HELP http_request_duration_seconds Request latency histogram.")
@@ -98,18 +98,18 @@ class MetricsHandler(BaseHTTPRequestHandler):
                 frac = 0.6
             else:
                 frac = 0.2
-            lines.append(f'http_request_duration_seconds_bucket{{service="payment-gateway",le="{le}"}} {total_reqs * frac:.1f}')
-        lines.append(f'http_request_duration_seconds_sum{{service="payment-gateway"}} {CUMULATIVE_LATENCY_SUM:.2f}')
-        lines.append(f'http_request_duration_seconds_count{{service="payment-gateway"}} {total_reqs:.1f}')
+            lines.append(f'http_request_duration_seconds_bucket{{service="payment-gateway",namespace="app-219",le="{le}"}} {total_reqs * frac:.1f}')
+        lines.append(f'http_request_duration_seconds_sum{{service="payment-gateway",namespace="app-219"}} {CUMULATIVE_LATENCY_SUM:.2f}')
+        lines.append(f'http_request_duration_seconds_count{{service="payment-gateway",namespace="app-219"}} {total_reqs:.1f}')
 
         # Thread/goroutine count - stays normal (service is running, just stuck)
         lines.append("# HELP process_threads Number of OS threads in the process.")
         lines.append("# TYPE process_threads gauge")
         if FROZEN:
             # Threads are stuck but count stays high (deadlock symptom)
-            lines.append("process_threads 48")
+            lines.append('process_threads{service="payment-gateway",namespace="app-219"} 48')
         else:
-            lines.append(f"process_threads {20 + int(3 * math.sin(SCRAPE_COUNT * 0.4))}")
+            lines.append(f'process_threads{{service="payment-gateway",namespace="app-219"}} {20 + int(3 * math.sin(SCRAPE_COUNT * 0.4))}')
 
         # Queue depth - grows after freeze (requests queue up but never process)
         lines.append("# HELP request_queue_depth Number of requests waiting in queue.")
@@ -117,9 +117,9 @@ class MetricsHandler(BaseHTTPRequestHandler):
         if FROZEN:
             scrapes_since_freeze = SCRAPE_COUNT - DROP_AFTER_SCRAPE
             queue_depth = min(scrapes_since_freeze * 50, 500)  # Grows then caps
-            lines.append(f"request_queue_depth {queue_depth}")
+            lines.append(f'request_queue_depth{{service="payment-gateway",namespace="app-219"}} {queue_depth}')
         else:
-            lines.append(f"request_queue_depth {int(2 + math.sin(SCRAPE_COUNT * 0.6))}")
+            lines.append(f'request_queue_depth{{service="payment-gateway",namespace="app-219"}} {int(2 + math.sin(SCRAPE_COUNT * 0.6))}')
 
         lines.append("")
         lines.append("# HELP exporter_info Exporter metadata.")
@@ -133,6 +133,6 @@ class MetricsHandler(BaseHTTPRequestHandler):
 
 
 if __name__ == "__main__":
-    server = HTTPServer(("0.0.0.0", 9100), MetricsHandler)
-    print("Payment gateway metrics exporter running on :9100", flush=True)
+    server = HTTPServer(("0.0.0.0", 9219), MetricsHandler)
+    print("Payment gateway metrics exporter running on :9219", flush=True)
     server.serve_forever()

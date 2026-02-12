@@ -8,7 +8,6 @@ expected_output:
   - "Must note that other countries (US, DE, JP, GB) remain at normal levels while BR spiked"
 
 tags:
-  - kubernetes
   - hard
   - chain-of-causation
   - prometheus
@@ -16,32 +15,69 @@ tags:
 
 setup_timeout: 300
 
-port_forwards:
-  - namespace: app-218
-    service: prometheus
-    local_port: 10218
-    remote_port: 9090
-
 before_test: |
   set -e
+  WORKDIR="/tmp/holmesgpt-eval-218"
+  rm -rf "$WORKDIR"
+  mkdir -p "$WORKDIR"
 
-  kubectl create namespace app-218 --dry-run=client -o yaml | kubectl apply -f -
+  # Start the metrics exporter (redirect to file so subprocess.run pipe closes)
+  python3 ./metrics_exporter.py > "$WORKDIR/exporter.log" 2>&1 &
+  EXPORTER_PID=$!
+  echo "$EXPORTER_PID" > "$WORKDIR/exporter.pid"
+  sleep 2
 
-  # Create the metrics exporter secret
-  kubectl create secret generic api-gateway-exporter \
-    --from-file=metrics_exporter.py=./metrics_exporter.py \
-    -n app-218 --dry-run=client -o yaml | kubectl apply -f -
+  # Verify exporter is running
+  if ! kill -0 "$EXPORTER_PID" 2>/dev/null; then
+    echo "❌ Metrics exporter failed to start"
+    exit 1
+  fi
+  echo "✅ Metrics exporter running on :9218 (PID $EXPORTER_PID)"
 
-  # Apply all manifests
-  kubectl apply -f prometheus-config.yaml -n app-218
-  kubectl apply -f ../../shared/prometheus.yaml -n app-218
-  kubectl apply -f manifest.yaml -n app-218
+  # Create Prometheus config for local scraping
+  cat > "$WORKDIR/prometheus.yml" << 'PROMEOF'
+  global:
+    scrape_interval: 5s
+    evaluation_interval: 5s
+  rule_files:
+    - alerts.yml
+  scrape_configs:
+  - job_name: 'api-gateway'
+    metrics_path: /metrics
+    static_configs:
+    - targets: ['localhost:9218']
+  PROMEOF
 
-  # Wait for prometheus
+  cat > "$WORKDIR/alerts.yml" << 'ALERTEOF'
+  groups:
+  - name: api-gateway-alerts
+    rules:
+    - alert: HighRequestRate
+      expr: sum(rate(http_requests_total[1m])) > 200
+      for: 30s
+      labels:
+        severity: warning
+        service: api-gateway
+        namespace: app-218
+      annotations:
+        summary: "HTTP request rate exceeded 200 req/s"
+  ALERTEOF
+
+  # Start Prometheus
+  /tmp/prometheus-bin/prometheus \
+    --config.file="$WORKDIR/prometheus.yml" \
+    --storage.tsdb.path="$WORKDIR/data" \
+    --web.listen-address=":10218" \
+    --log.level=warn > "$WORKDIR/prometheus.log" 2>&1 &
+  PROM_PID=$!
+  echo "$PROM_PID" > "$WORKDIR/prometheus.pid"
+  sleep 3
+
+  # Wait for Prometheus to be ready
   PROM_READY=false
-  for i in {1..60}; do
-    if kubectl wait --for=condition=ready pod -l app=prometheus -n app-218 --timeout=5s 2>/dev/null; then
-      echo "✅ Prometheus is ready"
+  for i in {1..30}; do
+    if curl -sf http://localhost:10218/-/ready >/dev/null 2>&1; then
+      echo "✅ Prometheus ready on :10218 (PID $PROM_PID)"
       PROM_READY=true
       break
     fi
@@ -49,40 +85,24 @@ before_test: |
   done
   if [ "$PROM_READY" = false ]; then
     echo "❌ Prometheus failed to start"
-    kubectl get pods -n app-218
     exit 1
   fi
 
-  # Wait for exporter
-  EXPORTER_READY=false
-  for i in {1..60}; do
-    if kubectl wait --for=condition=ready pod -l app=api-gateway -n app-218 --timeout=5s 2>/dev/null; then
-      echo "✅ Exporter is ready"
-      EXPORTER_READY=true
-      break
-    fi
-    sleep 1
-  done
-  if [ "$EXPORTER_READY" = false ]; then
-    echo "❌ Exporter failed to start"
-    kubectl get pods -n app-218
-    kubectl logs -l app=api-gateway -n app-218 --tail=20 || true
-    exit 1
-  fi
-
-  # Wait for metrics to accumulate (need ~20 scrapes = 100s for spike to develop)
+  # Wait for traffic pattern to develop (need ~20 scrapes for spike)
   echo "⏳ Waiting 120s for traffic pattern to develop in metrics..."
   sleep 120
 
-  # Verify spike is visible in Prometheus
-  QUERY='sum by (country) (rate(http_requests_total[30s]))'
-  RESULT=$(kubectl exec -n app-218 deploy/prometheus -- wget -q -O- "http://localhost:9090/api/v1/query?query=$(echo "$QUERY" | sed 's/ /%20/g; s/{/%7B/g; s/}/%7D/g; s/\[/%5B/g; s/\]/%5D/g')" 2>/dev/null || echo "")
+  # Verify spike is visible
+  RESULT=$(curl -sf "http://localhost:10218/api/v1/query?query=sum%20by%20(country)%20(rate(http_requests_total%5B30s%5D))" 2>/dev/null || echo "")
   if echo "$RESULT" | grep -q '"BR"'; then
     echo "✅ BR traffic data visible in Prometheus"
   else
-    echo "⚠️ BR data may not be fully visible yet, continuing anyway"
+    echo "⚠️ BR data may not be fully visible yet"
     echo "Query result: $RESULT"
   fi
 
 after_test: |
-  kubectl delete namespace app-218 --ignore-not-found
+  WORKDIR="/tmp/holmesgpt-eval-218"
+  kill $(cat "$WORKDIR/exporter.pid" 2>/dev/null) 2>/dev/null || true
+  kill $(cat "$WORKDIR/prometheus.pid" 2>/dev/null) 2>/dev/null || true
+  rm -rf "$WORKDIR"

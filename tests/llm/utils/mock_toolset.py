@@ -20,6 +20,7 @@ from holmes.core.tools import (
     ToolInvokeContext,
     Toolset,
     ToolsetStatusEnum,
+    ToolsetYamlFromConfig,
     YAMLTool,
     YAMLToolset,
 )
@@ -717,11 +718,15 @@ class MockToolsetManager:
         configured = []
 
         # First, validate that all custom definitions reference existing toolsets
-        # (except for HTTP toolsets which are dynamically created)
+        # (except for HTTP toolsets and custom inline toolsets which are dynamically created)
         builtin_names = {ts.name for ts in builtin_toolsets}
         for definition in custom_definitions:
             # Skip validation for HTTP toolsets - they override/replace built-in toolsets
             if isinstance(definition, HttpToolset):
+                continue
+            # Skip validation for custom inline toolsets that define their own tools
+            # (these are complete self-contained toolsets, not config overrides for built-ins)
+            if isinstance(definition, ToolsetYamlFromConfig) and definition.tools:
                 continue
             if definition.name not in builtin_names:
                 raise RuntimeError(
@@ -874,6 +879,27 @@ if [ "{{ kind }}" = "secret" ] || [ "{{ kind }}" = "secrets" ]; then echo "Not a
                 else:
                     # In MOCK mode, just set status to ENABLED for enabled toolsets
                     http_toolset.status = ToolsetStatusEnum.ENABLED
+
+        # Add custom inline toolsets (ToolsetYamlFromConfig with their own tools defined)
+        # These are complete self-contained toolsets defined in toolsets.yaml, not config overrides
+        for definition in custom_definitions:
+            if (
+                isinstance(definition, ToolsetYamlFromConfig)
+                and definition.tools
+                and definition.name not in builtin_names
+                and definition.name not in http_toolsets
+            ):
+                # Convert to YAMLToolset for proper tool execution
+                yaml_toolset = YAMLToolset(
+                    name=definition.name,
+                    enabled=definition.enabled,
+                    description=definition.description or "",
+                    tools=definition.tools,
+                    prerequisites=definition.prerequisites,
+                )
+                if definition.enabled:
+                    yaml_toolset.status = ToolsetStatusEnum.ENABLED
+                configured.append(yaml_toolset)
 
         return configured
 

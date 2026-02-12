@@ -9,44 +9,57 @@ expected_output:
   - "Should contrast the leaking pod's memory pattern with the stable memory of other pods in the namespace (auth-service, rate-limiter) to highlight the anomaly"
 
 tags:
-  - kubernetes
   - hard
   - chain-of-causation
   - prometheus
   - metrics
 
-setup_timeout: 480
-
-port_forwards:
-  - namespace: app-220
-    service: prometheus
-    local_port: 10220
-    remote_port: 9090
+setup_timeout: 300
 
 before_test: |
   set -e
+  WORKDIR="/tmp/holmesgpt-eval-220"
+  rm -rf "$WORKDIR"
+  mkdir -p "$WORKDIR"
 
-  kubectl create namespace app-220 --dry-run=client -o yaml | kubectl apply -f -
+  # Start the metrics exporter (redirect to file so subprocess.run pipe closes)
+  python3 ./metrics_exporter.py > "$WORKDIR/exporter.log" 2>&1 &
+  EXPORTER_PID=$!
+  echo "$EXPORTER_PID" > "$WORKDIR/exporter.pid"
+  sleep 2
 
-  # Create secrets for the leaky app and metrics exporter
-  kubectl create secret generic model-cache-app \
-    --from-file=memory_leak_app.py=./memory_leak_app.py \
-    -n app-220 --dry-run=client -o yaml | kubectl apply -f -
+  if ! kill -0 "$EXPORTER_PID" 2>/dev/null; then
+    echo "❌ Metrics exporter failed to start"
+    exit 1
+  fi
+  echo "✅ Metrics exporter running on :9220 (PID $EXPORTER_PID)"
 
-  kubectl create secret generic container-metrics-exporter \
-    --from-file=metrics_exporter.py=./metrics_exporter.py \
-    -n app-220 --dry-run=client -o yaml | kubectl apply -f -
+  # Create Prometheus config
+  cat > "$WORKDIR/prometheus.yml" << 'PROMEOF'
+  global:
+    scrape_interval: 5s
+    evaluation_interval: 5s
+  scrape_configs:
+  - job_name: 'container-metrics'
+    metrics_path: /metrics
+    static_configs:
+    - targets: ['localhost:9220']
+  PROMEOF
 
-  # Apply manifests
-  kubectl apply -f prometheus-config.yaml -n app-220
-  kubectl apply -f ../../shared/prometheus.yaml -n app-220
-  kubectl apply -f manifest.yaml -n app-220
+  # Start Prometheus
+  /tmp/prometheus-bin/prometheus \
+    --config.file="$WORKDIR/prometheus.yml" \
+    --storage.tsdb.path="$WORKDIR/data" \
+    --web.listen-address=":10220" \
+    --log.level=warn > "$WORKDIR/prometheus.log" 2>&1 &
+  PROM_PID=$!
+  echo "$PROM_PID" > "$WORKDIR/prometheus.pid"
+  sleep 3
 
-  # Wait for prometheus
   PROM_READY=false
-  for i in {1..60}; do
-    if kubectl wait --for=condition=ready pod -l app=prometheus -n app-220 --timeout=5s 2>/dev/null; then
-      echo "✅ Prometheus is ready"
+  for i in {1..30}; do
+    if curl -sf http://localhost:10220/-/ready >/dev/null 2>&1; then
+      echo "✅ Prometheus ready on :10220 (PID $PROM_PID)"
       PROM_READY=true
       break
     fi
@@ -54,53 +67,15 @@ before_test: |
   done
   if [ "$PROM_READY" = false ]; then
     echo "❌ Prometheus failed to start"
-    kubectl get pods -n app-220
     exit 1
   fi
 
-  # Wait for the metrics exporter
-  EXPORTER_READY=false
-  for i in {1..60}; do
-    if kubectl wait --for=condition=ready pod -l app=container-metrics -n app-220 --timeout=5s 2>/dev/null; then
-      echo "✅ Metrics exporter is ready"
-      EXPORTER_READY=true
-      break
-    fi
-    sleep 1
-  done
-  if [ "$EXPORTER_READY" = false ]; then
-    echo "❌ Metrics exporter failed to start"
-    kubectl get pods -n app-220
-    exit 1
-  fi
+  # Wait for memory growth pattern to develop
+  echo "⏳ Waiting 120s for memory growth pattern to develop..."
+  sleep 120
 
-  # Wait for the model-cache pod to get OOMKilled
-  # It has a 256Mi limit and grows ~3MB/s, so should OOM in ~70s
-  echo "⏳ Waiting for model-cache to OOMKill (up to 180s)..."
-  OOM_DETECTED=false
-  for i in {1..90}; do
-    REASON=$(kubectl get pods -l app=model-cache -n app-220 -o jsonpath='{.items[0].status.containerStatuses[0].lastState.terminated.reason}' 2>/dev/null || echo "")
-    if [ "$REASON" = "OOMKilled" ]; then
-      echo "✅ OOMKill detected!"
-      OOM_DETECTED=true
-      break
-    fi
-    sleep 2
-  done
-  if [ "$OOM_DETECTED" = false ]; then
-    echo "⚠️ OOMKill not detected yet, checking status..."
-    kubectl get pods -n app-220
-    # Even without actual OOM, the metrics exporter shows the pattern
-    # The test can still work since we test Prometheus metric analysis
-  fi
-
-  # Wait extra time for the memory growth pattern to be visible in Prometheus
-  echo "⏳ Waiting 60s more for full metric pattern visibility..."
-  sleep 60
-
-  # Verify memory metrics exist in Prometheus
-  QUERY='container_memory_working_set_bytes{namespace="app-220"}'
-  RESULT=$(kubectl exec -n app-220 deploy/prometheus -- wget -q -O- "http://localhost:9090/api/v1/query?query=$(echo "$QUERY" | sed 's/ /%20/g; s/{/%7B/g; s/}/%7D/g; s/"/%22/g')" 2>/dev/null || echo "")
+  # Verify memory metrics exist
+  RESULT=$(curl -sf 'http://localhost:10220/api/v1/query?query=container_memory_working_set_bytes%7Bnamespace%3D%22app-220%22%7D' 2>/dev/null || echo "")
   if echo "$RESULT" | grep -q "model-cache"; then
     echo "✅ Memory metrics for model-cache visible in Prometheus"
   else
@@ -108,4 +83,7 @@ before_test: |
   fi
 
 after_test: |
-  kubectl delete namespace app-220 --ignore-not-found
+  WORKDIR="/tmp/holmesgpt-eval-220"
+  kill $(cat "$WORKDIR/exporter.pid" 2>/dev/null) 2>/dev/null || true
+  kill $(cat "$WORKDIR/prometheus.pid" 2>/dev/null) 2>/dev/null || true
+  rm -rf "$WORKDIR"

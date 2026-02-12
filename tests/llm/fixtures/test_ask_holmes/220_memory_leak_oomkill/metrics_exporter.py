@@ -120,6 +120,6 @@ class MetricsHandler(BaseHTTPRequestHandler):
 
 
 if __name__ == "__main__":
-    server = HTTPServer(("0.0.0.0", 9100), MetricsHandler)
-    print("Container metrics exporter running on :9100", flush=True)
+    server = HTTPServer(("0.0.0.0", 9220), MetricsHandler)
+    print("Container metrics exporter running on :9220", flush=True)
     server.serve_forever()

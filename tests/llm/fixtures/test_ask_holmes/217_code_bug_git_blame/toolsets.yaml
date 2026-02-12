@@ -1,8 +1,12 @@
 toolsets:
+  # Disable default toolsets that require K8s/Helm (not available in this test)
   kubernetes/core:
-    enabled: true
+    enabled: false
   kubernetes/logs:
-    enabled: true
+    enabled: false
+  helm/core:
+    enabled: false
+
   git-repository:
     enabled: true
     description: "Git repository tools for investigating source code history. The repository is located at /tmp/holmesgpt-eval-217-repo and contains the source code for the order-processor service."
@@ -30,3 +34,11 @@ toolsets:
       - name: "git_show_file"
         description: "Show the current contents of a file in the repository."
         command: "git -C /tmp/holmesgpt-eval-217-repo show HEAD:{{ file_path }}"
+
+  pod-logs:
+    enabled: true
+    description: "Retrieve logs from Kubernetes pods. The order-processor pod in namespace app-217 has been crash-looping."
+    tools:
+      - name: "get_pod_logs"
+        description: "Get the logs from the order-processor pod which has been crash-looping. Shows the most recent crash output."
+        command: "echo '2026-02-12 10:15:01 INFO Order processor starting up v2.6.0\n2026-02-12 10:15:01 INFO Processing order ORD-90281: 149.99 USD\n2026-02-12 10:15:01 INFO Processing order ORD-90282: 299.5 USD\n2026-02-12 10:15:02 INFO Processing order ORD-90283: 89.95 USD\nTraceback (most recent call last):\n  File \"/app/order_processor.py\", line 42, in main\n    result = process_order(order)\n  File \"/app/order_processor.py\", line 33, in process_order\n    summary = format_discount_line(total_price, discount_pct)\n  File \"/app/order_processor.py\", line 24, in format_discount_line\n    return \"Discounted total: $\" + discounted + \" (saved \" + discount_pct + \"%)\"\nTypeError: can only concatenate str (not \"float\") to str'"

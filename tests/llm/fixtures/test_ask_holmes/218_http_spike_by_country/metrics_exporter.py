@@ -86,7 +86,7 @@ class MetricsHandler(BaseHTTPRequestHandler):
                 for code, weight in zip(STATUS_CODES, STATUS_WEIGHTS):
                     value = cumulative * ep_share * weight
                     lines.append(
-                        f'http_requests_total{{country="{country}",endpoint="{endpoint}",status_code="{code}"}} {value:.1f}'
+                        f'http_requests_total{{country="{country}",endpoint="{endpoint}",status_code="{code}",service="api-gateway",namespace="app-218"}} {value:.1f}'
                     )
 
         lines.append("")
@@ -114,10 +114,10 @@ class MetricsHandler(BaseHTTPRequestHandler):
                 else:
                     bucket_frac = 0.1
                 lines.append(
-                    f'http_request_duration_seconds_bucket{{country="{country}",le="{le}"}} {count * bucket_frac:.1f}'
+                    f'http_request_duration_seconds_bucket{{country="{country}",le="{le}",service="api-gateway",namespace="app-218"}} {count * bucket_frac:.1f}'
                 )
-            lines.append(f'http_request_duration_seconds_sum{{country="{country}"}} {count * avg_latency:.2f}')
-            lines.append(f'http_request_duration_seconds_count{{country="{country}"}} {count:.1f}')
+            lines.append(f'http_request_duration_seconds_sum{{country="{country}",service="api-gateway",namespace="app-218"}} {count * avg_latency:.2f}')
+            lines.append(f'http_request_duration_seconds_count{{country="{country}",service="api-gateway",namespace="app-218"}} {count:.1f}')
 
         lines.append("")
         lines.append("# HELP exporter_scrape_count Number of times this exporter has been scraped.")
@@ -131,6 +131,6 @@ class MetricsHandler(BaseHTTPRequestHandler):
 
 
 if __name__ == "__main__":
-    server = HTTPServer(("0.0.0.0", 9100), MetricsHandler)
-    print("Metrics exporter running on :9100", flush=True)
+    server = HTTPServer(("0.0.0.0", 9218), MetricsHandler)
+    print("Metrics exporter running on :9218", flush=True)
     server.serve_forever()

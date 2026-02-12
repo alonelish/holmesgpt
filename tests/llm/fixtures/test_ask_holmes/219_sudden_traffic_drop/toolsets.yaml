@@ -1,8 +1,12 @@
 toolsets:
+  # Disable default toolsets that require K8s/Helm (not available in this test)
   kubernetes/core:
-    enabled: true
+    enabled: false
   kubernetes/logs:
-    enabled: true
+    enabled: false
+  helm/core:
+    enabled: false
+
   prometheus/metrics:
     enabled: true
     config:

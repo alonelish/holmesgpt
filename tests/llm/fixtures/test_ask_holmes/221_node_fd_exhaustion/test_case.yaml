@@ -9,7 +9,6 @@ expected_output:
   - "Should note that other pods (event-router, metrics-aggregator, config-watcher, cache-proxy) have stable FD usage"
 
 tags:
-  - kubernetes
   - hard
   - chain-of-causation
   - prometheus
@@ -17,32 +16,66 @@ tags:
 
 setup_timeout: 300
 
-port_forwards:
-  - namespace: app-221
-    service: prometheus
-    local_port: 10221
-    remote_port: 9090
-
 before_test: |
   set -e
+  WORKDIR="/tmp/holmesgpt-eval-221"
+  rm -rf "$WORKDIR"
+  mkdir -p "$WORKDIR"
 
-  kubectl create namespace app-221 --dry-run=client -o yaml | kubectl apply -f -
+  # Start the metrics exporter (redirect to file so subprocess.run pipe closes)
+  python3 ./metrics_exporter.py > "$WORKDIR/exporter.log" 2>&1 &
+  EXPORTER_PID=$!
+  echo "$EXPORTER_PID" > "$WORKDIR/exporter.pid"
+  sleep 2
 
-  # Create the metrics exporter secret
-  kubectl create secret generic node-metrics-exporter \
-    --from-file=metrics_exporter.py=./metrics_exporter.py \
-    -n app-221 --dry-run=client -o yaml | kubectl apply -f -
+  if ! kill -0 "$EXPORTER_PID" 2>/dev/null; then
+    echo "❌ Metrics exporter failed to start"
+    exit 1
+  fi
+  echo "✅ Metrics exporter running on :9221 (PID $EXPORTER_PID)"
 
-  # Apply manifests
-  kubectl apply -f prometheus-config.yaml -n app-221
-  kubectl apply -f ../../shared/prometheus.yaml -n app-221
-  kubectl apply -f manifest.yaml -n app-221
+  # Create Prometheus config
+  cat > "$WORKDIR/prometheus.yml" << 'PROMEOF'
+  global:
+    scrape_interval: 5s
+    evaluation_interval: 5s
+  rule_files:
+    - alerts.yml
+  scrape_configs:
+  - job_name: 'node-metrics'
+    metrics_path: /metrics
+    static_configs:
+    - targets: ['localhost:9221']
+  PROMEOF
 
-  # Wait for prometheus
+  cat > "$WORKDIR/alerts.yml" << 'ALERTEOF'
+  groups:
+  - name: node-alerts
+    rules:
+    - alert: HighFileDescriptorUsage
+      expr: node_filefd_usage_percent > 75
+      for: 1m
+      labels:
+        severity: warning
+        node: worker-node-3
+      annotations:
+        summary: "Node file descriptor usage above 75%"
+  ALERTEOF
+
+  # Start Prometheus
+  /tmp/prometheus-bin/prometheus \
+    --config.file="$WORKDIR/prometheus.yml" \
+    --storage.tsdb.path="$WORKDIR/data" \
+    --web.listen-address=":10221" \
+    --log.level=warn > "$WORKDIR/prometheus.log" 2>&1 &
+  PROM_PID=$!
+  echo "$PROM_PID" > "$WORKDIR/prometheus.pid"
+  sleep 3
+
   PROM_READY=false
-  for i in {1..60}; do
-    if kubectl wait --for=condition=ready pod -l app=prometheus -n app-221 --timeout=5s 2>/dev/null; then
-      echo "✅ Prometheus is ready"
+  for i in {1..30}; do
+    if curl -sf http://localhost:10221/-/ready >/dev/null 2>&1; then
+      echo "✅ Prometheus ready on :10221 (PID $PROM_PID)"
       PROM_READY=true
       break
     fi
@@ -50,41 +83,23 @@ before_test: |
   done
   if [ "$PROM_READY" = false ]; then
     echo "❌ Prometheus failed to start"
-    kubectl get pods -n app-221
     exit 1
   fi
 
-  # Wait for exporter
-  EXPORTER_READY=false
-  for i in {1..60}; do
-    if kubectl wait --for=condition=ready pod -l app=node-metrics -n app-221 --timeout=5s 2>/dev/null; then
-      echo "✅ Metrics exporter is ready"
-      EXPORTER_READY=true
-      break
-    fi
-    sleep 1
-  done
-  if [ "$EXPORTER_READY" = false ]; then
-    echo "❌ Metrics exporter failed to start"
-    kubectl get pods -n app-221
-    exit 1
-  fi
-
-  # Wait for FD leak pattern to develop in metrics
-  # After ~40 scrapes (200s), log-collector will have leaked ~480 additional FDs
-  # making the pattern clearly visible
+  # Wait for FD leak pattern to develop
   echo "⏳ Waiting 150s for file descriptor leak pattern to develop..."
   sleep 150
 
   # Verify metrics are visible
-  QUERY='process_open_fds{namespace="app-221"}'
-  RESULT=$(kubectl exec -n app-221 deploy/prometheus -- wget -q -O- "http://localhost:9090/api/v1/query?query=$(echo "$QUERY" | sed 's/ /%20/g; s/{/%7B/g; s/}/%7D/g; s/"/%22/g')" 2>/dev/null || echo "")
+  RESULT=$(curl -sf 'http://localhost:10221/api/v1/query?query=process_open_fds%7Bnamespace%3D%22app-221%22%7D' 2>/dev/null || echo "")
   if echo "$RESULT" | grep -q "log-collector"; then
     echo "✅ FD metrics visible in Prometheus"
   else
     echo "⚠️ FD metrics may not be fully visible yet"
-    echo "Result: $RESULT"
   fi
 
 after_test: |
-  kubectl delete namespace app-221 --ignore-not-found
+  WORKDIR="/tmp/holmesgpt-eval-221"
+  kill $(cat "$WORKDIR/exporter.pid" 2>/dev/null) 2>/dev/null || true
+  kill $(cat "$WORKDIR/prometheus.pid" 2>/dev/null) 2>/dev/null || true
+  rm -rf "$WORKDIR"
