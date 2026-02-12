@@ -34,6 +34,11 @@ from holmes.core.models import (
 )
 from holmes.core.prompt import generate_user_prompt
 from holmes.core.safeguards import prevent_overly_repeated_tool_call
+from holmes.core.quality_convergence import (
+    QualityConvergenceConfig,
+    QualityConvergenceTracker,
+    build_refinement_prompt,
+)
 from holmes.core.tools import (
     StructuredToolResult,
     StructuredToolResultStatus,
@@ -238,7 +243,12 @@ class ToolCallingLLM:
     llm: LLM
 
     def __init__(
-        self, tool_executor: ToolExecutor, max_steps: int, llm: LLM, tracer=None
+        self,
+        tool_executor: ToolExecutor,
+        max_steps: int,
+        llm: LLM,
+        tracer=None,
+        quality_convergence_config: Optional[QualityConvergenceConfig] = None,
     ):
         self.tool_executor = tool_executor
         self.max_steps = max_steps
@@ -247,6 +257,7 @@ class ToolCallingLLM:
         self.approval_callback: Optional[
             Callable[[StructuredToolResult], tuple[bool, Optional[str]]]
         ] = None
+        self.quality_convergence_config = quality_convergence_config
 
         self._runbook_in_use: bool = False
 
@@ -373,6 +384,7 @@ class ToolCallingLLM:
         sections: Optional[InputSectionsDataType] = None,
         trace_span=DummySpan(),
         request_context: Optional[Dict[str, Any]] = None,
+        quality_convergence_config: Optional[QualityConvergenceConfig] = None,
     ) -> LLMResult:
         messages = [
             {"role": "system", "content": system_prompt},
@@ -385,6 +397,7 @@ class ToolCallingLLM:
             sections=sections,
             trace_span=trace_span,
             request_context=request_context,
+            quality_convergence_config=quality_convergence_config,
         )
 
     def messages_call(
@@ -422,6 +435,7 @@ class ToolCallingLLM:
         trace_span=DummySpan(),
         tool_number_offset: int = 0,
         request_context: Optional[Dict[str, Any]] = None,
+        quality_convergence_config: Optional[QualityConvergenceConfig] = None,
     ) -> LLMResult:
         tool_calls: list[
             dict
@@ -432,6 +446,14 @@ class ToolCallingLLM:
         max_steps = self.max_steps
         i = 0
         metadata: Dict[Any, Any] = {}
+
+        # Initialize quality convergence tracker if enabled
+        qc_config = (
+            quality_convergence_config
+            or self.quality_convergence_config
+            or QualityConvergenceConfig()
+        )
+        qc_tracker = QualityConvergenceTracker(qc_config) if qc_config.enabled else None
         while i < max_steps:
             i += 1
             logging.debug(f"running iteration {i}")
@@ -515,6 +537,23 @@ class ToolCallingLLM:
                 )
 
             if not tools_to_call:
+                # Quality convergence: assess and potentially continue
+                if qc_tracker and qc_tracker.should_assess_quality(i):
+                    assessment = qc_tracker.assess_and_decide()
+                    if assessment.should_continue and i < max_steps - 1:
+                        # Add refinement prompt and continue investigation
+                        refinement_prompt = build_refinement_prompt(assessment)
+                        if refinement_prompt:
+                            logging.info(
+                                f"Quality convergence: triggering refinement (quality={assessment.level.value})"
+                            )
+                            messages.append(
+                                {"role": "user", "content": refinement_prompt}
+                            )
+                            # Re-enable tools for refinement
+                            tools = self._get_tools()
+                            continue
+
                 tokens = self.llm.count_tokens(messages=messages, tools=tools)
 
                 add_token_count_to_metadata(
@@ -524,6 +563,10 @@ class ToolCallingLLM:
                     maximum_output_token=limit_result.maximum_output_token,
                     metadata=metadata,
                 )
+
+                # Add quality convergence metadata if tracking
+                if qc_tracker:
+                    metadata.update(qc_tracker.get_metadata())
 
                 return LLMResult(
                     result=text_response,
@@ -588,6 +631,13 @@ class ToolCallingLLM:
                     all_tool_calls.append(tool_result_response_dict)
                     messages.append(tool_call_result.as_tool_call_message())
                     tokens = self.llm.count_tokens(messages=messages, tools=tools)
+
+                    # Track tool call for quality convergence
+                    if qc_tracker:
+                        qc_tracker.record_tool_call(
+                            tool_call_result.tool_name,
+                            tool_call_result.result.status.value,
+                        )
 
                 # Update the tool number offset for the next iteration
                 tool_number_offset += len(tools_to_call)
@@ -1187,8 +1237,14 @@ class IssueInvestigator(ToolCallingLLM):
         max_steps: int,
         llm: LLM,
         cluster_name: Optional[str],
+        quality_convergence_config: Optional[QualityConvergenceConfig] = None,
     ):
-        super().__init__(tool_executor, max_steps, llm)
+        super().__init__(
+            tool_executor,
+            max_steps,
+            llm,
+            quality_convergence_config=quality_convergence_config,
+        )
         self.cluster_name = cluster_name
 
     def investigate(

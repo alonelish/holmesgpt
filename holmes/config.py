@@ -18,6 +18,7 @@ from pydantic import (
 
 from holmes.common.env_vars import ROBUSTA_CONFIG_PATH
 from holmes.core.llm import DefaultLLM, LLMModelRegistry
+from holmes.core.quality_convergence import QualityConvergenceConfig
 from holmes.core.tools_utils.tool_executor import ToolExecutor
 from holmes.core.toolset_manager import ToolsetManager
 from holmes.plugins.runbooks import (
@@ -58,6 +59,12 @@ class Config(RobustaBaseConfig):
     fast_model: Optional[str] = None
     max_steps: int = 40
     cluster_name: Optional[str] = None
+
+    # Quality convergence settings - iterate until quality targets are met
+    # Defaults are set in model_validator to read env vars at runtime (for test compatibility)
+    quality_convergence_enabled: Optional[bool] = None
+    quality_convergence_max_refinements: Optional[int] = None
+    quality_convergence_min_evidence_breadth: Optional[int] = None
 
     alertmanager_url: Optional[str] = None
     alertmanager_username: Optional[str] = None
@@ -137,6 +144,34 @@ class Config(RobustaBaseConfig):
         if not self._llm_model_registry:
             self._llm_model_registry = LLMModelRegistry(self, dal=self.dal)
         return self._llm_model_registry
+
+    @model_validator(mode="after")
+    def _set_quality_convergence_defaults(self) -> "Config":
+        """Set quality convergence defaults from env vars at runtime.
+
+        Reads directly from os.environ to support test_env_vars in tests.
+        """
+        import json
+
+        def _load_bool_from_env(env_var: str, default: bool) -> bool:
+            env_value = os.environ.get(env_var)
+            if env_value is None:
+                return default
+            return json.loads(env_value.lower())
+
+        if self.quality_convergence_enabled is None:
+            self.quality_convergence_enabled = _load_bool_from_env(
+                "QUALITY_CONVERGENCE_ENABLED", False
+            )
+        if self.quality_convergence_max_refinements is None:
+            self.quality_convergence_max_refinements = int(
+                os.environ.get("QUALITY_CONVERGENCE_MAX_REFINEMENTS", "2")
+            )
+        if self.quality_convergence_min_evidence_breadth is None:
+            self.quality_convergence_min_evidence_breadth = int(
+                os.environ.get("QUALITY_CONVERGENCE_MIN_EVIDENCE_BREADTH", "1")
+            )
+        return self
 
     @model_validator(mode="after")
     def _warn_deprecated_custom_runbooks(self) -> "Config":
@@ -323,6 +358,16 @@ class Config(RobustaBaseConfig):
 
         return [(name, old.value, new.value) for name, old, new in changes]
 
+    def get_quality_convergence_config(self) -> Optional[QualityConvergenceConfig]:
+        """Build QualityConvergenceConfig from config settings."""
+        if not self.quality_convergence_enabled:
+            return None
+        return QualityConvergenceConfig(
+            enabled=True,
+            max_refinement_iterations=self.quality_convergence_max_refinements or 2,
+            min_evidence_breadth=self.quality_convergence_min_evidence_breadth or 1,
+        )
+
     def create_console_toolcalling_llm(
         self,
         dal: Optional["SupabaseDal"] = None,
@@ -337,6 +382,7 @@ class Config(RobustaBaseConfig):
             tool_executor,
             self.max_steps,
             self._get_llm(tracer=tracer, model_key=model_name),
+            quality_convergence_config=self.get_quality_convergence_config(),
         )
 
     def create_agui_toolcalling_llm(
@@ -349,7 +395,10 @@ class Config(RobustaBaseConfig):
         from holmes.core.tool_calling_llm import ToolCallingLLM
 
         return ToolCallingLLM(
-            tool_executor, self.max_steps, self._get_llm(model, tracer)
+            tool_executor,
+            self.max_steps,
+            self._get_llm(model, tracer),
+            quality_convergence_config=self.get_quality_convergence_config(),
         )
 
     def create_toolcalling_llm(
@@ -362,7 +411,10 @@ class Config(RobustaBaseConfig):
         from holmes.core.tool_calling_llm import ToolCallingLLM
 
         return ToolCallingLLM(
-            tool_executor, self.max_steps, self._get_llm(model, tracer)
+            tool_executor,
+            self.max_steps,
+            self._get_llm(model, tracer),
+            quality_convergence_config=self.get_quality_convergence_config(),
         )
 
     def create_issue_investigator(
@@ -379,6 +431,7 @@ class Config(RobustaBaseConfig):
             max_steps=self.max_steps,
             llm=self._get_llm(model, tracer),
             cluster_name=self.cluster_name,
+            quality_convergence_config=self.get_quality_convergence_config(),
         )
 
     def create_console_issue_investigator(
@@ -392,6 +445,7 @@ class Config(RobustaBaseConfig):
             max_steps=self.max_steps,
             llm=self._get_llm(model_key=model_name),
             cluster_name=self.cluster_name,
+            quality_convergence_config=self.get_quality_convergence_config(),
         )
 
     def validate_jira_config(self):

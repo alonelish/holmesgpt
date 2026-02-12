@@ -1,0 +1,62 @@
+user_prompt: "What issues are affecting the multi-issue-app deployment? Provide a thorough investigation."
+expected_output:
+  - "DATABASE_URL environment variable is not set"
+  - "CrashLoopBackOff"
+include_tool_calls: true
+test_env_vars:
+  QUALITY_CONVERGENCE_ENABLED: "true"
+  QUALITY_CONVERGENCE_MAX_REFINEMENTS: "2"
+before_test: |
+  kubectl create namespace app-217 || true
+  cat <<'EOF' | kubectl apply -f -
+  apiVersion: apps/v1
+  kind: Deployment
+  metadata:
+    name: multi-issue-app
+    namespace: app-217
+  spec:
+    replicas: 1
+    selector:
+      matchLabels:
+        app: multi-issue-app
+    template:
+      metadata:
+        labels:
+          app: multi-issue-app
+      spec:
+        containers:
+        - name: app-container
+          image: busybox:1.36
+          command: ["/bin/sh"]
+          args: ["-c", "if [ -z \"${DATABASE_URL}\" ]; then echo 'ERROR: DATABASE_URL environment variable is not set'; exit 1; fi; while true; do echo 'App running'; sleep 10; done"]
+          resources:
+            requests:
+              memory: "64Mi"
+              cpu: "50m"
+            limits:
+              memory: "128Mi"
+              cpu: "100m"
+  EOF
+  # Wait for pod to exist
+  POD_EXISTS=false
+  for i in {1..60}; do
+    if kubectl get pod -l app=multi-issue-app -n app-217 2>/dev/null | grep -q multi-issue-app; then
+      echo "Pod exists!"
+      POD_EXISTS=true
+      break
+    fi
+    sleep 1
+  done
+  if [ "$POD_EXISTS" = false ]; then
+    echo "Pod failed to appear"
+    exit 1
+  fi
+  # Wait for CrashLoopBackOff
+  kubectl wait --for=jsonpath='{.status.containerStatuses[0].state.waiting.reason}'=CrashLoopBackOff pod -l app=multi-issue-app -n app-217 --timeout=180s || exit 1
+after_test: |
+  kubectl delete namespace app-217
+tags:
+  - easy
+  - kubernetes
+  - regression
+description: "Test that quality convergence tracks metrics and gathers evidence from multiple sources"

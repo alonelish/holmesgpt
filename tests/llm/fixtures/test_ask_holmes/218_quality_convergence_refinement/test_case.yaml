@@ -1,0 +1,68 @@
+user_prompt: "Investigate why the data-processor pod is not starting. Check both pod status and events to provide a complete diagnosis."
+expected_output:
+  - "ImagePullBackOff"
+  - "image does not exist or is not accessible"
+include_tool_calls: true
+test_env_vars:
+  QUALITY_CONVERGENCE_ENABLED: "true"
+  QUALITY_CONVERGENCE_MIN_EVIDENCE_BREADTH: "2"
+before_test: |
+  kubectl create namespace app-218 || true
+  cat <<'EOF' | kubectl apply -f -
+  apiVersion: apps/v1
+  kind: Deployment
+  metadata:
+    name: data-processor
+    namespace: app-218
+  spec:
+    replicas: 1
+    selector:
+      matchLabels:
+        app: data-processor
+    template:
+      metadata:
+        labels:
+          app: data-processor
+      spec:
+        containers:
+        - name: processor
+          image: nonexistent-registry.invalid/fake-image:v1.0.0
+          command: ["/bin/sh", "-c", "while true; do echo processing; sleep 5; done"]
+  EOF
+  # Wait for pod to exist
+  POD_EXISTS=false
+  for i in {1..60}; do
+    if kubectl get pod -l app=data-processor -n app-218 2>/dev/null | grep -q data-processor; then
+      echo "Pod exists!"
+      POD_EXISTS=true
+      break
+    fi
+    sleep 1
+  done
+  if [ "$POD_EXISTS" = false ]; then
+    echo "Pod failed to appear"
+    exit 1
+  fi
+  # Wait for ImagePullBackOff
+  IMAGE_PULL_BACKOFF=false
+  for i in {1..60}; do
+    STATUS=$(kubectl get pod -l app=data-processor -n app-218 -o jsonpath='{.items[0].status.containerStatuses[0].state.waiting.reason}' 2>/dev/null)
+    if [ "$STATUS" = "ImagePullBackOff" ] || [ "$STATUS" = "ErrImagePull" ]; then
+      echo "ImagePullBackOff/ErrImagePull detected!"
+      IMAGE_PULL_BACKOFF=true
+      break
+    fi
+    sleep 2
+  done
+  if [ "$IMAGE_PULL_BACKOFF" = false ]; then
+    echo "ImagePullBackOff not detected after 120 seconds"
+    kubectl get pod -l app=data-processor -n app-218 -o yaml
+    exit 1
+  fi
+after_test: |
+  kubectl delete namespace app-218
+tags:
+  - easy
+  - kubernetes
+  - regression
+description: "Test that quality convergence triggers refinement to gather evidence from multiple sources (pod status AND events)"
