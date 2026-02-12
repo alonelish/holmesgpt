@@ -339,4 +339,3 @@ llm_instructions: |
 - Verify the path pattern matches the endpoint you're trying to access
 - Ensure the HTTP method is in the allowed methods list
 - Check HolmesGPT logs for the exact URL being blocked
-
