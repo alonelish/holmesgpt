@@ -1,0 +1,88 @@
+user_prompt:
+  - "An alert fired for HighRequestRate on the api-gateway service in namespace app-218. The alert says HTTP request rate exceeded 200 req/s. Investigate what is causing the spike and identify which segment of traffic is responsible."
+  - "We received a HighRequestRate alert for the api-gateway in namespace app-218. Request rate went above 200/s. Use Prometheus to find out what changed and which traffic source caused the spike."
+
+expected_output:
+  - "Must identify that Brazil (BR) or country=BR is the source of the traffic spike"
+  - "Must mention that the spike is a significant increase from the baseline (e.g., from ~12 req/s to ~300 req/s or similar order of magnitude increase for BR)"
+  - "Must note that other countries (US, DE, JP, GB) remain at normal levels while BR spiked"
+
+tags:
+  - kubernetes
+  - hard
+  - chain-of-causation
+  - prometheus
+  - metrics
+
+setup_timeout: 300
+
+port_forwards:
+  - namespace: app-218
+    service: prometheus
+    local_port: 10218
+    remote_port: 9090
+
+before_test: |
+  set -e
+
+  kubectl create namespace app-218 --dry-run=client -o yaml | kubectl apply -f -
+
+  # Create the metrics exporter secret
+  kubectl create secret generic api-gateway-exporter \
+    --from-file=metrics_exporter.py=./metrics_exporter.py \
+    -n app-218 --dry-run=client -o yaml | kubectl apply -f -
+
+  # Apply all manifests
+  kubectl apply -f prometheus-config.yaml -n app-218
+  kubectl apply -f ../../shared/prometheus.yaml -n app-218
+  kubectl apply -f manifest.yaml -n app-218
+
+  # Wait for prometheus
+  PROM_READY=false
+  for i in {1..60}; do
+    if kubectl wait --for=condition=ready pod -l app=prometheus -n app-218 --timeout=5s 2>/dev/null; then
+      echo "✅ Prometheus is ready"
+      PROM_READY=true
+      break
+    fi
+    sleep 1
+  done
+  if [ "$PROM_READY" = false ]; then
+    echo "❌ Prometheus failed to start"
+    kubectl get pods -n app-218
+    exit 1
+  fi
+
+  # Wait for exporter
+  EXPORTER_READY=false
+  for i in {1..60}; do
+    if kubectl wait --for=condition=ready pod -l app=api-gateway -n app-218 --timeout=5s 2>/dev/null; then
+      echo "✅ Exporter is ready"
+      EXPORTER_READY=true
+      break
+    fi
+    sleep 1
+  done
+  if [ "$EXPORTER_READY" = false ]; then
+    echo "❌ Exporter failed to start"
+    kubectl get pods -n app-218
+    kubectl logs -l app=api-gateway -n app-218 --tail=20 || true
+    exit 1
+  fi
+
+  # Wait for metrics to accumulate (need ~20 scrapes = 100s for spike to develop)
+  echo "⏳ Waiting 120s for traffic pattern to develop in metrics..."
+  sleep 120
+
+  # Verify spike is visible in Prometheus
+  QUERY='sum by (country) (rate(http_requests_total[30s]))'
+  RESULT=$(kubectl exec -n app-218 deploy/prometheus -- wget -q -O- "http://localhost:9090/api/v1/query?query=$(echo "$QUERY" | sed 's/ /%20/g; s/{/%7B/g; s/}/%7D/g; s/\[/%5B/g; s/\]/%5D/g')" 2>/dev/null || echo "")
+  if echo "$RESULT" | grep -q '"BR"'; then
+    echo "✅ BR traffic data visible in Prometheus"
+  else
+    echo "⚠️ BR data may not be fully visible yet, continuing anyway"
+    echo "Query result: $RESULT"
+  fi
+
+after_test: |
+  kubectl delete namespace app-218 --ignore-not-found

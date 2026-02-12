@@ -1,0 +1,31 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: prometheus-config
+  namespace: app-219
+data:
+  prometheus.yml: |
+    global:
+      scrape_interval: 5s
+      evaluation_interval: 5s
+    rule_files:
+      - /etc/prometheus/alerts.yml
+    scrape_configs:
+    - job_name: 'payment-gateway'
+      metrics_path: /metrics
+      static_configs:
+      - targets: ['payment-gateway.app-219.svc.cluster.local:9100']
+  alerts.yml: |
+    groups:
+    - name: payment-gateway-alerts
+      rules:
+      - alert: LowNetworkTraffic
+        expr: sum(rate(http_requests_total{service="payment-gateway"}[1m])) < 10
+        for: 30s
+        labels:
+          severity: critical
+          service: payment-gateway
+          namespace: app-219
+        annotations:
+          summary: "HTTP request rate dropped below 10 req/s"
+          description: "Payment gateway traffic is at {{ $value }} req/s, well below normal levels of ~100 req/s."

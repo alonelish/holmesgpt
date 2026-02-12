@@ -1,0 +1,32 @@
+toolsets:
+  kubernetes/core:
+    enabled: true
+  kubernetes/logs:
+    enabled: true
+  git-repository:
+    enabled: true
+    description: "Git repository tools for investigating source code history. The repository is located at /tmp/holmesgpt-eval-217-repo and contains the source code for the order-processor service."
+    tools:
+      - name: "git_log"
+        description: "View the git commit history of the repository. Shows commit hash, author, date, and message. Use this to understand the history of changes."
+        command: "git -C /tmp/holmesgpt-eval-217-repo log --format='commit %H%nAuthor: %an <%ae>%nDate: %ad%n%n    %s%n' --date=short"
+
+      - name: "git_show_commit"
+        description: "Show the full details of a specific git commit including the diff of changes made. Use this to see exactly what code was changed in a commit."
+        command: "git -C /tmp/holmesgpt-eval-217-repo show {{ commit_hash }}"
+
+      - name: "git_blame_file"
+        description: "Show git blame for a file, displaying which commit last modified each line. Use this to find who introduced a specific line of code."
+        command: "git -C /tmp/holmesgpt-eval-217-repo blame {{ file_path }}"
+
+      - name: "git_diff_commits"
+        description: "Show the diff between two commits. Use this to compare changes between versions."
+        command: "git -C /tmp/holmesgpt-eval-217-repo diff {{ from_commit }}..{{ to_commit }}"
+
+      - name: "git_list_files"
+        description: "List all tracked files in the repository."
+        command: "git -C /tmp/holmesgpt-eval-217-repo ls-files"
+
+      - name: "git_show_file"
+        description: "Show the current contents of a file in the repository."
+        command: "git -C /tmp/holmesgpt-eval-217-repo show HEAD:{{ file_path }}"

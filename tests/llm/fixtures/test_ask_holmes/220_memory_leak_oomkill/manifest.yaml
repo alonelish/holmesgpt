@@ -1,0 +1,84 @@
+# The actual memory-leaking application pod
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: model-cache
+  namespace: app-220
+spec:
+  replicas: 1
+  selector:
+    matchLabels: { app: model-cache }
+  template:
+    metadata:
+      labels: { app: model-cache }
+    spec:
+      containers:
+      - name: model-cache
+        image: python:3.11-slim
+        command: ["python", "/app/memory_leak_app.py"]
+        volumeMounts:
+        - name: app-code
+          mountPath: /app
+        resources:
+          limits:
+            memory: "256Mi"
+            cpu: "200m"
+          requests:
+            memory: "64Mi"
+            cpu: "50m"
+      volumes:
+      - name: app-code
+        secret:
+          secretName: model-cache-app
+---
+# Metrics exporter that simulates cAdvisor-style container metrics
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: container-metrics
+  namespace: app-220
+spec:
+  replicas: 1
+  selector:
+    matchLabels: { app: container-metrics }
+  template:
+    metadata:
+      labels: { app: container-metrics }
+    spec:
+      containers:
+      - name: exporter
+        image: python:3.11-slim
+        command: ["python", "/app/metrics_exporter.py"]
+        ports:
+        - containerPort: 9100
+        volumeMounts:
+        - name: exporter-code
+          mountPath: /app
+        readinessProbe:
+          httpGet: { path: /healthz, port: 9100 }
+          initialDelaySeconds: 3
+          periodSeconds: 5
+        resources:
+          limits:
+            memory: "64Mi"
+            cpu: "100m"
+          requests:
+            memory: "32Mi"
+            cpu: "50m"
+      volumes:
+      - name: exporter-code
+        secret:
+          secretName: container-metrics-exporter
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: container-metrics
+  namespace: app-220
+  labels: { app: container-metrics }
+spec:
+  selector: { app: container-metrics }
+  ports:
+  - name: metrics
+    port: 9100
+    targetPort: 9100

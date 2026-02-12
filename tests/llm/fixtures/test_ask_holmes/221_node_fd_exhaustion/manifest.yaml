@@ -1,0 +1,50 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: node-metrics
+  namespace: app-221
+spec:
+  replicas: 1
+  selector:
+    matchLabels: { app: node-metrics }
+  template:
+    metadata:
+      labels: { app: node-metrics }
+    spec:
+      containers:
+      - name: exporter
+        image: python:3.11-slim
+        command: ["python", "/app/metrics_exporter.py"]
+        ports:
+        - containerPort: 9100
+        volumeMounts:
+        - name: app-code
+          mountPath: /app
+        readinessProbe:
+          httpGet: { path: /healthz, port: 9100 }
+          initialDelaySeconds: 3
+          periodSeconds: 5
+        resources:
+          limits:
+            memory: "64Mi"
+            cpu: "100m"
+          requests:
+            memory: "32Mi"
+            cpu: "50m"
+      volumes:
+      - name: app-code
+        secret:
+          secretName: node-metrics-exporter
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: node-metrics
+  namespace: app-221
+  labels: { app: node-metrics }
+spec:
+  selector: { app: node-metrics }
+  ports:
+  - name: metrics
+    port: 9100
+    targetPort: 9100

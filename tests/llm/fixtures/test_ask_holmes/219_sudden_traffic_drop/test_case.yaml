@@ -1,0 +1,90 @@
+user_prompt:
+  - "An alert fired: LowNetworkTraffic - HTTP request rate for the payment-gateway service in namespace app-219 has dropped below 10 req/s. Investigate what happened."
+  - "We got a LowNetworkTraffic alert for the payment-gateway in namespace app-219. The alert says HTTP requests dropped below 10/s. The pod seems healthy. Figure out what happened."
+
+expected_output:
+  - "Must explicitly identify that there was a sudden drop in traffic (not a gradual decline) - traffic went from approximately 100 req/s to 0 or near-zero"
+  - "Must note that the service/pod itself appears healthy and running despite the traffic drop"
+  - "Should suggest a possible cause such as deadlock, upstream failure, dependency issue, or the service being stuck - not a crash or restart"
+
+tags:
+  - kubernetes
+  - hard
+  - chain-of-causation
+  - prometheus
+  - metrics
+
+setup_timeout: 300
+
+port_forwards:
+  - namespace: app-219
+    service: prometheus
+    local_port: 10219
+    remote_port: 9090
+
+before_test: |
+  set -e
+
+  kubectl create namespace app-219 --dry-run=client -o yaml | kubectl apply -f -
+
+  # Create the metrics exporter secret
+  kubectl create secret generic payment-gateway-exporter \
+    --from-file=metrics_exporter.py=./metrics_exporter.py \
+    -n app-219 --dry-run=client -o yaml | kubectl apply -f -
+
+  # Apply manifests
+  kubectl apply -f prometheus-config.yaml -n app-219
+  kubectl apply -f ../../shared/prometheus.yaml -n app-219
+  kubectl apply -f manifest.yaml -n app-219
+
+  # Wait for prometheus
+  PROM_READY=false
+  for i in {1..60}; do
+    if kubectl wait --for=condition=ready pod -l app=prometheus -n app-219 --timeout=5s 2>/dev/null; then
+      echo "✅ Prometheus is ready"
+      PROM_READY=true
+      break
+    fi
+    sleep 1
+  done
+  if [ "$PROM_READY" = false ]; then
+    echo "❌ Prometheus failed to start"
+    kubectl get pods -n app-219
+    exit 1
+  fi
+
+  # Wait for exporter pod
+  EXPORTER_READY=false
+  for i in {1..60}; do
+    if kubectl wait --for=condition=ready pod -l app=payment-gateway -n app-219 --timeout=5s 2>/dev/null; then
+      echo "✅ Exporter is ready"
+      EXPORTER_READY=true
+      break
+    fi
+    sleep 1
+  done
+  if [ "$EXPORTER_READY" = false ]; then
+    echo "❌ Exporter failed to start"
+    kubectl get pods -n app-219
+    kubectl logs -l app=payment-gateway -n app-219 --tail=20 || true
+    exit 1
+  fi
+
+  # Wait for traffic pattern: normal period + drop + some time after drop
+  # Need ~12 scrapes normal (60s) + ~12 scrapes after drop (60s) = 120s
+  echo "⏳ Waiting 130s for traffic drop pattern to develop..."
+  sleep 130
+
+  # Verify the drop is visible
+  QUERY='rate(http_requests_total{service="payment-gateway",status="2xx"}[30s])'
+  RESULT=$(kubectl exec -n app-219 deploy/prometheus -- wget -q -O- "http://localhost:9090/api/v1/query?query=$(echo "$QUERY" | sed 's/ /%20/g; s/{/%7B/g; s/}/%7D/g; s/\[/%5B/g; s/\]/%5D/g; s/"/%22/g')" 2>/dev/null || echo "")
+  echo "Current rate query result: $RESULT"
+
+  if echo "$RESULT" | grep -q '"status":"success"'; then
+    echo "✅ Prometheus query succeeded - traffic drop pattern should be visible"
+  else
+    echo "⚠️ Prometheus query didn't return success, test may still work with range queries"
+  fi
+
+after_test: |
+  kubectl delete namespace app-219 --ignore-not-found

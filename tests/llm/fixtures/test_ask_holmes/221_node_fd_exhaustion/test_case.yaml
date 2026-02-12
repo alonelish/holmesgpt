@@ -1,0 +1,90 @@
+user_prompt:
+  - "An alert fired for HighFileDescriptorUsage on worker-node-3. The node is running low on file descriptors. Investigate using Prometheus to find which pod in namespace app-221 is causing the issue."
+  - "We got a HighFileDescriptorUsage alert for worker-node-3. Node FD usage is climbing toward the limit. Use Prometheus metrics to identify which pod in app-221 is leaking file descriptors."
+
+expected_output:
+  - "Must identify log-collector (pod log-collector-6b8f4d9a7-mv2rq) as the pod that is leaking file descriptors"
+  - "Must describe the log-collector's FD usage as monotonically increasing or steadily growing, in contrast to other pods which are stable"
+  - "Must mention the node's file descriptor allocation is climbing toward the limit (65536) or is at a high percentage"
+  - "Should note that other pods (event-router, metrics-aggregator, config-watcher, cache-proxy) have stable FD usage"
+
+tags:
+  - kubernetes
+  - hard
+  - chain-of-causation
+  - prometheus
+  - metrics
+
+setup_timeout: 300
+
+port_forwards:
+  - namespace: app-221
+    service: prometheus
+    local_port: 10221
+    remote_port: 9090
+
+before_test: |
+  set -e
+
+  kubectl create namespace app-221 --dry-run=client -o yaml | kubectl apply -f -
+
+  # Create the metrics exporter secret
+  kubectl create secret generic node-metrics-exporter \
+    --from-file=metrics_exporter.py=./metrics_exporter.py \
+    -n app-221 --dry-run=client -o yaml | kubectl apply -f -
+
+  # Apply manifests
+  kubectl apply -f prometheus-config.yaml -n app-221
+  kubectl apply -f ../../shared/prometheus.yaml -n app-221
+  kubectl apply -f manifest.yaml -n app-221
+
+  # Wait for prometheus
+  PROM_READY=false
+  for i in {1..60}; do
+    if kubectl wait --for=condition=ready pod -l app=prometheus -n app-221 --timeout=5s 2>/dev/null; then
+      echo "✅ Prometheus is ready"
+      PROM_READY=true
+      break
+    fi
+    sleep 1
+  done
+  if [ "$PROM_READY" = false ]; then
+    echo "❌ Prometheus failed to start"
+    kubectl get pods -n app-221
+    exit 1
+  fi
+
+  # Wait for exporter
+  EXPORTER_READY=false
+  for i in {1..60}; do
+    if kubectl wait --for=condition=ready pod -l app=node-metrics -n app-221 --timeout=5s 2>/dev/null; then
+      echo "✅ Metrics exporter is ready"
+      EXPORTER_READY=true
+      break
+    fi
+    sleep 1
+  done
+  if [ "$EXPORTER_READY" = false ]; then
+    echo "❌ Metrics exporter failed to start"
+    kubectl get pods -n app-221
+    exit 1
+  fi
+
+  # Wait for FD leak pattern to develop in metrics
+  # After ~40 scrapes (200s), log-collector will have leaked ~480 additional FDs
+  # making the pattern clearly visible
+  echo "⏳ Waiting 150s for file descriptor leak pattern to develop..."
+  sleep 150
+
+  # Verify metrics are visible
+  QUERY='process_open_fds{namespace="app-221"}'
+  RESULT=$(kubectl exec -n app-221 deploy/prometheus -- wget -q -O- "http://localhost:9090/api/v1/query?query=$(echo "$QUERY" | sed 's/ /%20/g; s/{/%7B/g; s/}/%7D/g; s/"/%22/g')" 2>/dev/null || echo "")
+  if echo "$RESULT" | grep -q "log-collector"; then
+    echo "✅ FD metrics visible in Prometheus"
+  else
+    echo "⚠️ FD metrics may not be fully visible yet"
+    echo "Result: $RESULT"
+  fi
+
+after_test: |
+  kubectl delete namespace app-221 --ignore-not-found

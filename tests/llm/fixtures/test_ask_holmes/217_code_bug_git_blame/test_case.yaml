@@ -1,0 +1,264 @@
+user_prompt:
+  - "The order-processor pod in namespace app-217 is crash-looping. Investigate the root cause. Check the pod logs for the error, then use git tools to find which commit introduced the bug and who authored it."
+  - "A pod named order-processor in namespace app-217 keeps crashing. Look at the logs, find the buggy line of code in the git repository, and tell me who introduced the bug and in which commit."
+
+expected_output:
+  - "Must identify the TypeError or type conversion error in process_order function around line 17 of order_processor.py where total_price is compared or concatenated with a string instead of being treated as a numeric value"
+  - "Must identify commit authored by charlie.martinez@acme-corp.dev (or charlie.martinez) as the one that introduced the bug"
+  - "Must mention the commit message contains 'Add discount string formatting' or reference the specific commit SHA that introduced the bug"
+  - "Must explain the fix involves converting the type properly (e.g., using float() or str() conversion, or fixing the string formatting)"
+
+tags:
+  - kubernetes
+  - hard
+  - chain-of-causation
+  - logs
+
+setup_timeout: 180
+
+before_test: |
+  set -e
+
+  # Create namespace
+  kubectl create namespace app-217 --dry-run=client -o yaml | kubectl apply -f -
+
+  # Create the git repository with realistic commit history
+  REPO_DIR="/tmp/holmesgpt-eval-217-repo"
+  rm -rf "$REPO_DIR"
+  mkdir -p "$REPO_DIR"
+  cd "$REPO_DIR"
+  git init
+
+  # Commit 1: Initial project structure (alice)
+  git config user.name "Alice Chen"
+  git config user.email "alice.chen@acme-corp.dev"
+
+  cat > order_processor.py << 'PYEOF'
+  """Order processing service for ACME Corp fulfillment pipeline."""
+  import json
+  import sys
+  import time
+  import logging
+
+  logging.basicConfig(level=logging.INFO, format='%(asctime)s %(levelname)s %(message)s')
+  logger = logging.getLogger("order-processor")
+
+  def load_orders(path="/data/orders.json"):
+      with open(path) as f:
+          return json.load(f)
+
+  def process_order(order):
+      order_id = order["id"]
+      total_price = order["total_price"]
+      currency = order["currency"]
+      logger.info(f"Processing order {order_id}: {total_price} {currency}")
+      # Simulate processing
+      time.sleep(0.1)
+      return {"order_id": order_id, "status": "completed", "total": total_price}
+
+  def main():
+      logger.info("Order processor starting up v2.4.1")
+      orders = load_orders()
+      results = []
+      for order in orders:
+          result = process_order(order)
+          results.append(result)
+      logger.info(f"Processed {len(results)} orders successfully")
+
+  if __name__ == "__main__":
+      main()
+  PYEOF
+
+  cat > requirements.txt << 'EOF'
+  # no external deps
+  EOF
+
+  git add -A
+  git commit -m "Initial order processor service"
+
+  # Commit 2: Add validation (bob)
+  git config user.name "Bob Kim"
+  git config user.email "bob.kim@acme-corp.dev"
+
+  cat > order_processor.py << 'PYEOF'
+  """Order processing service for ACME Corp fulfillment pipeline."""
+  import json
+  import sys
+  import time
+  import logging
+
+  logging.basicConfig(level=logging.INFO, format='%(asctime)s %(levelname)s %(message)s')
+  logger = logging.getLogger("order-processor")
+
+  def load_orders(path="/data/orders.json"):
+      with open(path) as f:
+          return json.load(f)
+
+  def validate_order(order):
+      required_fields = ["id", "total_price", "currency", "items"]
+      for field in required_fields:
+          if field not in order:
+              raise ValueError(f"Missing required field: {field}")
+      if not order["items"]:
+          raise ValueError(f"Order {order['id']} has no items")
+      return True
+
+  def process_order(order):
+      validate_order(order)
+      order_id = order["id"]
+      total_price = order["total_price"]
+      currency = order["currency"]
+      logger.info(f"Processing order {order_id}: {total_price} {currency}")
+      time.sleep(0.1)
+      return {"order_id": order_id, "status": "completed", "total": total_price}
+
+  def main():
+      logger.info("Order processor starting up v2.5.0")
+      orders = load_orders()
+      results = []
+      for order in orders:
+          result = process_order(order)
+          results.append(result)
+      logger.info(f"Processed {len(results)} orders successfully")
+
+  if __name__ == "__main__":
+      main()
+  PYEOF
+
+  git add -A
+  git commit -m "Add order validation checks"
+
+  # Commit 3: Charlie introduces the bug - string formatting with numeric type mismatch
+  git config user.name "Charlie Martinez"
+  git config user.email "charlie.martinez@acme-corp.dev"
+
+  cat > order_processor.py << 'PYEOF'
+  """Order processing service for ACME Corp fulfillment pipeline."""
+  import json
+  import sys
+  import time
+  import logging
+
+  logging.basicConfig(level=logging.INFO, format='%(asctime)s %(levelname)s %(message)s')
+  logger = logging.getLogger("order-processor")
+
+  def load_orders(path="/data/orders.json"):
+      with open(path) as f:
+          return json.load(f)
+
+  def validate_order(order):
+      required_fields = ["id", "total_price", "currency", "items"]
+      for field in required_fields:
+          if field not in order:
+              raise ValueError(f"Missing required field: {field}")
+      if not order["items"]:
+          raise ValueError(f"Order {order['id']} has no items")
+      return True
+
+  def format_discount_line(total_price, discount_pct):
+      discounted = total_price - (total_price * discount_pct / 100)
+      return "Discounted total: $" + discounted + " (saved " + discount_pct + "%)"
+
+  def process_order(order):
+      validate_order(order)
+      order_id = order["id"]
+      total_price = order["total_price"]
+      currency = order["currency"]
+      discount_pct = order.get("discount_pct", 0)
+      logger.info(f"Processing order {order_id}: {total_price} {currency}")
+      if discount_pct > 0:
+          summary = format_discount_line(total_price, discount_pct)
+          logger.info(summary)
+      time.sleep(0.1)
+      return {"order_id": order_id, "status": "completed", "total": total_price}
+
+  def main():
+      logger.info("Order processor starting up v2.6.0")
+      orders = load_orders()
+      results = []
+      for order in orders:
+          result = process_order(order)
+          results.append(result)
+      logger.info(f"Processed {len(results)} orders successfully")
+
+  if __name__ == "__main__":
+      main()
+  PYEOF
+
+  git add -A
+  git commit -m "Add discount string formatting to order summary"
+
+  # Commit 4: Unrelated change by diana (after the bug) so git log is non-trivial
+  git config user.name "Diana Patel"
+  git config user.email "diana.patel@acme-corp.dev"
+
+  cat > config.py << 'PYEOF'
+  """Configuration module for order processor."""
+  import os
+
+  ORDER_FILE = os.environ.get("ORDER_FILE", "/data/orders.json")
+  LOG_LEVEL = os.environ.get("LOG_LEVEL", "INFO")
+  MAX_RETRIES = int(os.environ.get("MAX_RETRIES", "3"))
+  PYEOF
+
+  git add -A
+  git commit -m "Add configuration module for environment settings"
+
+  # Now create the k8s resources
+  cd /home/user/holmesgpt/tests/llm/fixtures/test_ask_holmes/217_code_bug_git_blame
+
+  # Create orders.json with a discount order that triggers the bug
+  cat > /tmp/holmesgpt-eval-217-orders.json << 'EOF'
+  [
+    {"id": "ORD-90281", "total_price": 149.99, "currency": "USD", "items": ["widget-a", "widget-b"], "discount_pct": 0},
+    {"id": "ORD-90282", "total_price": 299.50, "currency": "USD", "items": ["gadget-x"], "discount_pct": 0},
+    {"id": "ORD-90283", "total_price": 89.95, "currency": "USD", "items": ["part-7k", "part-8m"], "discount_pct": 15}
+  ]
+  EOF
+
+  # Create secrets for the app code and data
+  kubectl create secret generic order-processor-code \
+    --from-file=order_processor.py="$REPO_DIR/order_processor.py" \
+    -n app-217 --dry-run=client -o yaml | kubectl apply -f -
+
+  kubectl create configmap order-data \
+    --from-file=orders.json=/tmp/holmesgpt-eval-217-orders.json \
+    -n app-217 --dry-run=client -o yaml | kubectl apply -f -
+
+  # Deploy the crashing pod
+  kubectl apply -f manifest.yaml -n app-217
+
+  # Wait for crash loop
+  CRASH_DETECTED=false
+  for i in {1..40}; do
+    STATUS=$(kubectl get pod -l app=order-processor -n app-217 -o jsonpath='{.items[0].status.containerStatuses[0].state.waiting.reason}' 2>/dev/null || echo "")
+    TERMINATED=$(kubectl get pod -l app=order-processor -n app-217 -o jsonpath='{.items[0].status.containerStatuses[0].lastState.terminated.reason}' 2>/dev/null || echo "")
+    if [ "$STATUS" = "CrashLoopBackOff" ] || [ "$TERMINATED" = "Error" ]; then
+      echo "✅ Crash detected (status=$STATUS, terminated=$TERMINATED)"
+      CRASH_DETECTED=true
+      break
+    fi
+    echo "⏳ Attempt $i/40: waiting for crash..."
+    sleep 2
+  done
+  if [ "$CRASH_DETECTED" = false ]; then
+    echo "❌ Pod did not crash as expected"
+    kubectl get pods -n app-217
+    kubectl logs -l app=order-processor -n app-217 --tail=30 || true
+    exit 1
+  fi
+
+  # Verify logs contain the TypeError
+  LOGS=$(kubectl logs -l app=order-processor -n app-217 --previous --tail=50 2>/dev/null || kubectl logs -l app=order-processor -n app-217 --tail=50 2>/dev/null || echo "")
+  if echo "$LOGS" | grep -q "TypeError"; then
+    echo "✅ TypeError visible in pod logs"
+  else
+    echo "⚠️ Warning: TypeError not immediately visible in logs, test may still work via --previous"
+  fi
+
+  # Clean up temp file
+  rm -f /tmp/holmesgpt-eval-217-orders.json
+
+after_test: |
+  kubectl delete namespace app-217 --ignore-not-found
+  rm -rf /tmp/holmesgpt-eval-217-repo

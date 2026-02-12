@@ -1,0 +1,32 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: order-processor
+  namespace: app-217
+  labels:
+    app: order-processor
+spec:
+  restartPolicy: Always
+  containers:
+  - name: processor
+    image: python:3.11-slim
+    command: ["python", "/app/order_processor.py"]
+    volumeMounts:
+    - name: app-code
+      mountPath: /app
+    - name: order-data
+      mountPath: /data
+    resources:
+      limits:
+        memory: "128Mi"
+        cpu: "100m"
+      requests:
+        memory: "64Mi"
+        cpu: "50m"
+  volumes:
+  - name: app-code
+    secret:
+      secretName: order-processor-code
+  - name: order-data
+    configMap:
+      name: order-data

@@ -1,0 +1,111 @@
+user_prompt:
+  - "The model-cache pod in namespace app-220 was OOMKilled. Investigate why and check the memory usage pattern in Prometheus to understand the root cause."
+  - "A pod called model-cache in app-220 namespace got OOMKilled. Use Prometheus to look at memory trends and determine what caused it."
+
+expected_output:
+  - "Must identify that the model-cache pod was OOMKilled (memory exceeded its limit of 256Mi)"
+  - "Must describe the memory pattern as monotonically increasing, steadily growing, or linear growth over time - indicating a memory leak rather than a sudden spike"
+  - "Must suggest the root cause is a memory leak (e.g., unbounded cache, missing eviction, growing data structure)"
+  - "Should contrast the leaking pod's memory pattern with the stable memory of other pods in the namespace (auth-service, rate-limiter) to highlight the anomaly"
+
+tags:
+  - kubernetes
+  - hard
+  - chain-of-causation
+  - prometheus
+  - metrics
+
+setup_timeout: 480
+
+port_forwards:
+  - namespace: app-220
+    service: prometheus
+    local_port: 10220
+    remote_port: 9090
+
+before_test: |
+  set -e
+
+  kubectl create namespace app-220 --dry-run=client -o yaml | kubectl apply -f -
+
+  # Create secrets for the leaky app and metrics exporter
+  kubectl create secret generic model-cache-app \
+    --from-file=memory_leak_app.py=./memory_leak_app.py \
+    -n app-220 --dry-run=client -o yaml | kubectl apply -f -
+
+  kubectl create secret generic container-metrics-exporter \
+    --from-file=metrics_exporter.py=./metrics_exporter.py \
+    -n app-220 --dry-run=client -o yaml | kubectl apply -f -
+
+  # Apply manifests
+  kubectl apply -f prometheus-config.yaml -n app-220
+  kubectl apply -f ../../shared/prometheus.yaml -n app-220
+  kubectl apply -f manifest.yaml -n app-220
+
+  # Wait for prometheus
+  PROM_READY=false
+  for i in {1..60}; do
+    if kubectl wait --for=condition=ready pod -l app=prometheus -n app-220 --timeout=5s 2>/dev/null; then
+      echo "✅ Prometheus is ready"
+      PROM_READY=true
+      break
+    fi
+    sleep 1
+  done
+  if [ "$PROM_READY" = false ]; then
+    echo "❌ Prometheus failed to start"
+    kubectl get pods -n app-220
+    exit 1
+  fi
+
+  # Wait for the metrics exporter
+  EXPORTER_READY=false
+  for i in {1..60}; do
+    if kubectl wait --for=condition=ready pod -l app=container-metrics -n app-220 --timeout=5s 2>/dev/null; then
+      echo "✅ Metrics exporter is ready"
+      EXPORTER_READY=true
+      break
+    fi
+    sleep 1
+  done
+  if [ "$EXPORTER_READY" = false ]; then
+    echo "❌ Metrics exporter failed to start"
+    kubectl get pods -n app-220
+    exit 1
+  fi
+
+  # Wait for the model-cache pod to get OOMKilled
+  # It has a 256Mi limit and grows ~3MB/s, so should OOM in ~70s
+  echo "⏳ Waiting for model-cache to OOMKill (up to 180s)..."
+  OOM_DETECTED=false
+  for i in {1..90}; do
+    REASON=$(kubectl get pods -l app=model-cache -n app-220 -o jsonpath='{.items[0].status.containerStatuses[0].lastState.terminated.reason}' 2>/dev/null || echo "")
+    if [ "$REASON" = "OOMKilled" ]; then
+      echo "✅ OOMKill detected!"
+      OOM_DETECTED=true
+      break
+    fi
+    sleep 2
+  done
+  if [ "$OOM_DETECTED" = false ]; then
+    echo "⚠️ OOMKill not detected yet, checking status..."
+    kubectl get pods -n app-220
+    # Even without actual OOM, the metrics exporter shows the pattern
+    # The test can still work since we test Prometheus metric analysis
+  fi
+
+  # Wait extra time for the memory growth pattern to be visible in Prometheus
+  echo "⏳ Waiting 60s more for full metric pattern visibility..."
+  sleep 60
+
+  # Verify memory metrics exist in Prometheus
+  QUERY='container_memory_working_set_bytes{namespace="app-220"}'
+  RESULT=$(kubectl exec -n app-220 deploy/prometheus -- wget -q -O- "http://localhost:9090/api/v1/query?query=$(echo "$QUERY" | sed 's/ /%20/g; s/{/%7B/g; s/}/%7D/g; s/"/%22/g')" 2>/dev/null || echo "")
+  if echo "$RESULT" | grep -q "model-cache"; then
+    echo "✅ Memory metrics for model-cache visible in Prometheus"
+  else
+    echo "⚠️ Memory metrics may not be fully visible yet"
+  fi
+
+after_test: |
+  kubectl delete namespace app-220 --ignore-not-found
