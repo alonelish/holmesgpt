@@ -138,7 +138,7 @@ class SearchDashboards(BaseGrafanaTool):
         super().__init__(
             toolset=toolset,
             name="grafana_search_dashboards",
-            description="Search for Grafana dashboards and folders by title using the /api/search endpoint. WARNING: This only searches dashboard titles and metadata (tags, folders), NOT the content of dashboard panels or queries. To check whether a metric or query expression is used inside a dashboard, first list dashboards with this tool, then use grafana_get_dashboard_by_uid to inspect each dashboard's panel definitions.",
+            description="Search for Grafana dashboards and folders by title using the /api/search endpoint",
             parameters={
                 "query": ToolParameter(
                     description="Search text to filter dashboards by title (does NOT search inside panel queries or expressions, only dashboard titles)",
