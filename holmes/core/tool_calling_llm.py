@@ -3,6 +3,7 @@ import json
 import logging
 import re
 import textwrap
+from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional, Type, Union
 
 import sentry_sdk
@@ -238,12 +239,18 @@ class ToolCallingLLM:
     llm: LLM
 
     def __init__(
-        self, tool_executor: ToolExecutor, max_steps: int, llm: LLM, tracer=None
+        self,
+        tool_executor: ToolExecutor,
+        max_steps: int,
+        llm: LLM,
+        tool_results_dir: Optional[Path],
+        tracer=None,
     ):
         self.tool_executor = tool_executor
         self.max_steps = max_steps
         self.tracer = tracer
         self.llm = llm
+        self.tool_results_dir = tool_results_dir
         self.approval_callback: Optional[
             Callable[[StructuredToolResult], tuple[bool, Optional[str]]]
         ] = None
@@ -255,6 +262,16 @@ class ToolCallingLLM:
         For interactive loop, reset runbooks in use
         """
         self._runbook_in_use = False
+
+    def _has_bash_for_file_access(self) -> bool:
+        """Check if bash toolset is available for reading saved tool result files."""
+        for toolset in self.tool_executor.enabled_toolsets:
+            if toolset.name == "bash":
+                config = toolset.config
+                if config and hasattr(config, "include_default_allow_deny_list"):
+                    return config.include_default_allow_deny_list
+                return False
+        return False
 
     def process_tool_decisions(
         self,
@@ -805,7 +822,11 @@ class ToolCallingLLM:
                 )
 
             original_token_count = prevent_overly_big_tool_response(
-                tool_call_result=tool_call_result, llm=self.llm
+                tool_call_result=tool_call_result,
+                llm=self.llm,
+                tool_results_dir=self.tool_results_dir
+                if self.tool_results_dir and self._has_bash_for_file_access()
+                else None,
             )
 
             ToolCallingLLM._log_tool_call_result(
@@ -1182,9 +1203,10 @@ class IssueInvestigator(ToolCallingLLM):
         tool_executor: ToolExecutor,
         max_steps: int,
         llm: LLM,
+        tool_results_dir: Optional[Path],
         cluster_name: Optional[str],
     ):
-        super().__init__(tool_executor, max_steps, llm)
+        super().__init__(tool_executor, max_steps, llm, tool_results_dir)
         self.cluster_name = cluster_name
 
     def investigate(

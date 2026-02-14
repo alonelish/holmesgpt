@@ -8,6 +8,7 @@ from holmes.core.models import (
     ToolCallConversationResult,
 )
 from holmes.core.prompt import (
+    PromptComponent,
     build_prompts,
     generate_user_prompt,
 )
@@ -269,6 +270,7 @@ def build_chat_messages(
     additional_system_prompt: Optional[str] = None,
     runbooks: Optional[RunbookCatalog] = None,
     images: Optional[List[Union[str, Dict[str, Any]]]] = None,
+    prompt_component_overrides: Optional[Dict[PromptComponent, bool]] = None,
 ) -> List[dict]:
     """Build messages for general chat conversation, truncating tool outputs to fit context window.
 
@@ -288,6 +290,7 @@ def build_chat_messages(
         file_paths=None,
         include_todowrite_reminder=False,
         images=images,
+        prompt_component_overrides=prompt_component_overrides,
     )
 
     if not conversation_history:

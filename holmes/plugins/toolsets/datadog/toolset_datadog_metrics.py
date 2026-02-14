@@ -109,7 +109,7 @@ class ListActiveMetrics(BaseDatadogMetricsTool):
                 default_time_span_seconds=ACTIVE_METRICS_DEFAULT_TIME_SPAN_SECONDS,
             )
 
-            url = f"{self.toolset.dd_config.site_api_url}/api/v1/metrics"
+            url = f"{self.toolset.dd_config.api_url}/api/v1/metrics"
             headers = get_headers(self.toolset.dd_config)
 
             query_params = {
@@ -125,7 +125,7 @@ class ListActiveMetrics(BaseDatadogMetricsTool):
             data = execute_datadog_http_request(
                 url=url,
                 headers=headers,
-                timeout=self.toolset.dd_config.request_timeout,
+                timeout=self.toolset.dd_config.timeout_seconds,
                 method="GET",
                 payload_or_params=query_params,
             )
@@ -316,7 +316,7 @@ class QueryMetrics(BaseDatadogMetricsTool):
                 default_time_span_seconds=DEFAULT_TIME_SPAN_SECONDS,
             )
 
-            url = f"{self.toolset.dd_config.site_api_url}/api/v1/query"
+            url = f"{self.toolset.dd_config.api_url}/api/v1/query"
             headers = get_headers(self.toolset.dd_config)
 
             query_params = {
@@ -328,7 +328,7 @@ class QueryMetrics(BaseDatadogMetricsTool):
             data = execute_datadog_http_request(
                 url=url,
                 headers=headers,
-                timeout=self.toolset.dd_config.request_timeout,
+                timeout=self.toolset.dd_config.timeout_seconds,
                 method="GET",
                 payload_or_params=query_params,
             )
@@ -527,13 +527,13 @@ class QueryMetricsMetadata(BaseDatadogMetricsTool):
 
             for metric_name in metric_names:
                 try:
-                    api_url = f"{self.toolset.dd_config.site_api_url}/api/v1/metrics/{metric_name}"
+                    api_url = f"{self.toolset.dd_config.api_url}/api/v1/metrics/{metric_name}"
 
                     data = execute_datadog_http_request(
                         url=api_url,
                         headers=headers,
                         payload_or_params={},
-                        timeout=self.toolset.dd_config.request_timeout,
+                        timeout=self.toolset.dd_config.timeout_seconds,
                         method="GET",
                     )
 
@@ -635,13 +635,13 @@ class ListMetricTags(BaseDatadogMetricsTool):
         try:
             metric_name = get_param_or_raise(params, "metric_name")
 
-            api_url = f"{self.toolset.dd_config.site_api_url}/api/v2/metrics/{metric_name}/active-configurations"
+            api_url = f"{self.toolset.dd_config.api_url}/api/v2/metrics/{metric_name}/active-configurations"
             headers = get_headers(self.toolset.dd_config)
 
             data = execute_datadog_http_request(
                 url=api_url,
                 headers=headers,
-                timeout=self.toolset.dd_config.request_timeout,
+                timeout=self.toolset.dd_config.timeout_seconds,
                 method="GET",
                 payload_or_params={},
             )
@@ -731,14 +731,14 @@ class DatadogMetricsToolset(Toolset):
         try:
             logging.debug("Performing Datadog metrics configuration healthcheck...")
 
-            url = f"{dd_config.site_api_url}/api/v1/validate"
+            url = f"{dd_config.api_url}/api/v1/validate"
             headers = get_headers(dd_config)
 
             data = execute_datadog_http_request(
                 url=url,
                 headers=headers,
                 payload_or_params={},
-                timeout=dd_config.request_timeout,
+                timeout=dd_config.timeout_seconds,
                 method="GET",
             )
 
@@ -758,7 +758,7 @@ class DatadogMetricsToolset(Toolset):
         if not config:
             return (
                 False,
-                "Missing config for dd_api_key, dd_app_key, or site_api_url. For details: https://holmesgpt.dev/data-sources/builtin-toolsets/datadog/",
+                "Missing config for api_key, app_key, or api_url. For details: https://holmesgpt.dev/data-sources/builtin-toolsets/datadog/",
             )
 
         try:
