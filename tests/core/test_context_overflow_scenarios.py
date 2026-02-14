@@ -56,9 +56,6 @@ class TestGlobalInstructionsOverflow:
     user prompt to exceed the context window.
     """
 
-    @pytest.mark.xfail(
-        reason="BUG: Global instructions have no size limit and can cause overflow"
-    )
     def test_large_global_instructions_should_be_truncated(self):
         """
         When global instructions are very large, they should be truncated
@@ -92,9 +89,6 @@ class TestGlobalInstructionsOverflow:
             f"This can cause context window overflow."
         )
 
-    @pytest.mark.xfail(
-        reason="BUG: Multiple global instructions accumulate without limit"
-    )
     def test_multiple_global_instructions_should_be_limited(self):
         """
         When there are many global instructions, the total size should be limited.
@@ -123,9 +117,6 @@ class TestRunbookCatalogOverflow:
     When there are many runbooks in the catalog, the prompt can become very large.
     """
 
-    @pytest.mark.xfail(
-        reason="BUG: Large runbook catalog has no size limit in user prompt"
-    )
     def test_large_runbook_catalog_should_be_truncated(self):
         """
         When there are many runbooks in the catalog, the catalog string
@@ -168,9 +159,6 @@ class TestAccumulatedMessagesOverflow:
     context window, especially in long conversations.
     """
 
-    @pytest.mark.xfail(
-        reason="BUG: Accumulated assistant messages not truncated, only tool messages"
-    )
     def test_accumulated_assistant_messages_should_be_handled(self):
         """
         When there are many assistant messages (from multiple LLM iterations),
@@ -233,9 +221,6 @@ class TestAccumulatedMessagesOverflow:
 class TestCombinedOverflowScenario:
     """Test realistic combined scenario that causes overflow."""
 
-    @pytest.mark.xfail(
-        reason="BUG: Non-tool messages exceeding context raise exception instead of being handled"
-    )
     def test_non_tool_messages_overflow_should_be_handled(self):
         """
         When non-tool messages (system + user + assistant) exceed the context

@@ -13,8 +13,6 @@ Key issues:
 
 from unittest.mock import MagicMock, patch
 
-import pytest
-
 from holmes.core.supabase_dal import SupabaseDal
 from holmes.utils.global_instructions import Instructions
 
@@ -22,9 +20,6 @@ from holmes.utils.global_instructions import Instructions
 class TestDalGlobalInstructionsLimits:
     """Tests for global instructions size limits in DAL."""
 
-    @pytest.mark.xfail(
-        reason="BUG: get_global_instructions_for_account has no size limit"
-    )
     def test_global_instructions_should_have_size_limit(self):
         """
         Global instructions fetched from Supabase should be limited in size
@@ -65,9 +60,6 @@ class TestDalGlobalInstructionsLimits:
                 f"This can cause context window overflow."
             )
 
-    @pytest.mark.xfail(
-        reason="BUG: Individual instruction items not validated for size"
-    )
     def test_individual_instruction_should_be_validated(self):
         """
         Individual instruction items should be validated and potentially
@@ -105,9 +97,6 @@ class TestDalGlobalInstructionsLimits:
 class TestDalRunbookContentLimits:
     """Tests for runbook content size limits in DAL."""
 
-    @pytest.mark.xfail(
-        reason="BUG: get_runbook_content has no size limit on instruction field"
-    )
     def test_runbook_content_should_have_size_limit(self):
         """
         Runbook content (instruction field) fetched from Supabase should
@@ -150,9 +139,6 @@ class TestDalRunbookContentLimits:
 class TestDalRunbookCatalogLimits:
     """Tests for runbook catalog size limits in DAL."""
 
-    @pytest.mark.xfail(
-        reason="BUG: get_runbook_catalog has no limit on number of entries"
-    )
     def test_runbook_catalog_should_have_entry_limit(self):
         """
         The runbook catalog should have a limit on the number of entries
@@ -195,9 +181,6 @@ class TestDalRunbookCatalogLimits:
 class TestDalResourceInstructionsLimits:
     """Tests for resource instructions size limits in DAL."""
 
-    @pytest.mark.xfail(
-        reason="BUG: get_resource_instructions has no size limit"
-    )
     def test_resource_instructions_should_have_size_limit(self):
         """
         Resource-specific instructions should be bounded to prevent

@@ -12,12 +12,9 @@ Key issues:
 4. Multiple runbook fetches accumulate without limit
 """
 
-import os
 import tempfile
 from pathlib import Path
-from unittest.mock import MagicMock, patch
-
-import pytest
+from unittest.mock import MagicMock
 
 from holmes.core.tools import StructuredToolResultStatus
 from holmes.plugins.runbooks import RobustaRunbookInstruction
@@ -31,9 +28,6 @@ from tests.conftest import create_mock_tool_invoke_context
 class TestRunbookFetcherOverflow:
     """Tests for runbook content causing context overflow."""
 
-    @pytest.mark.xfail(
-        reason="BUG: Large runbook content from DAL is returned without truncation"
-    )
     def test_large_robusta_runbook_should_be_truncated(self):
         """
         When fetching a runbook from Supabase DAL that has very large content,
@@ -81,9 +75,6 @@ class TestRunbookFetcherOverflow:
             f"Expected max {MAX_RUNBOOK_RESULT_CHARS} chars to prevent overflow."
         )
 
-    @pytest.mark.xfail(
-        reason="BUG: Large MD file runbook content is returned without truncation"
-    )
     def test_large_md_runbook_should_be_truncated(self):
         """
         When fetching a markdown runbook that has very large content,
@@ -173,9 +164,6 @@ class TestRunbookFetcherOverflow:
 class TestMultipleRunbookFetches:
     """Tests for multiple runbook fetches causing accumulated overflow."""
 
-    @pytest.mark.xfail(
-        reason="BUG: Multiple runbook fetches accumulate without context tracking"
-    )
     def test_multiple_runbook_fetches_should_be_tracked(self):
         """
         When multiple runbooks are fetched in one investigation, the total
@@ -236,9 +224,6 @@ class TestMultipleRunbookFetches:
 class TestRunbookDALContentValidation:
     """Tests for validating runbook content from DAL before returning."""
 
-    @pytest.mark.xfail(
-        reason="BUG: Runbook content from DAL is not validated for size"
-    )
     def test_dal_runbook_content_should_be_validated(self):
         """
         Runbook content fetched from Supabase DAL should be validated
