@@ -457,7 +457,7 @@ class ToolCallingLLM:
             tool_choice = "auto" if tools else None
 
             limit_result = limit_input_context_window(
-                llm=self.llm, messages=messages, tools=tools
+                llm=self.llm, messages=messages, tools=tools, trace_span=trace_span
             )
             messages = limit_result.messages
             metadata = metadata | limit_result.metadata

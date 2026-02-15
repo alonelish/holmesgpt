@@ -5,6 +5,7 @@ import litellm
 from litellm.types.utils import ModelResponse
 
 from holmes.core.llm import LLM
+from holmes.core.tracing import DummySpan
 from holmes.plugins.prompts import load_and_render_prompt
 
 
@@ -30,7 +31,7 @@ def find_last_user_prompt(conversation_history: list[dict]) -> Optional[dict]:
 
 
 def compact_conversation_history(
-    original_conversation_history: list[dict], llm: LLM
+    original_conversation_history: list[dict], llm: LLM, trace_span=DummySpan()
 ) -> list[dict]:
     """
     The compacted conversation history contains:
@@ -52,9 +53,12 @@ def compact_conversation_history(
     original_modify_params = litellm.modify_params
     try:
         litellm.modify_params = True  # necessary when using anthropic
-        response: ModelResponse = llm.completion(
-            messages=conversation_history, drop_params=True
-        )  # type: ignore
+        with trace_span.start_span(name="Compaction LLM Call", type="llm") as llm_span:
+            llm_span.log(input={"message_count": len(conversation_history)})
+            response: ModelResponse = llm.completion(
+                messages=conversation_history, drop_params=True
+            )  # type: ignore
+            llm_span.log(output={"status": "success" if response and response.choices else "failure"})
     finally:
         litellm.modify_params = original_modify_params
     response_message = None

@@ -96,7 +96,7 @@ def test_compaction(
                 "Compaction", span_type=SpanType.TASK
             ) as compaction_span:
                 compacted_history = compact_conversation_history(
-                    conversation_history, llm
+                    conversation_history, llm, trace_span=compaction_span
                 )
 
             # Extract the summary from compacted history
