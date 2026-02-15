@@ -507,9 +507,9 @@ class TestDashboardURLs:
 
 
 class TestCoralogixURLs:
-    TEAM_HOSTNAME = "my-team"
+    TEAM_SLUG = "my-team"
     DOMAIN = "eu2.coralogix.com"
-    BASE_URL = f"https://{TEAM_HOSTNAME}.{DOMAIN}"
+    BASE_URL = f"https://{TEAM_SLUG}.{DOMAIN}"
 
     @staticmethod
     def extract_query_from_url(url: str) -> str:
@@ -534,7 +534,7 @@ class TestCoralogixURLs:
     def config(self):
         return CoralogixConfig(
             api_key="test-key",
-            team_hostname=self.TEAM_HOSTNAME,
+            team_slug=self.TEAM_SLUG,
             domain=self.DOMAIN,
         )
 
@@ -793,9 +793,9 @@ class TestDatadogMetricsURLs:
     @pytest.fixture
     def config(self):
         return DatadogMetricsConfig(
-            dd_api_key="test-key",
-            dd_app_key="test-app-key",
-            site_api_url=self.BASE_URL,
+            api_key="test-key",
+            app_key="test-app-key",
+            api_url=self.BASE_URL,
         )
 
     @pytest.fixture
@@ -895,9 +895,9 @@ class TestDatadogTracesURLs:
     @pytest.fixture
     def config(self):
         return DatadogTracesConfig(
-            dd_api_key="test-key",
-            dd_app_key="test-app-key",
-            site_api_url=self.BASE_URL,
+            api_key="test-key",
+            app_key="test-app-key",
+            api_url=self.BASE_URL,
         )
 
     @pytest.fixture
@@ -965,9 +965,9 @@ class TestDatadogGeneralURLs:
     @pytest.fixture
     def config(self):
         return DatadogGeneralConfig(
-            dd_api_key="test-key",
-            dd_app_key="test-app-key",
-            site_api_url=self.BASE_URL,
+            api_key="test-key",
+            app_key="test-app-key",
+            api_url=self.BASE_URL,
         )
 
     @pytest.fixture
