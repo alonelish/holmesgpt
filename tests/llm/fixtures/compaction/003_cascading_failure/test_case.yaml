@@ -1,6 +1,7 @@
 tags:
   - compaction
   - easy
+  - regression
 
 expected_output: |
   The conversation captures a cascading failure investigation starting from frontend API errors.
