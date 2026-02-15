@@ -18,6 +18,8 @@ from holmes.plugins.toolsets.database.database import (  # noqa: E402
     _serialize_value,
 )
 
+pytestmark = pytest.mark.database
+
 
 class TestNormaliseUrl:
     def test_postgres_url(self):
