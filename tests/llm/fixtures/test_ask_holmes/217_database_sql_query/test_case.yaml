@@ -3,7 +3,7 @@
 # and find specific data by querying.
 #
 # Requirements:
-# - DATABASE_URL: PostgreSQL connection URL (e.g., postgresql://user:pass@host:5432/db)
+# - POSTGRES_URL: PostgreSQL connection URL (e.g., postgresql://user:pass@host:5432/db)
 #
 # The before_test creates a table with a unique verification code that the LLM
 # must discover by querying the database.
@@ -27,8 +27,8 @@ setup_timeout: 60
 before_test: |
   set -e
 
-  if [ -z "$DATABASE_URL" ]; then
-    echo "❌ DATABASE_URL environment variable is not set"
+  if [ -z "$POSTGRES_URL" ]; then
+    echo "❌ POSTGRES_URL environment variable is not set"
     exit 1
   fi
 
@@ -39,7 +39,7 @@ before_test: |
   import sqlalchemy
   import os
 
-  url = os.environ['DATABASE_URL']
+  url = os.environ['POSTGRES_URL']
   # Normalise to pg8000 driver
   for old, new in [('postgresql://', 'postgresql+pg8000://'), ('postgres://', 'postgresql+pg8000://')]:
       if url.startswith(old) and not url.startswith(new):
@@ -74,7 +74,7 @@ after_test: |
   echo "⏳ Cleaning up test data..."
   python3 -c "
   import sqlalchemy, os
-  url = os.environ.get('DATABASE_URL', '')
+  url = os.environ.get('POSTGRES_URL', '')
   if not url:
       exit(0)
   for old, new in [('postgresql://', 'postgresql+pg8000://'), ('postgres://', 'postgresql+pg8000://')]:
