@@ -1,0 +1,5 @@
+toolsets:
+  database/sql:
+    enabled: true
+    config:
+      connection_url: "{{ env.DATABASE_URL }}"
