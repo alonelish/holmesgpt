@@ -20,6 +20,11 @@ from holmes.core.tools import (
 from holmes.plugins.toolsets.utils import toolset_name_for_one_liner
 from holmes.utils.pydantic_utils import ToolsetConfig
 
+try:
+    import sqlalchemy
+except ImportError:
+    sqlalchemy = None  # type: ignore[assignment]
+
 logger = logging.getLogger(__name__)
 
 # SQL statements that are safe for read-only access
@@ -28,9 +33,16 @@ _READONLY_PATTERN = re.compile(
     re.IGNORECASE,
 )
 
-# Statements that modify data or schema
+# Statements that modify data or schema (prefix check)
 _WRITE_PATTERN = re.compile(
     r"^\s*(INSERT|UPDATE|DELETE|DROP|CREATE|ALTER|TRUNCATE|REPLACE|MERGE|GRANT|REVOKE|CALL|EXEC)\b",
+    re.IGNORECASE,
+)
+
+# Write keywords anywhere in the query (catches writable CTEs like
+# "WITH cte AS (DELETE FROM users RETURNING *) SELECT * FROM cte")
+_WRITE_ANYWHERE_PATTERN = re.compile(
+    r"\b(INSERT|UPDATE|DELETE|DROP|CREATE|ALTER|TRUNCATE|REPLACE|MERGE|GRANT|REVOKE)\b",
     re.IGNORECASE,
 )
 
@@ -125,8 +137,8 @@ class DatabaseToolset(Toolset):
 
     def _perform_health_check(self) -> Tuple[bool, str]:
         try:
-            import sqlalchemy
-
+            if sqlalchemy is None:
+                return False, "sqlalchemy is not installed"
             url = _normalise_url(self.database_config.connection_url)
             engine = sqlalchemy.create_engine(url, pool_pre_ping=True)
             with engine.connect() as conn:
@@ -147,11 +159,19 @@ class DatabaseToolset(Toolset):
         Returns:
             Dict with keys: columns, rows, row_count, truncated
         """
-        import sqlalchemy
+        if sqlalchemy is None:
+            raise RuntimeError("sqlalchemy is not installed")
 
         if _WRITE_PATTERN.match(sql):
             raise ValueError(
                 f"Write operations are not allowed. "
+                f"Only SELECT, SHOW, DESCRIBE, EXPLAIN, and WITH statements are permitted. "
+                f"Received: {sql[:80]}"
+            )
+
+        if _WRITE_ANYWHERE_PATTERN.search(sql):
+            raise ValueError(
+                f"Write operations are not allowed anywhere in the query. "
                 f"Only SELECT, SHOW, DESCRIBE, EXPLAIN, and WITH statements are permitted. "
                 f"Received: {sql[:80]}"
             )
@@ -167,6 +187,11 @@ class DatabaseToolset(Toolset):
         engine = sqlalchemy.create_engine(url)
         try:
             with engine.connect() as conn:
+                # Defense-in-depth: enforce read-only at the DB level
+                try:
+                    conn.execute(sqlalchemy.text("SET TRANSACTION READ ONLY"))
+                except Exception:
+                    pass  # Not all dialects support this; regex check is primary guard
                 result = conn.execute(sqlalchemy.text(sql))
                 columns = list(result.keys())
                 rows: List[List[Any]] = []
@@ -301,8 +326,6 @@ class DatabaseListTables(BaseDatabaseTool):
 
     def _invoke(self, params: dict, context: ToolInvokeContext) -> StructuredToolResult:
         try:
-            import sqlalchemy
-
             schema = params.get("schema")
             include_views = params.get("include_views", True)
 
@@ -331,7 +354,7 @@ class DatabaseListTables(BaseDatabaseTool):
         except Exception as e:
             return StructuredToolResult(
                 status=StructuredToolResultStatus.ERROR,
-                error=f"Failed to list tables: {e}",
+                error=f"Failed to list tables (schema={params.get('schema', 'default')}): {e}",
                 params=params,
             )
 
@@ -370,8 +393,6 @@ class DatabaseDescribeTable(BaseDatabaseTool):
 
     def _invoke(self, params: dict, context: ToolInvokeContext) -> StructuredToolResult:
         try:
-            import sqlalchemy
-
             table_name = params["table_name"]
             schema = params.get("schema")
 

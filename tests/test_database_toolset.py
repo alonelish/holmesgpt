@@ -1,10 +1,18 @@
 """Unit tests for the database toolset."""
 
+import os
+import tempfile
+
 import pytest
+import sqlalchemy
+from pydantic import ValidationError
 
 from holmes.plugins.toolsets.database.database import (
     DatabaseConfig,
     DatabaseToolset,
+    _READONLY_PATTERN,
+    _WRITE_ANYWHERE_PATTERN,
+    _WRITE_PATTERN,
     _normalise_url,
     _serialize_value,
 )
@@ -89,9 +97,9 @@ class TestSerializeValue:
         assert _serialize_value(lst) == lst
 
     def test_datetime_to_str(self):
-        import datetime
+        from datetime import datetime
 
-        dt = datetime.datetime(2024, 1, 15, 12, 0, 0)
+        dt = datetime(2024, 1, 15, 12, 0, 0)
         assert _serialize_value(dt) == "2024-01-15 12:00:00"
 
     def test_decimal_to_str(self):
@@ -106,7 +114,7 @@ class TestDatabaseConfig:
         assert config.connection_url == "postgresql://user:pass@host/db"
 
     def test_config_requires_url(self):
-        with pytest.raises(Exception):
+        with pytest.raises(ValidationError):
             DatabaseConfig()  # type: ignore[call-arg]
 
 
@@ -135,23 +143,10 @@ class TestReadOnlyValidation:
         self.toolset.config = DatabaseConfig(connection_url="sqlite:///:memory:")
 
     def test_select_allowed_with_sqlite(self):
-        """SELECT works end-to-end with an in-memory SQLite database."""
-        import sqlalchemy
-
-        # Set up an in-memory SQLite database with test data
-        engine = sqlalchemy.create_engine("sqlite:///:memory:")
-        with engine.connect() as conn:
-            conn.execute(sqlalchemy.text("CREATE TABLE users (id INTEGER, name TEXT)"))
-            conn.execute(sqlalchemy.text("INSERT INTO users VALUES (1, 'alice')"))
-            conn.commit()
-        engine.dispose()
-
-        # Point the toolset at the same in-memory DB
-        # Note: SQLite in-memory is per-connection, so we create a file-based temp DB
-        import tempfile
-        import os
-
-        db_file = tempfile.mktemp(suffix=".db")
+        """SELECT works end-to-end with a file-based SQLite database."""
+        tmp = tempfile.NamedTemporaryFile(suffix=".db", delete=False)
+        db_file = tmp.name
+        tmp.close()
         try:
             file_engine = sqlalchemy.create_engine(f"sqlite:///{db_file}")
             with file_engine.connect() as conn:
@@ -201,41 +196,46 @@ class TestReadOnlyValidation:
 
     def test_show_allowed(self):
         """SHOW statements should not be blocked."""
-        # Will fail at execution since we mock, but should pass validation
-        from holmes.plugins.toolsets.database.database import (
-            _READONLY_PATTERN,
-            _WRITE_PATTERN,
-        )
-
         assert _READONLY_PATTERN.match("SHOW TABLES")
         assert not _WRITE_PATTERN.match("SHOW TABLES")
 
     def test_describe_allowed(self):
-        from holmes.plugins.toolsets.database.database import (
-            _READONLY_PATTERN,
-            _WRITE_PATTERN,
-        )
-
         assert _READONLY_PATTERN.match("DESCRIBE users")
         assert not _WRITE_PATTERN.match("DESCRIBE users")
 
     def test_explain_allowed(self):
-        from holmes.plugins.toolsets.database.database import (
-            _READONLY_PATTERN,
-            _WRITE_PATTERN,
-        )
-
         assert _READONLY_PATTERN.match("EXPLAIN SELECT * FROM users")
         assert not _WRITE_PATTERN.match("EXPLAIN SELECT * FROM users")
 
     def test_with_cte_allowed(self):
-        from holmes.plugins.toolsets.database.database import (
-            _READONLY_PATTERN,
-            _WRITE_PATTERN,
-        )
-
         assert _READONLY_PATTERN.match("WITH cte AS (SELECT 1) SELECT * FROM cte")
         assert not _WRITE_PATTERN.match("WITH cte AS (SELECT 1) SELECT * FROM cte")
+
+    def test_writable_cte_blocked(self):
+        """Writable CTEs (WITH ... DELETE/INSERT/UPDATE) must be blocked."""
+        with pytest.raises(ValueError, match="Write operations are not allowed"):
+            self.toolset.execute_query(
+                "WITH cte AS (DELETE FROM users RETURNING *) SELECT * FROM cte"
+            )
+
+    def test_writable_cte_insert_blocked(self):
+        with pytest.raises(ValueError, match="Write operations are not allowed"):
+            self.toolset.execute_query(
+                "WITH new AS (INSERT INTO users VALUES (1) RETURNING *) SELECT * FROM new"
+            )
+
+    def test_writable_cte_update_blocked(self):
+        with pytest.raises(ValueError, match="Write operations are not allowed"):
+            self.toolset.execute_query(
+                "WITH upd AS (UPDATE users SET name='x' RETURNING *) SELECT * FROM upd"
+            )
+
+    def test_write_anywhere_pattern(self):
+        """_WRITE_ANYWHERE_PATTERN catches write keywords inside CTEs."""
+        assert _WRITE_ANYWHERE_PATTERN.search(
+            "WITH cte AS (DELETE FROM users RETURNING *) SELECT * FROM cte"
+        )
+        assert not _WRITE_ANYWHERE_PATTERN.search("SELECT * FROM users")
 
     def test_random_command_blocked(self):
         with pytest.raises(ValueError, match="Only SELECT"):
