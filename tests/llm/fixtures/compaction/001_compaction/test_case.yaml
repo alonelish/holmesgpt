@@ -1,7 +1,6 @@
 tags:
   - compaction
   - easy
-  - regression
 
 expected_output: |
   The conversation history has been successfully compacted. The summary captures:
