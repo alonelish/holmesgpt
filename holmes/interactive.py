@@ -1358,7 +1358,9 @@ def run_interactive_loop(
             if messages is None:
                 if include_files:
                     for file_path in include_files:
-                        console.print(f"[bold yellow]Adding file {file_path} to context[/bold yellow]")
+                        console.print(
+                            f"[bold yellow]Adding file {file_path} to context[/bold yellow]"
+                        )
                 messages = build_initial_ask_messages(
                     user_input,
                     include_files,

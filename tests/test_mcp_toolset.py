@@ -1020,7 +1020,6 @@ class TestStdio:
 
     def test_everything_stdio_config_from_yaml(self, suppress_migration_warnings):
         """Test loading everything_stdio MCP server config matching the YAML example"""
-        import os
 
         # Config matching the YAML structure - using Python stdio server
         server_path = os.path.join(os.path.dirname(__file__), "stdio_server.py")
@@ -1054,7 +1053,6 @@ class TestStdio:
 
     def test_everything_stdio_tool_invocation(self, suppress_migration_warnings):
         """Test invoking a tool from everything_stdio MCP server"""
-        import os
 
         server_path = os.path.join(os.path.dirname(__file__), "stdio_server.py")
         yaml_config = {
@@ -1104,7 +1102,6 @@ class TestStdio:
 
     def test_everything_stdio_list_tools(self, suppress_migration_warnings):
         """Test listing tools from everything_stdio MCP server"""
-        import os
 
         server_path = os.path.join(os.path.dirname(__file__), "stdio_server.py")
         yaml_config = {
@@ -1378,9 +1375,7 @@ class TestRequestContextPassthrough:
         assert "secret-tenant" not in str_repr
         assert "context_keys=['headers']" in str_repr
 
-    def test_get_initialized_mcp_session_passes_request_context(
-        self, monkeypatch
-    ):
+    def test_get_initialized_mcp_session_passes_request_context(self, monkeypatch):
         mcp_toolset = RemoteMCPToolset(
             name="test_mcp",
             description="Test toolset",
@@ -1415,7 +1410,9 @@ class TestRequestContextPassthrough:
 
         captured_headers = None
 
-        def capture_sse_client_call(_url, headers, *, sse_read_timeout, httpx_client_factory=None):
+        def capture_sse_client_call(
+            _url, headers, *, sse_read_timeout, httpx_client_factory=None
+        ):
             nonlocal captured_headers
             captured_headers = headers
             return mock_client_context
@@ -1490,7 +1487,9 @@ class TestRequestContextPassthrough:
 
         captured_headers = None
 
-        def capture_sse_client_call(_url, headers, *, sse_read_timeout, httpx_client_factory=None):
+        def capture_sse_client_call(
+            _url, headers, *, sse_read_timeout, httpx_client_factory=None
+        ):
             nonlocal captured_headers
             captured_headers = headers
             return mock_client_context
