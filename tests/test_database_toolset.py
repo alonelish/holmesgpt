@@ -4,10 +4,11 @@ import os
 import tempfile
 
 import pytest
-import sqlalchemy
 from pydantic import ValidationError
 
-from holmes.plugins.toolsets.database.database import (
+sqlalchemy = pytest.importorskip("sqlalchemy")
+
+from holmes.plugins.toolsets.database.database import (  # noqa: E402
     DatabaseConfig,
     DatabaseToolset,
     _READONLY_PATTERN,
