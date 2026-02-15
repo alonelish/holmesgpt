@@ -491,19 +491,19 @@ class ToolCallingLLM:
                 ):
                     raise Exception(
                         "The Azure model you chose is not supported. Model version 1106 and higher required."
-                    )
+                    ) from e
                 else:
                     logging.error(
                         f"LLM BadRequestError on model={self.llm.model} (iteration {i}): {e}",
-                        exc_info=True,
                     )
+                    logging.debug("Full traceback for BadRequestError:", exc_info=True)
                     raise
             except Exception as e:
                 logging.error(
                     f"LLM call failed on model={self.llm.model} (iteration {i}): "
                     f"{type(e).__name__}: {e}",
-                    exc_info=True,
                 )
+                logging.debug("Full traceback for LLM call failure:", exc_info=True)
                 raise
 
             response = full_response.choices[0]  # type: ignore
@@ -680,8 +680,9 @@ class ToolCallingLLM:
 
         except Exception as e:
             logging.error(
-                f"Tool call to {tool_name} failed with an Exception", exc_info=True
+                f"Tool call to {tool_name} failed with an Exception: {e}"
             )
+            logging.debug("Full traceback:", exc_info=True)
             tool_response = StructuredToolResult(
                 status=StructuredToolResultStatus.ERROR,
                 error=f"Tool call failed: {e}",
@@ -1014,15 +1015,15 @@ class ToolCallingLLM:
                 else:
                     logging.error(
                         f"LLM BadRequestError on model={self.llm.model} (streaming iteration {i}): {e}",
-                        exc_info=True,
                     )
+                    logging.debug("Full traceback for BadRequestError:", exc_info=True)
                     raise
             except Exception as e:
                 logging.error(
                     f"LLM call failed on model={self.llm.model} (streaming iteration {i}): "
                     f"{type(e).__name__}: {e}",
-                    exc_info=True,
                 )
+                logging.debug("Full traceback for LLM call failure:", exc_info=True)
                 raise
 
             response_message = full_response.choices[0].message  # type: ignore
