@@ -18,7 +18,7 @@ from holmes.plugins.toolsets.database.database import (  # noqa: E402
     _serialize_value,
 )
 
-pytestmark = pytest.mark.database
+pytestmark = getattr(pytest.mark, "db-connectors")
 
 
 class TestNormaliseUrl:

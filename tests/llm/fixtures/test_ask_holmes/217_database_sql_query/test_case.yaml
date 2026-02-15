@@ -17,10 +17,7 @@ expected_output:
 include_tool_calls: true
 
 tags:
-  - database
-  - question-answer
-  - fast
-  - easy
+  - db-connectors
 
 setup_timeout: 60
 
