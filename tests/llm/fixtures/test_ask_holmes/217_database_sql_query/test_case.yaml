@@ -1,0 +1,90 @@
+# Test: SQL Database Query - discover table structure and query data
+# Tests that Holmes can connect to a PostgreSQL database, explore its schema,
+# and find specific data by querying.
+#
+# Requirements:
+# - DATABASE_URL: PostgreSQL connection URL (e.g., postgresql://user:pass@host:5432/db)
+#
+# The before_test creates a table with a unique verification code that the LLM
+# must discover by querying the database.
+
+user_prompt: "List the tables in the database, then look at the holmes_eval_217 table and tell me the verification code stored in it."
+
+expected_output:
+  - "Must report the verification code: HOLMES-DB-EVAL-217-q8x3m7"
+  - "Must mention the holmes_eval_217 table"
+
+include_tool_calls: true
+
+tags:
+  - database
+  - question-answer
+  - fast
+  - easy
+
+setup_timeout: 60
+
+before_test: |
+  set -e
+
+  if [ -z "$DATABASE_URL" ]; then
+    echo "❌ DATABASE_URL environment variable is not set"
+    exit 1
+  fi
+
+  echo "⏳ Setting up test data in PostgreSQL..."
+
+  # Use Python to create test table (pg8000 is already installed)
+  python3 -c "
+  import sqlalchemy
+  import os
+
+  url = os.environ['DATABASE_URL']
+  # Normalise to pg8000 driver
+  for old, new in [('postgresql://', 'postgresql+pg8000://'), ('postgres://', 'postgresql+pg8000://')]:
+      if url.startswith(old) and not url.startswith(new):
+          url = url.replace(old, new, 1)
+          break
+
+  engine = sqlalchemy.create_engine(url)
+  with engine.connect() as conn:
+      conn.execute(sqlalchemy.text('DROP TABLE IF EXISTS holmes_eval_217'))
+      conn.execute(sqlalchemy.text('''
+          CREATE TABLE holmes_eval_217 (
+              id SERIAL PRIMARY KEY,
+              category TEXT NOT NULL,
+              verification_code TEXT NOT NULL,
+              created_at TIMESTAMP DEFAULT NOW()
+          )
+      '''))
+      conn.execute(sqlalchemy.text('''
+          INSERT INTO holmes_eval_217 (category, verification_code)
+          VALUES ('eval_test', 'HOLMES-DB-EVAL-217-q8x3m7')
+      '''))
+      conn.commit()
+      # Verify
+      row = conn.execute(sqlalchemy.text('SELECT verification_code FROM holmes_eval_217')).fetchone()
+      print(f'✅ Inserted verification code: {row[0]}')
+  engine.dispose()
+  "
+
+  echo "✅ Test data created successfully"
+
+after_test: |
+  echo "⏳ Cleaning up test data..."
+  python3 -c "
+  import sqlalchemy, os
+  url = os.environ.get('DATABASE_URL', '')
+  if not url:
+      exit(0)
+  for old, new in [('postgresql://', 'postgresql+pg8000://'), ('postgres://', 'postgresql+pg8000://')]:
+      if url.startswith(old) and not url.startswith(new):
+          url = url.replace(old, new, 1)
+          break
+  engine = sqlalchemy.create_engine(url)
+  with engine.connect() as conn:
+      conn.execute(sqlalchemy.text('DROP TABLE IF EXISTS holmes_eval_217'))
+      conn.commit()
+  engine.dispose()
+  print('✅ Cleanup complete')
+  " 2>/dev/null || echo "Cleanup skipped"
