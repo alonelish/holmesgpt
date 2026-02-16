@@ -38,8 +38,8 @@ The Grafana MCP server provides comprehensive access to your Grafana instance an
           NEVER answer based on truncated data. Retry with topk/bottomk or more filters until the query succeeds.
           For high-cardinality metrics (>10 series), ALWAYS use topk(5, <query>). Check cardinality first with count() if unsure.
           Standard metrics: CPU=container_cpu_usage_seconds_total, Memory=container_memory_working_set_bytes, Throttling=container_cpu_cfs_throttled_periods_total.
-          ALWAYS embed a graph: << {"type": "promql", "tool_name": "query_prometheus", "tool_call_id": "<tool_call_id>"} >>
-          Post processing will re-run the query and render a chart. Embed at most 2 graphs with line spacing between them.
+          NEVER use type "promql" embeds. ALWAYS embed charts: << {"type": "chart", "tool_call_ids": ["<tool_call_id>"], "generateConfig": "function generateConfig(toolOutputs) { /* parse toolOutputs[0].data array, return Chart.js config */ }", "title": "Title"} >>
+          Embed at most 2 charts with line spacing between them.
     ```
 
     Replace `<YOUR_TOKEN>` with your Grafana service account token.
@@ -80,8 +80,8 @@ The Grafana MCP server provides comprehensive access to your Grafana instance an
           NEVER answer based on truncated data. Retry with topk/bottomk or more filters until the query succeeds.
           For high-cardinality metrics (>10 series), ALWAYS use topk(5, <query>). Check cardinality first with count() if unsure.
           Standard metrics: CPU=container_cpu_usage_seconds_total, Memory=container_memory_working_set_bytes, Throttling=container_cpu_cfs_throttled_periods_total.
-          ALWAYS embed a graph: << {"type": "promql", "tool_name": "query_prometheus", "tool_call_id": "<tool_call_id>"} >>
-          Post processing will re-run the query and render a chart. Embed at most 2 graphs with line spacing between them.
+          NEVER use type "promql" embeds. ALWAYS embed charts: << {"type": "chart", "tool_call_ids": ["<tool_call_id>"], "generateConfig": "function generateConfig(toolOutputs) { /* parse toolOutputs[0].data array, return Chart.js config */ }", "title": "Title"} >>
+          Embed at most 2 charts with line spacing between them.
     ```
 
     Then deploy or upgrade your Holmes installation:
@@ -125,8 +125,8 @@ The Grafana MCP server provides comprehensive access to your Grafana instance an
             NEVER answer based on truncated data. Retry with topk/bottomk or more filters until the query succeeds.
             For high-cardinality metrics (>10 series), ALWAYS use topk(5, <query>). Check cardinality first with count() if unsure.
             Standard metrics: CPU=container_cpu_usage_seconds_total, Memory=container_memory_working_set_bytes, Throttling=container_cpu_cfs_throttled_periods_total.
-            ALWAYS embed a graph: << {"type": "promql", "tool_name": "query_prometheus", "tool_call_id": "<tool_call_id>"} >>
-            Post processing will re-run the query and render a chart. Embed at most 2 graphs with line spacing between them.
+            NEVER use type "promql" embeds. ALWAYS embed charts: << {"type": "chart", "tool_call_ids": ["<tool_call_id>"], "generateConfig": "function generateConfig(toolOutputs) { /* parse toolOutputs[0].data array, return Chart.js config */ }", "title": "Title"} >>
+            Embed at most 2 charts with line spacing between them.
     ```
 
     Then deploy or upgrade your Robusta installation:
