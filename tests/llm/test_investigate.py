@@ -231,6 +231,7 @@ def test_investigate(
             result=result,
             mock_generation_config=mock_generation_config,
         )
+        e.add_note(f"[EVAL {test_case.id}] (model={model})")
         raise
 
     tools_called = [t.tool_name for t in result.tool_calls] if result.tool_calls else []

@@ -66,19 +66,27 @@ before_test: |
   echo "Waiting 3 minutes for metrics to accumulate..."
   sleep 180
 
-  # Verify metrics are available
-  METRICS_OUTPUT=$(kubectl run -n app-217 metric-check-$RANDOM --rm -i --restart=Never --image=curlimages/curl:8.8.0 -- \
-    -s -G "http://robusta-kube-prometheus-st-prometheus.default.svc.cluster.local:9090/api/v1/query" \
-    --data-urlencode "query=sum by (pod) (rate(container_cpu_usage_seconds_total{namespace=\"app-217\"}[2m]))" 2>&1)
+  # Verify metrics are available using kubectl exec on an existing pod
+  WORKER_POD=$(kubectl get pods -n app-217 -l app=api-worker -o jsonpath='{.items[0].metadata.name}')
+  METRICS_CHECK=false
+  for i in {1..10}; do
+    METRICS_OUTPUT=$(kubectl exec -n app-217 "$WORKER_POD" -- \
+      wget -q -O- "http://robusta-kube-prometheus-st-prometheus.default.svc.cluster.local:9090/api/v1/query?query=count(rate(container_cpu_usage_seconds_total\{namespace=%22app-217%22\}[2m]))" 2>&1) || true
 
-  if ! echo "$METRICS_OUTPUT" | grep -q '"status":"success"'; then
-    echo "❌ Prometheus query did not return success"
-    echo "Response: $METRICS_OUTPUT"
-    exit 1
-  fi
+    if echo "$METRICS_OUTPUT" | grep -q '"status":"success"'; then
+      if ! echo "$METRICS_OUTPUT" | grep -q '"result":\[\]'; then
+        echo "✅ CPU metrics available for app-217"
+        METRICS_CHECK=true
+        break
+      fi
+    fi
+    echo "⏳ Metrics check attempt $i/10..."
+    sleep 10
+  done
 
-  if echo "$METRICS_OUTPUT" | grep -q '"result":\[\]'; then
-    echo "❌ No CPU metrics found for app-217"
+  if [ "$METRICS_CHECK" = false ]; then
+    echo "❌ No CPU metrics found for app-217 after retries"
+    echo "Last response: $METRICS_OUTPUT"
     exit 1
   fi
 

@@ -131,6 +131,7 @@ def test_ask_holmes(
             result=result,
             mock_generation_config=mock_generation_config,
         )
+        e.add_note(f"[EVAL {test_case.id}] (model={model})")
         raise
 
     output = result.result

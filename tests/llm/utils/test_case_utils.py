@@ -32,7 +32,8 @@ class SetupFailureError(Exception):
         command: Optional[str] = None,
         output: Optional[str] = None,
     ):
-        super().__init__(message)
+        full_message = f"[EVAL {test_id}] Setup failure:\n{message}"
+        super().__init__(full_message)
         self.test_id = test_id
         self.command = command
         self.output = output
