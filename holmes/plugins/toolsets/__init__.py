@@ -1,3 +1,4 @@
+import importlib
 import logging
 import os
 import os.path
@@ -13,47 +14,52 @@ from holmes.common.env_vars import (
 )
 from holmes.core.supabase_dal import SupabaseDal
 from holmes.core.tools import Toolset, ToolsetType, ToolsetYamlFromConfig, YAMLToolset
-from holmes.plugins.toolsets.atlas_mongodb.mongodb_atlas import MongoDBAtlasToolset
-from holmes.plugins.toolsets.azure_sql.azure_sql_toolset import AzureSQLToolset
-from holmes.plugins.toolsets.bash.bash_toolset import BashExecutorToolset
-from holmes.plugins.toolsets.connectivity_check import ConnectivityCheckToolset
-from holmes.plugins.toolsets.coralogix.toolset_coralogix import CoralogixToolset
-from holmes.plugins.toolsets.datadog.toolset_datadog_general import (
-    DatadogGeneralToolset,
-)
-from holmes.plugins.toolsets.datadog.toolset_datadog_logs import DatadogLogsToolset
-from holmes.plugins.toolsets.datadog.toolset_datadog_metrics import (
-    DatadogMetricsToolset,
-)
-from holmes.plugins.toolsets.datadog.toolset_datadog_traces import (
-    DatadogTracesToolset,
-)
-from holmes.plugins.toolsets.elasticsearch.elasticsearch import (
-    ElasticsearchClusterToolset,
-    ElasticsearchDataToolset,
-)
-from holmes.plugins.toolsets.elasticsearch.opensearch_query_assist import (
-    OpenSearchQueryAssistToolset,
-)
-from holmes.plugins.toolsets.grafana.loki.toolset_grafana_loki import GrafanaLokiToolset
-from holmes.plugins.toolsets.grafana.toolset_grafana import GrafanaToolset
-from holmes.plugins.toolsets.grafana.toolset_grafana_tempo import GrafanaTempoToolset
-from holmes.plugins.toolsets.internet.internet import InternetToolset
-from holmes.plugins.toolsets.internet.notion import NotionToolset
-from holmes.plugins.toolsets.investigator.core_investigation import (
-    CoreInvestigationToolset,
-)
-from holmes.plugins.toolsets.kafka import KafkaToolset
-from holmes.plugins.toolsets.kubectl_run.kubectl_run_toolset import KubectlRunToolset
-from holmes.plugins.toolsets.kubernetes_logs import KubernetesLogsToolset
-from holmes.plugins.toolsets.mcp.toolset_mcp import RemoteMCPToolset
-from holmes.plugins.toolsets.newrelic.newrelic import NewRelicToolset
-from holmes.plugins.toolsets.rabbitmq.toolset_rabbitmq import RabbitMQToolset
-from holmes.plugins.toolsets.robusta.robusta import RobustaToolset
-from holmes.plugins.toolsets.runbook.runbook_fetcher import RunbookToolset
-from holmes.plugins.toolsets.servicenow_tables.servicenow_tables import (
-    ServiceNowTablesToolset,
-)
+
+# Lazy-load registry: map class names to (module_path, class_name)
+_LAZY_IMPORTS: dict[str, tuple[str, str]] = {
+    "MongoDBAtlasToolset": ("holmes.plugins.toolsets.atlas_mongodb.mongodb_atlas", "MongoDBAtlasToolset"),
+    "AzureSQLToolset": ("holmes.plugins.toolsets.azure_sql.azure_sql_toolset", "AzureSQLToolset"),
+    "BashExecutorToolset": ("holmes.plugins.toolsets.bash.bash_toolset", "BashExecutorToolset"),
+    "ConnectivityCheckToolset": ("holmes.plugins.toolsets.connectivity_check", "ConnectivityCheckToolset"),
+    "CoralogixToolset": ("holmes.plugins.toolsets.coralogix.toolset_coralogix", "CoralogixToolset"),
+    "DatadogGeneralToolset": ("holmes.plugins.toolsets.datadog.toolset_datadog_general", "DatadogGeneralToolset"),
+    "DatadogLogsToolset": ("holmes.plugins.toolsets.datadog.toolset_datadog_logs", "DatadogLogsToolset"),
+    "DatadogMetricsToolset": ("holmes.plugins.toolsets.datadog.toolset_datadog_metrics", "DatadogMetricsToolset"),
+    "DatadogTracesToolset": ("holmes.plugins.toolsets.datadog.toolset_datadog_traces", "DatadogTracesToolset"),
+    "ElasticsearchClusterToolset": ("holmes.plugins.toolsets.elasticsearch.elasticsearch", "ElasticsearchClusterToolset"),
+    "ElasticsearchDataToolset": ("holmes.plugins.toolsets.elasticsearch.elasticsearch", "ElasticsearchDataToolset"),
+    "OpenSearchQueryAssistToolset": ("holmes.plugins.toolsets.elasticsearch.opensearch_query_assist", "OpenSearchQueryAssistToolset"),
+    "GrafanaLokiToolset": ("holmes.plugins.toolsets.grafana.loki.toolset_grafana_loki", "GrafanaLokiToolset"),
+    "GrafanaToolset": ("holmes.plugins.toolsets.grafana.toolset_grafana", "GrafanaToolset"),
+    "GrafanaTempoToolset": ("holmes.plugins.toolsets.grafana.toolset_grafana_tempo", "GrafanaTempoToolset"),
+    "InternetToolset": ("holmes.plugins.toolsets.internet.internet", "InternetToolset"),
+    "NotionToolset": ("holmes.plugins.toolsets.internet.notion", "NotionToolset"),
+    "CoreInvestigationToolset": ("holmes.plugins.toolsets.investigator.core_investigation", "CoreInvestigationToolset"),
+    "KafkaToolset": ("holmes.plugins.toolsets.kafka", "KafkaToolset"),
+    "KubectlRunToolset": ("holmes.plugins.toolsets.kubectl_run.kubectl_run_toolset", "KubectlRunToolset"),
+    "KubernetesLogsToolset": ("holmes.plugins.toolsets.kubernetes_logs", "KubernetesLogsToolset"),
+    "RemoteMCPToolset": ("holmes.plugins.toolsets.mcp.toolset_mcp", "RemoteMCPToolset"),
+    "NewRelicToolset": ("holmes.plugins.toolsets.newrelic.newrelic", "NewRelicToolset"),
+    "RabbitMQToolset": ("holmes.plugins.toolsets.rabbitmq.toolset_rabbitmq", "RabbitMQToolset"),
+    "RobustaToolset": ("holmes.plugins.toolsets.robusta.robusta", "RobustaToolset"),
+    "RunbookToolset": ("holmes.plugins.toolsets.runbook.runbook_fetcher", "RunbookToolset"),
+    "ServiceNowTablesToolset": ("holmes.plugins.toolsets.servicenow_tables.servicenow_tables", "ServiceNowTablesToolset"),
+}
+
+
+def __getattr__(name: str):
+    if name in _LAZY_IMPORTS:
+        module_path, attr = _LAZY_IMPORTS[name]
+        mod = importlib.import_module(module_path)
+        val = getattr(mod, attr)
+        globals()[name] = val  # cache so __getattr__ isn't called again
+        return val
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
+
+
+def __dir__():
+    return list(_LAZY_IMPORTS) + list(globals())
+
 
 THIS_DIR = os.path.abspath(os.path.dirname(__file__))
 

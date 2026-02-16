@@ -6,12 +6,20 @@ from abc import abstractmethod
 from math import floor
 from typing import TYPE_CHECKING, Any, Dict, List, Optional, Type, Union
 
-import litellm
 import sentry_sdk
-from litellm.litellm_core_utils.streaming_handler import CustomStreamWrapper
-from litellm.types.utils import ModelResponse, TextCompletionResponse
 from pydantic import BaseModel, ConfigDict, SecretStr
 from typing_extensions import Self
+
+if TYPE_CHECKING:
+    import litellm as _litellm_type
+    from litellm.litellm_core_utils.streaming_handler import CustomStreamWrapper
+    from litellm.types.utils import ModelResponse, TextCompletionResponse
+
+
+def _import_litellm():
+    import litellm
+
+    return litellm
 
 from holmes.clients.robusta_client import (
     RobustaModel,
@@ -130,7 +138,7 @@ class LLM:
         temperature: Optional[float] = None,
         drop_params: Optional[bool] = None,
         stream: Optional[bool] = None,
-    ) -> Union[ModelResponse, CustomStreamWrapper]:
+    ) -> Union["ModelResponse", "CustomStreamWrapper"]:
         pass
 
 
@@ -185,6 +193,7 @@ class DefaultLLM(LLM):
             return
         args = args or {}
         logging.debug(f"Checking LiteLLM model {model}")
+        litellm = _import_litellm()
         lookup = litellm.get_llm_provider(model)
         if not lookup:
             raise Exception(f"Unknown provider for model {model}")
@@ -279,6 +288,7 @@ class DefaultLLM(LLM):
             return OVERRIDE_MAX_CONTENT_SIZE
 
         # Try each name variant
+        litellm = _import_litellm()
         for name in self._get_model_name_variants_for_lookup():
             try:
                 return litellm.model_cost[name]["max_input_tokens"]
@@ -300,6 +310,7 @@ class DefaultLLM(LLM):
         # TODO: Add a recount:bool flag to save time. When the flag is false, reuse 'message["token_count"]' for individual messages.
         # It's only necessary to recount message tokens at the beginning of a session because the LLM model may have changed.
         # Changing the model requires recounting tokens because the tokenizer may be different
+        litellm = _import_litellm()
         total_tokens = 0
         tools_tokens = 0
         system_tokens = 0
@@ -374,7 +385,11 @@ class DefaultLLM(LLM):
         temperature: Optional[float] = None,
         drop_params: Optional[bool] = None,
         stream: Optional[bool] = None,
-    ) -> Union[ModelResponse, CustomStreamWrapper]:
+    ) -> Union["ModelResponse", "CustomStreamWrapper"]:
+        litellm = _import_litellm()
+        from litellm.litellm_core_utils.streaming_handler import CustomStreamWrapper
+        from litellm.types.utils import ModelResponse
+
         tools_args = {}
         allowed_openai_params = None
 
@@ -438,6 +453,7 @@ class DefaultLLM(LLM):
             raise Exception(f"Unexpected type returned by the LLM {type(result)}")
 
     def get_maximum_output_token(self) -> int:
+        litellm = _import_litellm()
         max_output_tokens = floor(min(64000, self.get_context_window_size() / 5))
 
         if OVERRIDE_MAX_OUTPUT_TOKEN:
@@ -667,8 +683,11 @@ class LLMModelRegistry:
 
 
 def get_llm_usage(
-    llm_response: Union[ModelResponse, CustomStreamWrapper, TextCompletionResponse],
+    llm_response: Union["ModelResponse", "CustomStreamWrapper", "TextCompletionResponse"],
 ) -> dict:
+    from litellm.litellm_core_utils.streaming_handler import CustomStreamWrapper
+    from litellm.types.utils import ModelResponse, TextCompletionResponse
+
     usage: dict = {}
     if (
         (
@@ -682,6 +701,7 @@ def get_llm_usage(
         usage["completion_tokens"] = llm_response.usage.completion_tokens  # type: ignore
         usage["total_tokens"] = llm_response.usage.total_tokens  # type: ignore
     elif isinstance(llm_response, CustomStreamWrapper):
+        litellm = _import_litellm()
         complete_response = litellm.stream_chunk_builder(chunks=llm_response)  # type: ignore
         if complete_response:
             return get_llm_usage(complete_response)

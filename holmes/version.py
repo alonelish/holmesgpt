@@ -11,7 +11,6 @@ import threading
 from functools import cache
 from typing import NamedTuple, Optional
 
-import requests  # type: ignore
 from pydantic import BaseModel, ConfigDict
 
 from holmes.common.env_vars import ROBUSTA_API_ENDPOINT
@@ -136,6 +135,8 @@ def get_version() -> str:
 def fetch_holmes_info() -> Optional[HolmesInfo]:
     """Fetch latest version information from Robusta API"""
     try:
+        import requests  # type: ignore
+
         response = requests.get(HOLMES_GET_INFO_URL, timeout=TIMEOUT)
         response.raise_for_status()
         result = response.json()
