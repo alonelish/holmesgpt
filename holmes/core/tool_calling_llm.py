@@ -542,6 +542,15 @@ class ToolCallingLLM:
                     f"[italic dim]AI reasoning:\n\n{response_message.reasoning_content}[/italic dim]\n"
                 )
 
+            # On the last step, if the LLM still returns tool_calls despite tools=None
+            # (common with thinking models), ignore the tool calls and return available text
+            if tools_to_call and i == max_steps:
+                logging.warning(
+                    f"LLM returned tool_calls on final step (step {i}/{max_steps}) despite tools being disabled. "
+                    "Ignoring tool calls and returning available text. This is common with thinking models."
+                )
+                tools_to_call = None
+
             if not tools_to_call:
                 tokens = self.llm.count_tokens(messages=messages, tools=tools)
 
@@ -1060,6 +1069,16 @@ class ToolCallingLLM:
             yield build_stream_event_token_count(metadata=metadata)
 
             tools_to_call = getattr(response_message, "tool_calls", None)
+
+            # On the last step, if the LLM still returns tool_calls despite tools=None
+            # (common with thinking models), ignore the tool calls and return available text
+            if tools_to_call and i == max_steps:
+                logging.warning(
+                    f"LLM returned tool_calls on final step (step {i}/{max_steps}) despite tools being disabled. "
+                    "Ignoring tool calls and returning available text. This is common with thinking models."
+                )
+                tools_to_call = None
+
             if not tools_to_call:
                 yield StreamMessage(
                     event=StreamEvents.ANSWER_END,
