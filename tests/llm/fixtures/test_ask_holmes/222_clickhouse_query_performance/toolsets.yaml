@@ -1,0 +1,5 @@
+toolsets:
+  test-clickhouse:
+    type: database
+    config:
+      connection_url: "clickhouse://default@localhost:10222/testdb"

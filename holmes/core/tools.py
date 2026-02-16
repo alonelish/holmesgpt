@@ -162,6 +162,7 @@ class ToolsetType(str, Enum):
     CUSTOMIZED = "custom"
     MCP = "mcp"
     HTTP = "http"
+    DATABASE = "database"
 
 
 class ToolParameter(BaseModel):

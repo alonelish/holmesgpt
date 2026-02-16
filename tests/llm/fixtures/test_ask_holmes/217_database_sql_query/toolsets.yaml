@@ -1,5 +1,5 @@
 toolsets:
-  database/sql:
-    enabled: true
+  test-postgres:
+    type: database
     config:
-      connection_url: "{{ env.POSTGRES_URL }}"
+      connection_url: "postgresql://holmes:holmespass@localhost:10217/holmesdb"

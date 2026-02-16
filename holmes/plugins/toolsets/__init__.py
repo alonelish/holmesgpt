@@ -199,6 +199,8 @@ def load_toolsets_from_config(
                 validated_toolset = RemoteMCPToolset(**config, name=name)
             elif toolset_type == ToolsetType.HTTP.value:
                 validated_toolset = HttpToolset(name=name, **config)
+            elif toolset_type == ToolsetType.DATABASE.value:
+                validated_toolset = DatabaseToolset(name=name, **config)
             elif strict_check:
                 validated_toolset = YAMLToolset(**config, name=name)  # type: ignore
             else:

@@ -1,0 +1,5 @@
+toolsets:
+  test-sqlserver:
+    type: database
+    config:
+      connection_url: "mssql+pymssql://sa:HolmesTest123!@localhost:10223/testdb"

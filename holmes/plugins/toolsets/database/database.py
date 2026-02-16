@@ -83,7 +83,14 @@ class DatabaseConfig(ToolsetConfig):
 
     Example configuration:
     ```yaml
-    connection_url: "postgresql://user:password@host:5432/mydb"
+    orders-rds:
+      type: database
+      config:
+        connection_url: "mysql+pymysql://admin:pass@orders.rds.amazonaws.com:3306/orders"
+        read_only: true
+        verify_ssl: true
+        timeout_seconds: 30
+      llm_instructions: "This is the orders database for our e-commerce platform"
     ```
     """
 
@@ -94,30 +101,80 @@ class DatabaseConfig(ToolsetConfig):
             "Supported databases: PostgreSQL, MySQL/MariaDB, SQLite, SQL Server. "
             "Pure-Python drivers are used automatically (pg8000, PyMySQL, pymssql)."
         ),
-        examples=["{{ env.DATABASE_URL }}"],
+        examples=[
+            "{{ env.DATABASE_URL }}",
+            "postgresql://user:pass@host:5432/db",
+            "mysql+pymysql://user:pass@host:3306/db",
+        ],
+    )
+
+    read_only: bool = Field(
+        default=True,
+        title="Read-Only Mode",
+        description=(
+            "When True (default), only SELECT, SHOW, DESCRIBE, EXPLAIN, and WITH statements are allowed. "
+            "Set to False to allow write operations (INSERT, UPDATE, DELETE, CREATE, ALTER, etc.). "
+            "Warning: Disabling read-only mode grants full database access to the LLM."
+        ),
+    )
+
+    verify_ssl: bool = Field(
+        default=True,
+        title="Verify SSL",
+        description=(
+            "When True (default), verify SSL certificates for database connections. "
+            "Set to False for self-signed certificates or development environments. "
+            "Required for some managed databases with custom certificates (e.g., RDS with custom CAs)."
+        ),
+    )
+
+    timeout_seconds: int = Field(
+        default=30,
+        title="Query Timeout",
+        description=(
+            "Maximum time in seconds to wait for query execution. "
+            "Increase for analytical queries on large datasets. "
+            "Default: 30 seconds."
+        ),
+        ge=1,
+        le=300,
     )
 
 
 class DatabaseToolset(Toolset):
     """Toolset for querying SQL databases via SQLAlchemy.
 
-    Provides read-only access to any SQLAlchemy-compatible database.
-    Write operations (INSERT, UPDATE, DELETE, DROP, etc.) are blocked.
+    By default, provides read-only access to any SQLAlchemy-compatible database.
+    Write operations (INSERT, UPDATE, DELETE, DROP, etc.) are blocked unless
+    explicitly enabled via the read_only configuration option.
     """
 
     model_config = ConfigDict(arbitrary_types_allowed=True)
     config_classes: ClassVar[list[Type[DatabaseConfig]]] = [DatabaseConfig]
 
-    def __init__(self):
+    def __init__(self, name: str = "database", **kwargs: Any):
+        llm_instructions = kwargs.pop("llm_instructions", None)
+        config = kwargs.pop("config", None)
+        enabled = kwargs.pop("enabled", False)
+        kwargs.pop("type", None)
+
+        description = kwargs.pop("description", None)
+        if not description:
+            if name == "database":
+                description = "Query SQL databases (PostgreSQL, MySQL, MariaDB, CockroachDB, ClickHouse, SQL Server, SQLite)"
+            else:
+                description = f"Query {name} database"
+
         super().__init__(
-            name="database/sql",
-            enabled=False,
-            description="Query SQL databases (PostgreSQL, MySQL, SQLite, SQL Server) with read-only access",
+            name=name,
+            enabled=enabled,
+            description=description,
             docs_url="https://holmesgpt.dev/data-sources/builtin-toolsets/database/",
             icon_url="https://www.postgresql.org/favicon.ico",
             prerequisites=[CallablePrerequisite(callable=self.prerequisites_callable)],
             tools=[],
             tags=[ToolsetTag.CORE],
+            **kwargs,
         )
         self.tools = [
             DatabaseQuery(self),
@@ -127,6 +184,11 @@ class DatabaseToolset(Toolset):
         self._load_llm_instructions_from_file(
             os.path.dirname(__file__), "instructions.jinja2"
         )
+
+        self._user_llm_instructions = llm_instructions
+
+        if config:
+            self.config = config
 
     def prerequisites_callable(self, config: Dict[str, Any]) -> Tuple[bool, str]:
         try:
@@ -140,7 +202,7 @@ class DatabaseToolset(Toolset):
             if sqlalchemy is None:
                 return False, "sqlalchemy is not installed"
             url = _normalise_url(self.database_config.connection_url)
-            engine = sqlalchemy.create_engine(url, pool_pre_ping=True)
+            engine = self._create_engine(url)
             with engine.connect() as conn:
                 conn.execute(sqlalchemy.text("SELECT 1"))
             dialect = engine.dialect.name
@@ -149,12 +211,37 @@ class DatabaseToolset(Toolset):
         except Exception as e:
             return False, f"Database connection failed: {e}"
 
+    def _create_engine(self, url: str):
+        """Create SQLAlchemy engine with configured timeout and SSL settings."""
+        connect_args = {}
+
+        # Configure timeout (database-specific)
+        if "postgresql" in url or "pg8000" in url:
+            connect_args["connect_timeout"] = self.database_config.timeout_seconds
+        elif "mysql" in url or "pymysql" in url:
+            connect_args["connect_timeout"] = self.database_config.timeout_seconds
+        elif "mssql" in url or "pymssql" in url:
+            connect_args["timeout"] = self.database_config.timeout_seconds
+
+        # Configure SSL verification
+        if not self.database_config.verify_ssl:
+            if "postgresql" in url or "pg8000" in url:
+                connect_args["sslmode"] = "disable"
+            elif "mysql" in url or "pymysql" in url:
+                connect_args["ssl_disabled"] = True
+
+        return sqlalchemy.create_engine(
+            url,
+            pool_pre_ping=True,
+            connect_args=connect_args
+        )
+
     @property
     def database_config(self) -> DatabaseConfig:
         return self.config  # type: ignore
 
     def execute_query(self, sql: str, limit: Optional[int] = None) -> Dict[str, Any]:
-        """Execute a read-only SQL query and return results as a dict.
+        """Execute a SQL query and return results as a dict.
 
         Returns:
             Dict with keys: columns, rows, row_count, truncated
@@ -162,52 +249,67 @@ class DatabaseToolset(Toolset):
         if sqlalchemy is None:
             raise RuntimeError("sqlalchemy is not installed")
 
-        if _WRITE_PATTERN.match(sql):
-            raise ValueError(
-                f"Write operations are not allowed. "
-                f"Only SELECT, SHOW, DESCRIBE, EXPLAIN, and WITH statements are permitted. "
-                f"Received: {sql[:80]}"
-            )
+        # Only validate read-only if configured to do so
+        if self.database_config.read_only:
+            if _WRITE_PATTERN.match(sql):
+                raise ValueError(
+                    f"Write operations are not allowed. "
+                    f"Only SELECT, SHOW, DESCRIBE, EXPLAIN, and WITH statements are permitted. "
+                    f"Received: {sql[:80]}"
+                )
 
-        if _WRITE_ANYWHERE_PATTERN.search(sql):
-            raise ValueError(
-                f"Write operations are not allowed anywhere in the query. "
-                f"Only SELECT, SHOW, DESCRIBE, EXPLAIN, and WITH statements are permitted. "
-                f"Received: {sql[:80]}"
-            )
+            if _WRITE_ANYWHERE_PATTERN.search(sql):
+                raise ValueError(
+                    f"Write operations are not allowed anywhere in the query. "
+                    f"Only SELECT, SHOW, DESCRIBE, EXPLAIN, and WITH statements are permitted. "
+                    f"Received: {sql[:80]}"
+                )
 
-        if not _READONLY_PATTERN.match(sql):
-            raise ValueError(
-                f"Only SELECT, SHOW, DESCRIBE, EXPLAIN, and WITH statements are permitted. "
-                f"Received: {sql[:80]}"
-            )
+            if not _READONLY_PATTERN.match(sql):
+                raise ValueError(
+                    f"Only SELECT, SHOW, DESCRIBE, EXPLAIN, and WITH statements are permitted. "
+                    f"Received: {sql[:80]}"
+                )
 
         effective_limit = min(limit or _MAX_ROWS, _MAX_ROWS)
         url = _normalise_url(self.database_config.connection_url)
-        engine = sqlalchemy.create_engine(url)
+        engine = self._create_engine(url)
         try:
             with engine.connect() as conn:
-                # Defense-in-depth: enforce read-only at the DB level
-                try:
-                    conn.execute(sqlalchemy.text("SET TRANSACTION READ ONLY"))
-                except Exception:
-                    pass  # Not all dialects support this; regex check is primary guard
+                # Defense-in-depth: enforce read-only at the DB level (if configured)
+                if self.database_config.read_only:
+                    try:
+                        conn.execute(sqlalchemy.text("SET TRANSACTION READ ONLY"))
+                    except Exception:
+                        pass  # Not all dialects support this; regex check is primary guard
                 result = conn.execute(sqlalchemy.text(sql))
-                columns = list(result.keys())
-                rows: List[List[Any]] = []
-                truncated = False
-                for i, row in enumerate(result):
-                    if i >= effective_limit:
-                        truncated = True
-                        break
-                    rows.append([_serialize_value(v) for v in row])
 
-                return {
-                    "columns": columns,
-                    "rows": rows,
-                    "row_count": len(rows),
-                    "truncated": truncated,
-                }
+                # Check if the result returns rows (SELECT, SHOW, etc.) or not (INSERT, UPDATE, etc.)
+                if result.returns_rows:
+                    columns = list(result.keys())
+                    rows: List[List[Any]] = []
+                    truncated = False
+                    for i, row in enumerate(result):
+                        if i >= effective_limit:
+                            truncated = True
+                            break
+                        rows.append([_serialize_value(v) for v in row])
+
+                    return {
+                        "columns": columns,
+                        "rows": rows,
+                        "row_count": len(rows),
+                        "truncated": truncated,
+                    }
+                else:
+                    # Write operations don't return rows
+                    return {
+                        "columns": [],
+                        "rows": [],
+                        "row_count": 0,
+                        "truncated": False,
+                        "rows_affected": result.rowcount if result.rowcount >= 0 else None,
+                    }
         finally:
             engine.dispose()
 
@@ -235,16 +337,17 @@ class BaseDatabaseTool(Tool, ABC):
 
 
 class DatabaseQuery(BaseDatabaseTool):
-    """Execute a read-only SQL query against the connected database."""
+    """Execute a SQL query against the connected database."""
 
     def __init__(self, toolset: DatabaseToolset):
         super().__init__(
             toolset=toolset,
             name="database_query",
             description=(
-                "Execute a read-only SQL query. Only SELECT, SHOW, DESCRIBE, EXPLAIN, "
-                "and WITH (CTE) statements are allowed. Returns up to 200 rows. "
-                "Always use LIMIT to control result size."
+                "Execute a SQL query against the database. "
+                "In read-only mode (default), only SELECT, SHOW, DESCRIBE, EXPLAIN, "
+                "and WITH (CTE) statements are allowed. Write operations can be enabled via configuration. "
+                "Returns up to 200 rows. Always use LIMIT to control result size."
             ),
             parameters={
                 "sql": ToolParameter(
@@ -330,7 +433,7 @@ class DatabaseListTables(BaseDatabaseTool):
             include_views = params.get("include_views", True)
 
             url = _normalise_url(self._toolset.database_config.connection_url)
-            engine = sqlalchemy.create_engine(url)
+            engine = self._toolset._create_engine(url)
             try:
                 inspector = sqlalchemy.inspect(engine)
                 tables = inspector.get_table_names(schema=schema)
@@ -397,7 +500,7 @@ class DatabaseDescribeTable(BaseDatabaseTool):
             schema = params.get("schema")
 
             url = _normalise_url(self._toolset.database_config.connection_url)
-            engine = sqlalchemy.create_engine(url)
+            engine = self._toolset._create_engine(url)
             try:
                 inspector = sqlalchemy.inspect(engine)
 

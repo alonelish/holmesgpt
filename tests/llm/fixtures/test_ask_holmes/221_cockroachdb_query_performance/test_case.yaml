@@ -1,0 +1,115 @@
+# Test: CockroachDB Query Performance - connectivity and performance diagnosis
+# Tests that Holmes can connect to CockroachDB (PostgreSQL-compatible distributed SQL),
+# discover schema, query data, and diagnose performance issues (missing index).
+
+user_prompt: |
+  1. List the tables in the database and tell me the verification code from the holmes_eval_221 table
+  2. I'm experiencing slow queries with this SQL: SELECT * FROM orders WHERE customer_id = 12345
+     Analyze why this query is slow and suggest how to fix it
+
+expected_output:
+  - "Must report the verification code: HOLMES-COCKROACH-EVAL-221-r8q4w7"
+  - "Must mention the holmes_eval_221 table"
+  - "Must identify missing index on customer_id column"
+  - "Must suggest creating an index on customer_id"
+
+include_tool_calls: true
+
+tags:
+  - db-connectors
+
+setup_timeout: 120
+
+port_forwards:
+  - namespace: app-221
+    service: cockroachdb
+    local_port: 10221
+    remote_port: 26257
+
+before_test: |
+  set -e
+
+  echo "⏳ Setting up CockroachDB in cluster..."
+
+  # Create namespace
+  kubectl create namespace app-221 --dry-run=client -o yaml | kubectl apply -f -
+
+  # Deploy CockroachDB
+  kubectl apply -f cockroachdb.yaml -n app-221
+
+  # Wait for CockroachDB to be ready
+  echo "⏳ Waiting for CockroachDB pod to be ready..."
+  POD_READY=false
+  for i in {1..90}; do
+    if kubectl wait --for=condition=ready pod -l app=cockroachdb -n app-221 --timeout=5s 2>/dev/null; then
+      echo "✅ CockroachDB pod is ready!"
+      POD_READY=true
+      break
+    fi
+    sleep 1
+  done
+
+  if [ "$POD_READY" = false ]; then
+    echo "❌ CockroachDB pod failed to become ready after 90 seconds"
+    kubectl get pods -n app-221
+    kubectl logs -l app=cockroachdb -n app-221 --tail=20
+    exit 1
+  fi
+
+  # Wait for CockroachDB to fully initialize
+  sleep 5
+
+  # Create test tables and data
+  echo "⏳ Creating test data..."
+  kubectl exec -n app-221 deployment/cockroachdb -- /cockroach/cockroach sql --insecure -e "
+  -- Create database
+  CREATE DATABASE IF NOT EXISTS testdb;
+  USE testdb;
+
+  -- Create verification table
+  DROP TABLE IF EXISTS holmes_eval_221;
+  CREATE TABLE holmes_eval_221 (
+      id SERIAL PRIMARY KEY,
+      category STRING NOT NULL,
+      verification_code STRING NOT NULL,
+      created_at TIMESTAMP DEFAULT NOW()
+  );
+  INSERT INTO holmes_eval_221 (category, verification_code)
+  VALUES ('eval_test', 'HOLMES-COCKROACH-EVAL-221-r8q4w7');
+
+  -- Create orders table without index for performance test
+  DROP TABLE IF EXISTS orders;
+  CREATE TABLE orders (
+      id SERIAL PRIMARY KEY,
+      customer_id INT NOT NULL,
+      order_date DATE NOT NULL,
+      total_amount DECIMAL(10,2) NOT NULL,
+      status STRING NOT NULL
+  );
+
+  -- Insert sample data (10K rows)
+  INSERT INTO orders (customer_id, order_date, total_amount, status)
+  SELECT
+    (random() * 1000)::INT AS customer_id,
+    (NOW() - (random() * INTERVAL '365 days'))::DATE AS order_date,
+    (10 + random() * 990)::DECIMAL(10,2) AS total_amount,
+    CASE (random() * 3)::INT
+      WHEN 0 THEN 'pending'
+      WHEN 1 THEN 'completed'
+      ELSE 'cancelled'
+    END AS status
+  FROM generate_series(1, 10000);
+  "
+
+  # Verify data
+  VERIFICATION_CODE=$(kubectl exec -n app-221 deployment/cockroachdb -- /cockroach/cockroach sql --insecure -d testdb --format=tsv -e "SELECT verification_code FROM holmes_eval_221;")
+  ORDER_COUNT=$(kubectl exec -n app-221 deployment/cockroachdb -- /cockroach/cockroach sql --insecure -d testdb --format=tsv -e "SELECT COUNT(*) FROM orders;")
+  echo "✅ Verification code: $VERIFICATION_CODE"
+  echo "✅ Orders table has $ORDER_COUNT rows"
+
+  echo "✅ CockroachDB setup complete"
+
+after_test: |
+  echo "⏳ Cleaning up CockroachDB..."
+  kubectl delete namespace app-221 --ignore-not-found=true --wait=false 2>/dev/null || true
+  echo "✅ Cleanup initiated"
