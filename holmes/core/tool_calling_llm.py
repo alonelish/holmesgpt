@@ -48,6 +48,7 @@ from holmes.core.tracing import DummySpan
 from holmes.core.truncation.input_context_window_limiter import (
     limit_input_context_window,
 )
+from holmes.plugins.toolsets.investigator.core_investigation import TODO_WRITE_TOOL_NAME
 from holmes.plugins.prompts import load_and_render_prompt
 from holmes.plugins.runbooks import RunbookCatalog
 from holmes.utils import sentry_helper
@@ -233,6 +234,20 @@ class ToolCallWithDecision(BaseModel):
     message_index: int
     tool_call: ChatCompletionMessageToolCall
     decision: Optional[ToolApprovalDecision]
+
+
+def _all_todos_completed(tools_to_call: list) -> bool:
+    """Check if TodoWrite was called in this batch and all tasks are completed."""
+    for t in tools_to_call:
+        if t.function.name == TODO_WRITE_TOOL_NAME:
+            try:
+                args = json.loads(t.function.arguments) if isinstance(t.function.arguments, str) else t.function.arguments
+                todos = args.get("todos", [])
+                if todos and all(task.get("status") == "completed" for task in todos):
+                    return True
+            except (json.JSONDecodeError, AttributeError):
+                pass
+    return False
 
 
 class ToolCallingLLM:
@@ -632,6 +647,28 @@ class ToolCallingLLM:
                 # Add a blank line after all tools in this batch complete
                 if tools_to_call:
                     logging.info("")
+
+                # Early return: if all todos are completed and the LLM already provided
+                # a text response alongside the tool calls, skip the extra LLM call.
+                if text_response and text_response.strip() and _all_todos_completed(tools_to_call):
+                    logging.info("All tasks completed with text response — skipping extra LLM call")
+                    tokens = self.llm.count_tokens(messages=messages, tools=tools)
+                    add_token_count_to_metadata(
+                        tokens=tokens,
+                        full_llm_response=full_response,
+                        max_context_size=limit_result.max_context_size,
+                        maximum_output_token=limit_result.maximum_output_token,
+                        metadata=metadata,
+                    )
+                    return LLMResult(
+                        result=text_response,
+                        tool_calls=all_tool_calls,
+                        num_llm_calls=i,
+                        prompt=json.dumps(messages, indent=2),
+                        messages=messages,
+                        **costs.model_dump(),
+                        metadata=metadata,
+                    )
 
         raise Exception(f"Too many LLM calls - exceeded max_steps: {i}/{max_steps}")
 
@@ -1191,6 +1228,20 @@ class ToolCallingLLM:
                             f"Runbook activated - refreshing tools list ({len(tools)} -> {len(new_tools)} tools)"
                         )
                         tools = new_tools
+
+                # Early return: if all todos are completed and the LLM already provided
+                # a text response alongside the tool calls, skip the extra LLM call.
+                if message and message.strip() and _all_todos_completed(tools_to_call):
+                    logging.info("All tasks completed with text response — skipping extra LLM call")
+                    yield StreamMessage(
+                        event=StreamEvents.ANSWER_END,
+                        data={
+                            "content": message,
+                            "messages": messages,
+                            "metadata": metadata,
+                        },
+                    )
+                    return
 
         raise Exception(
             f"Too many LLM calls - exceeded max_steps: {i}/{self.max_steps}"
