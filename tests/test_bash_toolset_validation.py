@@ -876,7 +876,7 @@ class TestCompoundStatements:
             deny_list,
         )
         assert result.status == ValidationStatus.APPROVAL_REQUIRED
-        assert result.message == "Contains segments not in the allow list."
+        assert "Segment(s) not in allow list: 'whoami'" in result.message
 
     def test_command_substitution_backticks_all_allowed(self):
         """Command substitution with backticks with all commands allowed is allowed."""
@@ -902,7 +902,7 @@ class TestCompoundStatements:
             deny_list,
         )
         assert result.status == ValidationStatus.APPROVAL_REQUIRED
-        assert result.message == "Contains segments not in the allow list."
+        assert "Segment(s) not in allow list: 'whoami'" in result.message
 
     def test_process_substitution_all_allowed(self):
         """Process substitution with all inner commands allowed is allowed."""
@@ -927,7 +927,7 @@ class TestCompoundStatements:
             deny_list,
         )
         assert result.status == ValidationStatus.APPROVAL_REQUIRED
-        assert result.message == "Contains segments not in the allow list."
+        assert "Segment(s) not in allow list: 'cat file1', 'cat file2'" in result.message
 
     # ==================== STILL BLOCKED: Hardcoded blocks inside scripts ====================
 
