@@ -46,9 +46,6 @@ _WRITE_ANYWHERE_PATTERN = re.compile(
     re.IGNORECASE,
 )
 
-# Maximum number of rows to return from a query
-_MAX_ROWS = 200
-
 # Map of common URL scheme prefixes to SQLAlchemy drivers that are pure-Python
 # and bundled with holmesgpt (no C extensions needed).
 _DRIVER_MAP: Dict[str, str] = {
@@ -102,7 +99,6 @@ class DatabaseConfig(ToolsetConfig):
             "Pure-Python drivers are used automatically (pg8000, PyMySQL, pymssql)."
         ),
         examples=[
-            "{{ env.DATABASE_URL }}",
             "postgresql://user:pass@host:5432/db",
             "mysql+pymysql://user:pass@host:3306/db",
         ],
@@ -140,6 +136,18 @@ class DatabaseConfig(ToolsetConfig):
         le=300,
     )
 
+    max_rows: int = Field(
+        default=200,
+        title="Maximum Rows",
+        description=(
+            "Maximum number of rows to return from query results. "
+            "Limits result size to prevent token overflow. "
+            "Default: 200 rows."
+        ),
+        ge=1,
+        le=10000,
+    )
+
 
 class DatabaseToolset(Toolset):
     """Toolset for querying SQL databases via SQLAlchemy.
@@ -152,7 +160,7 @@ class DatabaseToolset(Toolset):
     model_config = ConfigDict(arbitrary_types_allowed=True)
     config_classes: ClassVar[list[Type[DatabaseConfig]]] = [DatabaseConfig]
 
-    def __init__(self, name: str = "database", **kwargs: Any):
+    def __init__(self, name: str = "database/sql", **kwargs: Any):
         llm_instructions = kwargs.pop("llm_instructions", None)
         config = kwargs.pop("config", None)
         enabled = kwargs.pop("enabled", False)
@@ -160,7 +168,7 @@ class DatabaseToolset(Toolset):
 
         description = kwargs.pop("description", None)
         if not description:
-            if name == "database":
+            if name == "database/sql":
                 description = "Query SQL databases (PostgreSQL, MySQL, MariaDB, CockroachDB, ClickHouse, SQL Server, SQLite)"
             else:
                 description = f"Query {name} database"
@@ -212,10 +220,8 @@ class DatabaseToolset(Toolset):
             return False, f"Database connection failed: {e}"
 
     def _create_engine(self, url: str):
-        """Create SQLAlchemy engine with configured timeout and SSL settings."""
         connect_args = {}
 
-        # Configure timeout (database-specific)
         if "postgresql" in url or "pg8000" in url:
             connect_args["connect_timeout"] = self.database_config.timeout_seconds
         elif "mysql" in url or "pymysql" in url:
@@ -223,12 +229,15 @@ class DatabaseToolset(Toolset):
         elif "mssql" in url or "pymssql" in url:
             connect_args["timeout"] = self.database_config.timeout_seconds
 
-        # Configure SSL verification
         if not self.database_config.verify_ssl:
             if "postgresql" in url or "pg8000" in url:
                 connect_args["sslmode"] = "disable"
             elif "mysql" in url or "pymysql" in url:
                 connect_args["ssl_disabled"] = True
+            elif "clickhouse" in url:
+                connect_args["verify"] = False
+            elif "mssql" in url or "pymssql" in url:
+                connect_args["TrustServerCertificate"] = "yes"
 
         return sqlalchemy.create_engine(
             url,
@@ -249,7 +258,6 @@ class DatabaseToolset(Toolset):
         if sqlalchemy is None:
             raise RuntimeError("sqlalchemy is not installed")
 
-        # Only validate read-only if configured to do so
         if self.database_config.read_only:
             if _WRITE_PATTERN.match(sql):
                 raise ValueError(
@@ -271,12 +279,11 @@ class DatabaseToolset(Toolset):
                     f"Received: {sql[:80]}"
                 )
 
-        effective_limit = min(limit or _MAX_ROWS, _MAX_ROWS)
+        effective_limit = min(limit or self.database_config.max_rows, self.database_config.max_rows)
         url = _normalise_url(self.database_config.connection_url)
         engine = self._create_engine(url)
         try:
             with engine.connect() as conn:
-                # Defense-in-depth: enforce read-only at the DB level (if configured)
                 if self.database_config.read_only:
                     try:
                         conn.execute(sqlalchemy.text("SET TRANSACTION READ ONLY"))

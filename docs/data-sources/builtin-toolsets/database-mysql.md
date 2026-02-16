@@ -184,6 +184,7 @@ FLUSH PRIVILEGES;
 - **read_only** (default: `true`): Only allow SELECT/SHOW/DESCRIBE/EXPLAIN/WITH statements
 - **verify_ssl** (default: `true`): Verify SSL certificates
 - **timeout_seconds** (default: `30`): Query timeout (1-300 seconds)
+- **max_rows** (default: `200`): Maximum rows to return (1-10000)
 - **llm_instructions**: Context about this database
 
 ## Common Use Cases

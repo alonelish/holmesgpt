@@ -83,30 +83,31 @@ before_test: |
       status VARCHAR(20) NOT NULL
   );
 
-  -- Insert sample data (10K rows)
-  DELIMITER //
-  CREATE PROCEDURE generate_orders()
-  BEGIN
-    DECLARE i INT DEFAULT 1;
-    WHILE i <= 10000 DO
-      INSERT INTO orders (customer_id, order_date, total_amount, status)
-      VALUES (
-        FLOOR(1 + RAND() * 1000),
-        DATE_SUB(CURDATE(), INTERVAL FLOOR(RAND() * 365) DAY),
-        ROUND(10 + RAND() * 990, 2),
-        CASE FLOOR(RAND() * 3)
-          WHEN 0 THEN 'pending'
-          WHEN 1 THEN 'completed'
-          ELSE 'cancelled'
-        END
-      );
-      SET i = i + 1;
-    END WHILE;
-  END //
-  DELIMITER ;
+  "
 
-  CALL generate_orders();
-  DROP PROCEDURE generate_orders;
+  # Insert sample data using bulk inserts (100 batches of 100 rows each)
+  echo "⏳ Inserting 10K rows in bulk..."
+  for batch in {1..100}; do
+    SQL="INSERT INTO orders (customer_id, order_date, total_amount, status) VALUES "
+    for i in {1..100}; do
+      customer_id=$((1 + RANDOM % 1000))
+      days_ago=$((RANDOM % 365))
+      amount=$((10 + RANDOM % 990))
+      status_num=$((RANDOM % 3))
+      status="pending"
+      [ $status_num -eq 1 ] && status="completed"
+      [ $status_num -eq 2 ] && status="cancelled"
+
+      if [ $i -eq 100 ]; then
+        SQL="${SQL}($customer_id, DATE_SUB(CURDATE(), INTERVAL $days_ago DAY), $amount.00, '$status');"
+      else
+        SQL="${SQL}($customer_id, DATE_SUB(CURDATE(), INTERVAL $days_ago DAY), $amount.00, '$status'),"
+      fi
+    done
+    kubectl exec -n app-218 deployment/mysql -- mysql -h 127.0.0.1 -uholmes -pholmespass testdb -e "$SQL"
+  done
+
+  kubectl exec -n app-218 deployment/mysql -- mysql -h 127.0.0.1 -uholmes -pholmespass testdb -e "
   "
 
   # Verify data
