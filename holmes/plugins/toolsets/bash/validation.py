@@ -83,14 +83,6 @@ def get_effective_lists(config: BashExecutorConfig) -> Tuple[List[str], List[str
     return allow_list, deny_list
 
 
-class CompoundStatementError(Exception):
-    """Raised when a compound statement (for, while, if, etc.) is detected."""
-
-    def __init__(self, kind: str):
-        self.kind = kind
-        super().__init__(f"Compound statement detected: {kind}")
-
-
 # Keywords that indicate compound statements (checked when bashlex can't parse)
 COMPOUND_KEYWORDS = {"for", "while", "until", "if", "case", "select", "function"}
 COMPOUND_END_KEYWORDS = {"done", "fi", "esac"}
@@ -146,9 +138,6 @@ def parse_command_segments(command: str) -> Tuple[List[str], bool]:
         Tuple of (segments, contains_compound_command):
         - segments: List of command segments extracted from the command
         - contains_compound_command: True if compound statements (for, while, if, etc.) were detected
-
-    Raises:
-        CompoundStatementError: If command cannot be parsed at all (not a compound statement issue)
     """
     try:
         parts = bashlex.parse(command)
@@ -160,7 +149,7 @@ def parse_command_segments(command: str) -> Tuple[List[str], bool]:
         if keyword:
             return ([], True)
         # If no compound keywords found, it's a genuine parse error
-        raise CompoundStatementError(f"parse_error: {e}")
+        return ([], False)
 
     extractor = CommandSegmentExtractor(command)
     for part in parts:
@@ -351,14 +340,7 @@ def validate_command(
             )
 
     # Parse command into segments and detect compound statements
-    try:
-        segments, contains_compound_command = parse_command_segments(command)
-    except CompoundStatementError:
-        return ValidationResult(
-            status=ValidationStatus.DENIED,
-            deny_reason=DenyReason.PARSE_ERROR,
-            message="Failed to parse command.",
-        )
+    segments, contains_compound_command = parse_command_segments(command)
 
     # For unparseable compounds (e.g. case statements where bashlex fails entirely):
     # check hardcoded blocks, then require approval

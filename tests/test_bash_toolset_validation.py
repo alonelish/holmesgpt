@@ -16,7 +16,6 @@ from holmes.plugins.toolsets.bash.common.default_lists import (
     EXTENDED_ALLOW_LIST,
 )
 from holmes.plugins.toolsets.bash.validation import (
-    CompoundStatementError,
     DenyReason,
     ValidationStatus,
     check_hardcoded_blocks,
@@ -167,10 +166,11 @@ class TestParseCommandSegments:
         assert not has_compound
 
     def test_invalid_pipe_syntax_rejected(self):
-        """Test that invalid pipe syntax (empty segments) is rejected."""
+        """Test that invalid pipe syntax (empty segments) returns empty segments."""
         # Invalid bash: pipe with no left side
-        with pytest.raises(CompoundStatementError):
-            parse_command_segments("  |  kubectl get pods  |  ")
+        segments, is_compound = parse_command_segments("  |  kubectl get pods  |  ")
+        assert segments == []
+        assert is_compound is False
 
     def test_for_loop_extracts_inner_segments(self):
         """For loop returns inner command segments with compound flag."""
