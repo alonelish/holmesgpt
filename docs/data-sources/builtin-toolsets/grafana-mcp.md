@@ -120,13 +120,13 @@ The Grafana MCP server provides comprehensive access to your Grafana instance an
               X-Grafana-API-Key: "{{ env.GRAFANA_API_KEY }}"
           icon_url: "https://cdn.simpleicons.org/grafana/F46800"
           # These instructions were tested and produce improved results
-        llm_instructions: |
-            Always use Grafana tools (e.g. query_prometheus) for metrics/PromQL. Do not use kubectl top or prometheus/metrics toolset.
-            NEVER answer based on truncated data. Retry with topk/bottomk or more filters until the query succeeds.
-            For high-cardinality metrics (>10 series), ALWAYS use topk(5, <query>). Check cardinality first with count() if unsure.
-            Standard metrics: CPU=container_cpu_usage_seconds_total, Memory=container_memory_working_set_bytes, Throttling=container_cpu_cfs_throttled_periods_total.
-            NEVER use type "promql" embeds. ALWAYS embed charts: << {"type": "chart", "tool_call_ids": ["<tool_call_id>"], "generateConfig": "function generateConfig(toolOutputs) { /* parse toolOutputs[0].data array, return Chart.js config */ }", "title": "Title"} >>
-            Embed at most 2 charts with line spacing between them.
+          llm_instr uctions: |
+              Always use Grafana tools (e.g. query_prometheus) for metrics/PromQL. Do not use kubectl top or prometheus/metrics toolset.
+              NEVER answer based on truncated data. Retry with topk/bottomk or more filters until the query succeeds.
+              For high-cardinality metrics (>10 series), ALWAYS use topk(5, <query>). Check cardinality first with count() if unsure.
+              Standard metrics: CPU=container_cpu_usage_seconds_total, Memory=container_memory_working_set_bytes, Throttling=container_cpu_cfs_throttled_periods_total.
+              NEVER use type "promql" embeds. ALWAYS embed charts: << {"type": "chart", "tool_call_ids": ["<tool_call_id>"], "generateConfig": "function generateConfig(toolOutputs) { /* parse toolOutputs[0].data array, return Chart.js config */ }", "title": "Title"} >>
+              Embed at most 2 charts with line spacing between them.
     ```
 
     Then deploy or upgrade your Robusta installation:
@@ -179,7 +179,7 @@ holmes ask "List all Grafana dashboards"
 ## Common Use Cases
 
 ```bash
-holmes ask "What dashboards are monitoring the payment service?"
+holmes ask "show me memory and cpu usage by namespace for the past day?"
 ```
 
 ```bash
