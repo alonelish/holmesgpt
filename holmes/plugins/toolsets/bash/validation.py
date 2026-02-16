@@ -19,8 +19,9 @@ from holmes.plugins.toolsets.bash.common.config import (
     BashExecutorConfig,
 )
 from holmes.plugins.toolsets.bash.common.default_lists import (
-    DEFAULT_ALLOW_LIST,
+    CORE_ALLOW_LIST,
     DEFAULT_DENY_LIST,
+    EXTENDED_ALLOW_LIST,
 )
 
 logger = logging.getLogger(__name__)
@@ -60,19 +61,25 @@ def get_effective_lists(config: BashExecutorConfig) -> Tuple[List[str], List[str
     """
     Get the effective allow and deny lists based on configuration.
 
+    builtin_allowlist controls which builtin list is merged with user-provided entries:
+    - "core": kubectl read-only, jq, grep, text processing, system info
+    - "extended": core + filesystem commands (cat, find, ls, base64)
+    - "none": only user-provided allow/deny entries
+
     Returns copies to prevent mutation of the shared config.
 
     Returns:
         Tuple of (allow_list, deny_list) - always returns copies, never references
     """
-    if config.include_default_allow_deny_list:
-        # Merge user lists with defaults (creates new lists), sorted for deterministic output
-        allow_list = sorted(set(DEFAULT_ALLOW_LIST + config.allow))
-        deny_list = sorted(set(DEFAULT_DENY_LIST + config.deny))
+    if config.builtin_allowlist == "extended":
+        builtin = EXTENDED_ALLOW_LIST
+    elif config.builtin_allowlist == "core":
+        builtin = CORE_ALLOW_LIST
     else:
-        # Return sorted copies for deterministic output
-        allow_list = sorted(config.allow)
-        deny_list = sorted(config.deny)
+        builtin = []
+
+    allow_list = sorted(set(builtin + config.allow))
+    deny_list = sorted(set(DEFAULT_DENY_LIST + config.deny))
 
     return allow_list, deny_list
 
@@ -201,6 +208,29 @@ def check_hardcoded_blocks(segment: str) -> Optional[str]:
     segment_lower = segment.lower()
     for block in HARDCODED_BLOCKS:
         if match_prefix_for_deny(segment_lower, block):
+            return block
+
+    return None
+
+
+def check_hardcoded_blocks_in_raw_command(command: str) -> Optional[str]:
+    """
+    Check for hardcoded block patterns anywhere in a raw command string.
+
+    Unlike check_hardcoded_blocks() which checks if a parsed segment starts with
+    a blocked pattern, this function scans the entire command using word boundaries.
+    This is needed for compound statements and subshell commands where we can't
+    parse individual segments.
+
+    Args:
+        command: The full raw command string (may contain compound statements, subshells, etc.)
+
+    Returns:
+        The matched block pattern if found, None otherwise
+    """
+    command_lower = command.lower()
+    for block in HARDCODED_BLOCKS:
+        if re.search(rf"\b{re.escape(block)}\b", command_lower):
             return block
 
     return None
@@ -345,22 +375,37 @@ def validate_command(
                 message=f"Suggested prefix '{prefix}' does not appear in the command.",
             )
 
-    # Check for subshells
+    # Check for subshells - these require user approval (but still block hardcoded patterns)
     if detect_subshells(command):
+        blocked = check_hardcoded_blocks_in_raw_command(command)
+        if blocked:
+            return ValidationResult(
+                status=ValidationStatus.DENIED,
+                deny_reason=DenyReason.HARDCODED_BLOCK,
+                message=f"Command contains '{blocked}' which is permanently blocked for security reasons and cannot be overridden.",
+            )
         return ValidationResult(
-            status=ValidationStatus.DENIED,
-            deny_reason=DenyReason.SUBSHELL_DETECTED,
-            message="Command contains subshell constructs ($(), ``, <(), >()) which are not allowed for security reasons.",
+            status=ValidationStatus.APPROVAL_REQUIRED,
+            message="Command contains subshell constructs ($(), ``, <(), >()) which require approval.",
+            prefixes_needing_approval=suggested_prefixes,
         )
 
     # Parse command into segments (may raise CompoundStatementError)
+    # Compound statements require user approval (but still block hardcoded patterns)
     try:
         segments = parse_command_segments(command)
     except CompoundStatementError:
+        blocked = check_hardcoded_blocks_in_raw_command(command)
+        if blocked:
+            return ValidationResult(
+                status=ValidationStatus.DENIED,
+                deny_reason=DenyReason.HARDCODED_BLOCK,
+                message=f"Command contains '{blocked}' which is permanently blocked for security reasons and cannot be overridden.",
+            )
         return ValidationResult(
-            status=ValidationStatus.DENIED,
-            deny_reason=DenyReason.COMPOUND_STATEMENT,
-            message="Compound statements (for, while, if, case, etc.) are not supported. Only simple one-liner commands are allowed.",
+            status=ValidationStatus.APPROVAL_REQUIRED,
+            message="Command contains compound statements (for, while, if, case, etc.) or complex syntax which requires approval.",
+            prefixes_needing_approval=suggested_prefixes,
         )
 
     if not segments:
