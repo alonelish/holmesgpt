@@ -18,8 +18,8 @@ from holmes.plugins.toolsets.bash.common.default_lists import (
 from holmes.plugins.toolsets.bash.validation import (
     DenyReason,
     ValidationStatus,
+    check_blocked_in_raw_command,
     check_hardcoded_blocks,
-    check_hardcoded_blocks_in_raw_command,
     get_effective_lists,
     match_prefix,
     match_prefix_for_deny,
@@ -165,12 +165,12 @@ class TestParseCommandSegments:
         assert segments == ["sleep 10", "echo done"]
         assert not has_compound
 
-    def test_invalid_pipe_syntax_rejected(self):
-        """Test that invalid pipe syntax (empty segments) returns empty segments."""
-        # Invalid bash: pipe with no left side
-        segments, is_compound = parse_command_segments("  |  kubectl get pods  |  ")
-        assert segments == []
-        assert is_compound is False
+    def test_invalid_pipe_syntax_raises(self):
+        """Test that invalid pipe syntax raises a parsing error."""
+        import bashlex
+
+        with pytest.raises(bashlex.errors.ParsingError):
+            parse_command_segments("  |  kubectl get pods  |  ")
 
     def test_for_loop_extracts_inner_segments(self):
         """For loop returns inner command segments with compound flag."""
@@ -185,11 +185,10 @@ class TestParseCommandSegments:
         assert has_compound
         assert len(segments) > 0
 
-    def test_case_statement_returns_empty_segments_with_compound_flag(self):
-        """Case statement (unparseable by bashlex) returns empty segments with compound flag."""
-        segments, has_compound = parse_command_segments("case $x in 1) echo one;; 2) echo two;; esac")
-        assert has_compound
-        assert segments == []
+    def test_case_statement_raises(self):
+        """Case statement (unsupported by bashlex) raises NotImplementedError."""
+        with pytest.raises(NotImplementedError):
+            parse_command_segments("case $x in 1) echo one;; 2) echo two;; esac")
 
 
 class TestCheckHardcodedBlocks:
@@ -227,33 +226,44 @@ class TestCheckHardcodedBlocks:
         assert check_hardcoded_blocks("su -") == "su"
 
 
-class TestCheckHardcodedBlocksInRawCommand:
-    """Tests for hardcoded block detection in raw (unparsed) commands."""
+class TestCheckBlockedInRawCommand:
+    """Tests for blocked pattern detection in raw (unparsed) commands."""
 
     def test_sudo_in_compound_detected(self):
         """Test that sudo inside a compound command is detected."""
-        assert check_hardcoded_blocks_in_raw_command("for i in 1 2; do sudo echo $i; done") == "sudo"
+        assert check_blocked_in_raw_command("for i in 1 2; do sudo echo $i; done", HARDCODED_BLOCKS) == "sudo"
 
     def test_su_in_compound_detected(self):
         """Test that su inside a compound command is detected."""
-        assert check_hardcoded_blocks_in_raw_command("if true; then su - root; fi") == "su"
+        assert check_blocked_in_raw_command("if true; then su - root; fi", HARDCODED_BLOCKS) == "su"
 
     def test_sudo_in_subshell_detected(self):
         """Test that sudo inside a subshell is detected."""
-        assert check_hardcoded_blocks_in_raw_command("echo $(sudo whoami)") == "sudo"
+        assert check_blocked_in_raw_command("echo $(sudo whoami)", HARDCODED_BLOCKS) == "sudo"
 
     def test_normal_compound_not_blocked(self):
         """Test that normal compound commands are not blocked."""
-        assert check_hardcoded_blocks_in_raw_command("for i in 1 2 3; do echo $i; done") is None
+        assert check_blocked_in_raw_command("for i in 1 2 3; do echo $i; done", HARDCODED_BLOCKS) is None
 
     def test_no_false_positives_from_substring(self):
         """Test that words containing 'su' as substring are NOT blocked."""
-        assert check_hardcoded_blocks_in_raw_command("for f in issue result; do echo $f; done") is None
-        assert check_hardcoded_blocks_in_raw_command("echo sum") is None
+        assert check_blocked_in_raw_command("for f in issue result; do echo $f; done", HARDCODED_BLOCKS) is None
+        assert check_blocked_in_raw_command("echo sum", HARDCODED_BLOCKS) is None
 
     def test_case_insensitive(self):
         """Test that blocking is case-insensitive."""
-        assert check_hardcoded_blocks_in_raw_command("for i in 1; do SUDO echo $i; done") == "sudo"
+        assert check_blocked_in_raw_command("for i in 1; do SUDO echo $i; done", HARDCODED_BLOCKS) == "sudo"
+
+    def test_deny_list_pattern_detected(self):
+        """Test that deny list patterns are detected in raw commands."""
+        deny_list = ["kubectl get secret", "rm"]
+        assert check_blocked_in_raw_command("case $x in 1) kubectl get secret;; esac", deny_list) == "kubectl get secret"
+        assert check_blocked_in_raw_command("case $x in 1) rm -rf /tmp;; esac", deny_list) == "rm"
+
+    def test_deny_list_no_false_positives(self):
+        """Test that deny list scanning doesn't have false positives from substrings."""
+        deny_list = ["rm"]
+        assert check_blocked_in_raw_command("case $x in 1) echo format;; esac", deny_list) is None
 
 
 class TestGetEffectiveLists:
@@ -977,3 +987,43 @@ class TestCompoundStatements:
         )
         assert result.status == ValidationStatus.DENIED
         assert result.deny_reason == DenyReason.DENY_LIST
+
+    # ==================== Unparseable commands: raw string safety checks ====================
+
+    def test_case_with_deny_listed_command_denied(self):
+        """Case statement (unparseable) with deny-listed command is denied via raw string scan."""
+        config = BashExecutorConfig(allow=["echo"], deny=["kubectl get secret"])
+        allow_list, deny_list = get_effective_lists(config)
+        result = validate_command(
+            "case $x in 1) kubectl get secret;; 2) echo two;; esac",
+            ["echo"],
+            allow_list,
+            deny_list,
+        )
+        assert result.status == ValidationStatus.DENIED
+        assert result.deny_reason == DenyReason.DENY_LIST
+
+    def test_case_with_sudo_denied(self):
+        """Case statement (unparseable) with sudo is denied via raw string scan."""
+        config = BashExecutorConfig(allow=["echo"])
+        allow_list, deny_list = get_effective_lists(config)
+        result = validate_command(
+            "case $x in 1) sudo echo one;; esac",
+            ["echo"],
+            allow_list,
+            deny_list,
+        )
+        assert result.status == ValidationStatus.DENIED
+        assert result.deny_reason == DenyReason.HARDCODED_BLOCK
+
+    def test_unparseable_command_requires_approval(self):
+        """Unparseable command with no blocked patterns requires approval."""
+        config = BashExecutorConfig(allow=["echo"])
+        allow_list, deny_list = get_effective_lists(config)
+        result = validate_command(
+            "case $x in 1) echo one;; 2) echo two;; esac",
+            ["echo"],
+            allow_list,
+            deny_list,
+        )
+        assert result.status == ValidationStatus.APPROVAL_REQUIRED

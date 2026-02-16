@@ -41,7 +41,6 @@ class DenyReason(Enum):
     HARDCODED_BLOCK = "hardcoded_block"
     DENY_LIST = "deny_list"
     COMPOUND_STATEMENT = "compound_statement"
-    PARSE_ERROR = "parse_error"
     PREFIX_NOT_IN_COMMAND = "fabricated_prefix"
 
 
@@ -83,28 +82,6 @@ def get_effective_lists(config: BashExecutorConfig) -> Tuple[List[str], List[str
     return allow_list, deny_list
 
 
-# Keywords that indicate compound statements (checked when bashlex can't parse)
-COMPOUND_KEYWORDS = {"for", "while", "until", "if", "case", "select", "function"}
-COMPOUND_END_KEYWORDS = {"done", "fi", "esac"}
-
-
-def _detect_compound_keywords(command: str) -> Optional[str]:
-    """
-    Detect compound statement keywords in a command string.
-
-    This is a fallback check for when bashlex can't parse the command
-    (e.g., case statements which bashlex doesn't fully support).
-
-    Returns:
-        The detected keyword if found, None otherwise
-    """
-    words = re.findall(r"\b(\w+)\b", command)
-    for word in words:
-        if word in COMPOUND_KEYWORDS or word in COMPOUND_END_KEYWORDS:
-            return word
-    return None
-
-
 class CommandSegmentExtractor(ast.nodevisitor):
     """
     Bashlex AST visitor that extracts command segments.
@@ -138,23 +115,15 @@ def parse_command_segments(command: str) -> Tuple[List[str], bool]:
         Tuple of (segments, contains_compound_command):
         - segments: List of command segments extracted from the command
         - contains_compound_command: True if compound statements (for, while, if, etc.) were detected
-    """
-    try:
-        parts = bashlex.parse(command)
-    except (bashlex.errors.ParsingError, NotImplementedError) as e:
-        logger.debug(f"bashlex failed to parse command: {e}")
-        # Check for compound keywords when bashlex can't parse
-        # (catches cases like `case` statements that bashlex doesn't fully support)
-        keyword = _detect_compound_keywords(command)
-        if keyword:
-            return ([], True)
-        # If no compound keywords found, it's a genuine parse error
-        return ([], False)
 
+    Raises:
+        bashlex.errors.ParsingError: If bashlex cannot parse the command
+        NotImplementedError: If bashlex encounters unsupported syntax (e.g. case statements)
+    """
+    parts = bashlex.parse(command)
     extractor = CommandSegmentExtractor(command)
     for part in parts:
         extractor.visit(part)
-
     return (extractor.segments, extractor.contains_compound_command)
 
 
@@ -177,26 +146,24 @@ def check_hardcoded_blocks(segment: str) -> Optional[str]:
     return None
 
 
-def check_hardcoded_blocks_in_raw_command(command: str) -> Optional[str]:
+def check_blocked_in_raw_command(command: str, blocked_list: List[str]) -> Optional[str]:
     """
-    Check for hardcoded block patterns anywhere in a raw command string.
+    Check for blocked patterns anywhere in a raw command string using word boundaries.
 
-    Unlike check_hardcoded_blocks() which checks if a parsed segment starts with
-    a blocked pattern, this function scans the entire command using word boundaries.
-    This is needed for compound statements and subshell commands where we can't
-    parse individual segments.
+    This is the fallback safety check for when bashlex can't parse the command.
+    It scans the entire raw command for any pattern from the given list.
 
     Args:
         command: The full raw command string (may contain compound statements, subshells, etc.)
+        blocked_list: List of command patterns to check for (e.g. HARDCODED_BLOCKS or deny_list)
 
     Returns:
-        The matched block pattern if found, None otherwise
+        The matched pattern if found, None otherwise
     """
     command_lower = command.lower()
-    for block in HARDCODED_BLOCKS:
-        if re.search(rf"\b{re.escape(block)}\b", command_lower):
-            return block
-
+    for pattern in blocked_list:
+        if re.search(rf"\b{re.escape(pattern.lower())}\b", command_lower):
+            return pattern
     return None
 
 
@@ -340,29 +307,28 @@ def validate_command(
             )
 
     # Parse command into segments and detect compound statements
-    segments, contains_compound_command = parse_command_segments(command)
-
-    # For unparseable compounds (e.g. case statements where bashlex fails entirely):
-    # check hardcoded blocks, then require approval
-    if contains_compound_command and not segments:
-        blocked = check_hardcoded_blocks_in_raw_command(command)
+    try:
+        segments, contains_compound_command = parse_command_segments(command)
+    except (bashlex.errors.ParsingError, NotImplementedError):
+        # Can't parse — do safety checks on raw string, then ask user to approve
+        blocked = check_blocked_in_raw_command(command, HARDCODED_BLOCKS)
         if blocked:
             return ValidationResult(
                 status=ValidationStatus.DENIED,
                 deny_reason=DenyReason.HARDCODED_BLOCK,
                 message=f"Command contains '{blocked}' which is permanently blocked for security reasons and cannot be overridden.",
             )
+        denied = check_blocked_in_raw_command(command, deny_list)
+        if denied:
+            return ValidationResult(
+                status=ValidationStatus.DENIED,
+                deny_reason=DenyReason.DENY_LIST,
+                message=f"Command matches deny list pattern '{denied}'. This command is blocked by configuration.",
+            )
         return ValidationResult(
             status=ValidationStatus.APPROVAL_REQUIRED,
-            message="Command contains compound statements (for, while, if, case, etc.) or complex syntax which requires approval.",
+            message="Command contains complex syntax which requires approval.",
             prefixes_needing_approval=suggested_prefixes,
-        )
-
-    if not segments:
-        return ValidationResult(
-            status=ValidationStatus.DENIED,
-            deny_reason=DenyReason.PARSE_ERROR,
-            message="Failed to parse command: no valid command segments found.",
         )
 
     # Validate each segment against deny/allow lists

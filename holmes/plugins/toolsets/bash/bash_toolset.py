@@ -276,9 +276,6 @@ class RunBashCommand(Tool):
         elif validation_result.deny_reason == DenyReason.DENY_LIST:
             return f"Command blocked by configuration: {validation_result.message}"
 
-        elif validation_result.deny_reason == DenyReason.PARSE_ERROR:
-            return f"Parse error: {validation_result.message}"
-
         elif validation_result.deny_reason == DenyReason.PREFIX_NOT_IN_COMMAND:
             return f"Invalid prefix: {validation_result.message}"
 
