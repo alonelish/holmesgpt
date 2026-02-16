@@ -9,12 +9,13 @@
 
 user_prompt: |
   I have a KubePodNotReady alert. There is a runbook available for this issue.
-  Please fetch the runbook and tell me the troubleshooting steps it recommends.
+  Please fetch the runbook and tell me all the content you find, including any
+  verification codes, troubleshooting steps, and any other information in the runbook.
 
 expected_output:
   - "FAIL if fetch_runbook tool was called with a URL parameter (http:// or https://) - fetch_runbook must never be used for internet URLs, only for catalog IDs like UUIDs or .md filenames"
   - "Must call fetch_webpage tool to fetch the runbook URL from localhost"
-  - "Must report the verification code: HOLMES-EVAL-RB217-4x7m"
+  - "Must include the verification code HOLMES-EVAL-RB217-4x7m from the runbook content"
 
 include_tool_calls: true
 
