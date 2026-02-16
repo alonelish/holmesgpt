@@ -50,8 +50,8 @@ before_test: |
   </body></html>
   CONTENT
 
-  # Start a simple HTTP server
-  cd "$TMPDIR" && python3 -m http.server 10217 &
+  # Start a simple HTTP server (redirect stdout/stderr to avoid holding subprocess pipes open)
+  cd "$TMPDIR" && python3 -m http.server 10217 > /dev/null 2>&1 &
   echo $! > /tmp/holmesgpt_test_217_server.pid
   sleep 1
 
