@@ -40,7 +40,6 @@ class DenyReason(Enum):
 
     HARDCODED_BLOCK = "hardcoded_block"
     DENY_LIST = "deny_list"
-    COMPOUND_STATEMENT = "compound_statement"
     PREFIX_NOT_IN_COMMAND = "fabricated_prefix"
 
 
@@ -353,12 +352,15 @@ def validate_command(
                 if not any(match_prefix(prefix, allowed) for allowed in allow_list)
             )
         )
+        reasons = []
+        if contains_compound_command:
+            reasons.append("Contains compound statements (for/while/if/etc).")
+        if prefixes_needing_approval:
+            reasons.append(f"Prefix(es) not in allow list: {', '.join(prefixes_needing_approval)}")
         return ValidationResult(
             status=ValidationStatus.APPROVAL_REQUIRED,
-            message="Command contains compound statements which require approval."
-            if contains_compound_command and not any_needs_approval
-            else "Command not in allow list.",
-            prefixes_needing_approval=prefixes_needing_approval or suggested_prefixes,
+            message=" ".join(reasons) if reasons else "Contains segments not in the allow list.",
+            prefixes_needing_approval=prefixes_needing_approval,
         )
 
     # All segments validated and allowed
