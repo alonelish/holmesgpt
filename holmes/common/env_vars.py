@@ -82,6 +82,8 @@ TOOL_SCHEMA_NO_PARAM_OBJECT_IF_NO_PARAMS = load_bool(
     "TOOL_SCHEMA_NO_PARAM_OBJECT_IF_NO_PARAMS", False
 )
 
+# Deprecated: output token reservation is now handled entirely by LLM.get_maximum_output_token()
+# which caps at 16K and applies a 20% context window safeguard. Use OVERRIDE_MAX_OUTPUT_TOKEN instead.
 MAX_OUTPUT_TOKEN_RESERVATION = int(
     os.environ.get("MAX_OUTPUT_TOKEN_RESERVATION", 16384)
 )  ## 16k

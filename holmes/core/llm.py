@@ -438,7 +438,11 @@ class DefaultLLM(LLM):
             raise Exception(f"Unexpected type returned by the LLM {type(result)}")
 
     def get_maximum_output_token(self) -> int:
-        max_output_tokens = floor(min(64000, self.get_context_window_size() / 5))
+        context_window = self.get_context_window_size()
+        # Cap at 16K tokens - Holmes outputs are typically 1-5K tokens for diagnostics.
+        # The previous 64K cap wasted significant context window space on models like
+        # Claude Sonnet 4.5 (reserving 40K of 200K, leaving only 160K for input).
+        max_output_tokens = floor(min(16384, context_window / 5))
 
         if OVERRIDE_MAX_OUTPUT_TOKEN:
             logging.debug(
@@ -454,16 +458,28 @@ class DefaultLLM(LLM):
                 ]
                 if litellm_max_output_tokens < max_output_tokens:
                     max_output_tokens = litellm_max_output_tokens
-                return max_output_tokens
+                break
             except Exception:
                 continue
+        else:
+            # Log which lookups we tried
+            logging.warning(
+                f"Couldn't find model {self.model} in litellm's model list (tried: {', '.join(self._get_model_name_variants_for_lookup())}), "
+                f"using {max_output_tokens} tokens for max_output_tokens. "
+                f"To override, set OVERRIDE_MAX_OUTPUT_TOKEN environment variable to the correct value for your model."
+            )
 
-        # Log which lookups we tried
-        logging.warning(
-            f"Couldn't find model {self.model} in litellm's model list (tried: {', '.join(self._get_model_name_variants_for_lookup())}), "
-            f"using {max_output_tokens} tokens for max_output_tokens. "
-            f"To override, set OVERRIDE_MAX_OUTPUT_TOKEN environment variable to the correct value for your model."
-        )
+        # Safeguard: never reserve more than 20% of context window for output.
+        # Protects against misconfigured models or wrong litellm entries where
+        # max_output_tokens is excessively large relative to the context window.
+        max_allowed = floor(context_window * 0.2)
+        if max_output_tokens > max_allowed:
+            logging.warning(
+                f"Output token reservation {max_output_tokens} exceeds 20% of context window ({context_window}). "
+                f"Capping at {max_allowed} tokens."
+            )
+            max_output_tokens = max_allowed
+
         return max_output_tokens
 
 

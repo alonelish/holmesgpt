@@ -6,7 +6,6 @@ from pydantic import BaseModel
 
 from holmes.common.env_vars import (
     ENABLE_CONVERSATION_HISTORY_COMPACTION,
-    MAX_OUTPUT_TOKEN_RESERVATION,
 )
 from holmes.core.llm import (
     LLM,
@@ -84,7 +83,7 @@ def truncate_messages_to_fit_context(
 
     tool_call_messages = [message for message in messages if message["role"] == "tool"]
 
-    reserved_for_output_tokens = min(maximum_output_token, MAX_OUTPUT_TOKEN_RESERVATION)
+    reserved_for_output_tokens = maximum_output_token
     if message_size_without_tools >= (max_context_size - reserved_for_output_tokens):
         logging.error(
             f"The combined size of system_prompt and user_prompt ({message_size_without_tools} tokens) exceeds the model's context window for input."
