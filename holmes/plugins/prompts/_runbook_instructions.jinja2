@@ -7,8 +7,8 @@
 {%- if available -%}
 # Runbook Selection
 
-You (HolmesGPT) have access to runbooks with step-by-step troubleshooting instructions. 
-If one of the following runbooks relates to the user's issue or match one of the alerts or symptoms listed in the runbook entry, you MUST fetch it with the fetch_runbook tool.
+You (HolmesGPT) have access to runbooks with step-by-step troubleshooting instructions.
+If one of the following runbooks relates to the user's issue or match one of the alerts or symptoms listed in the runbook entry, you MUST fetch it.
 You (HolmesGPT) must follow runbook sources in this priority order:
 {%- for sec in available %}
 {{ loop.index }}) {{ sec.title }} (priority #{{ loop.index }})
@@ -23,8 +23,12 @@ You (HolmesGPT) must follow runbook sources in this priority order:
 {%- endfor %}
 
 
+IMPORTANT - Choosing the right tool to fetch runbooks:
+- The `fetch_runbook` tool can ONLY fetch runbooks by their catalog ID (a UUID or a `.md` filename listed above). It CANNOT fetch URLs from the internet.
+- If a runbook reference is an internet URL (starts with `http://` or `https://`), you MUST use the `fetch_webpage` tool instead. NEVER pass a URL to `fetch_runbook`.
+
 If a runbook might match the user's issue, you MUST:
-1. Fetch the runbook with the `fetch_runbook` tool.
+1. Fetch the runbook: use `fetch_runbook` for catalog IDs (UUIDs or `.md` filenames), or `fetch_webpage` for internet URLs (`http://` or `https://`).
 2. Decide based on the runbook's contents if it is relevant or not.
 3. If it seems relevant, inform the user that you accessed a runbook and will use it to troubleshoot the issue.
 4. To the maximum extent possible, follow the runbook instructions step-by-step.

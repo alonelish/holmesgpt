@@ -55,7 +55,7 @@ class RunbookFetcher(Tool):
 
         super().__init__(
             name="fetch_runbook",
-            description="Get runbook content by runbook link. Use this to get troubleshooting steps for incidents",
+            description="Get runbook content by runbook ID (a UUID or .md filename from the runbook catalog). Do NOT use this for internet URLs - use fetch_webpage for http/https URLs instead.",
             parameters={
                 "runbook_id": ToolParameter(
                     description=f"The runbook_id: either a UUID or a .md filename. Must be one of: {runbook_list}",
@@ -72,6 +72,20 @@ class RunbookFetcher(Tool):
     def _invoke(self, params: dict, context: ToolInvokeContext) -> StructuredToolResult:
         runbook_id: str = params.get("runbook_id", "")
         is_md_file: bool = True if runbook_id.endswith(".md") else False
+
+        # Reject internet URLs - these should use fetch_webpage instead
+        if runbook_id.startswith(("http://", "https://")):
+            err_msg = (
+                f"fetch_runbook cannot fetch internet URLs. "
+                f"Use the fetch_webpage tool to fetch '{runbook_id}' instead. "
+                f"fetch_runbook only accepts runbook IDs (UUIDs or .md filenames from the catalog)."
+            )
+            logging.warning(err_msg)
+            return StructuredToolResult(
+                status=StructuredToolResultStatus.ERROR,
+                error=err_msg,
+                params=params,
+            )
 
         # Validate link is not empty
         if not runbook_id or not runbook_id.strip():

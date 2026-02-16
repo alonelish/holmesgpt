@@ -22,6 +22,29 @@ def test_RunbookFetcher():
     assert result.error is not None
 
 
+def test_RunbookFetcher_rejects_http_url():
+    runbook_fetch_tool = RunbookFetcher(RunbookToolset(dal=None))
+    result = runbook_fetch_tool._invoke(
+        {"runbook_id": "https://runbooks.prometheus-operator.dev/runbooks/kubernetes/kubepodnotready"},
+        context=create_mock_tool_invoke_context(),
+    )
+    assert result.status == StructuredToolResultStatus.ERROR
+    assert result.error is not None
+    assert "fetch_webpage" in result.error
+    assert "cannot fetch internet URLs" in result.error
+
+
+def test_RunbookFetcher_rejects_http_url_without_tls():
+    runbook_fetch_tool = RunbookFetcher(RunbookToolset(dal=None))
+    result = runbook_fetch_tool._invoke(
+        {"runbook_id": "http://example.com/runbook.md"},
+        context=create_mock_tool_invoke_context(),
+    )
+    assert result.status == StructuredToolResultStatus.ERROR
+    assert result.error is not None
+    assert "fetch_webpage" in result.error
+
+
 def test_RunbookFetcher_with_additional_search_paths():
     runbook_fetch_tool = RunbookFetcher(
         RunbookToolset(dal=None, additional_search_paths=[TEST_RUNBOOKS_PATH]),

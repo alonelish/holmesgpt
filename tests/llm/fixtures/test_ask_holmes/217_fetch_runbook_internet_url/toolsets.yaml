@@ -1,0 +1,13 @@
+# Enable internet (fetch_webpage) and runbook (fetch_runbook) toolsets
+# Disable K8s-dependent toolsets (no K8s in this test)
+toolsets:
+  internet:
+    enabled: true
+  runbook:
+    enabled: true
+  kubernetes/core:
+    enabled: false
+  kubernetes/logs:
+    enabled: false
+  helm/core:
+    enabled: false

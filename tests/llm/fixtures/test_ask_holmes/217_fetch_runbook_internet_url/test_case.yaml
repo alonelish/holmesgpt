@@ -1,0 +1,72 @@
+# Test: fetch_runbook must NOT be used for internet URLs
+#
+# When a runbook catalog entry has an internet URL (http/https), Holmes must use
+# fetch_webpage to fetch it, NOT fetch_runbook. The fetch_runbook tool only handles
+# local .md files and Robusta UUIDs.
+#
+# This test starts a local HTTP server serving a mock runbook page, then verifies
+# Holmes uses the correct tool to fetch it.
+
+user_prompt: |
+  I have a KubePodNotReady alert. There is a runbook available for this issue.
+  Please fetch the runbook and tell me the troubleshooting steps it recommends.
+
+expected_output:
+  - "FAIL if fetch_runbook tool was called with a URL parameter (http:// or https://) - fetch_runbook must never be used for internet URLs, only for catalog IDs like UUIDs or .md filenames"
+  - "Must call fetch_webpage tool to fetch the runbook URL from localhost"
+  - "Must report the verification code: HOLMES-EVAL-RB217-4x7m"
+
+include_tool_calls: true
+
+tags:
+  - runbooks
+  - question-answer
+  - medium
+
+runbooks:
+  catalog:
+    - description: "Troubleshooting KubePodNotReady alerts - steps for diagnosing pod readiness failures"
+      link: "http://localhost:10217/runbook_217.html"
+      update_date: "2025-07-01"
+      id: "kubepodnotready_runbook"
+
+before_test: |
+  set -e
+
+  # Create a mock runbook HTML page
+  TMPDIR=$(mktemp -d)
+  cat > "$TMPDIR/runbook_217.html" <<'CONTENT'
+  <html><body>
+  <h1>KubePodNotReady Troubleshooting Runbook</h1>
+  <p>Verification code: HOLMES-EVAL-RB217-4x7m</p>
+  <h2>Troubleshooting Steps</h2>
+  <ol>
+  <li>Check pod status: Run kubectl get pods -n NAMESPACE to see pod states</li>
+  <li>Inspect pod events: Run kubectl describe pod POD_NAME -n NAMESPACE</li>
+  <li>Check container logs: Run kubectl logs POD_NAME -n NAMESPACE for application errors</li>
+  <li>Verify readiness probe: Check if the readiness probe endpoint is responding correctly</li>
+  <li>Check resource limits: Verify CPU and memory limits are not causing throttling</li>
+  </ol>
+  </body></html>
+  CONTENT
+
+  # Start a simple HTTP server
+  cd "$TMPDIR" && python3 -m http.server 10217 &
+  echo $! > /tmp/holmesgpt_test_217_server.pid
+  sleep 1
+
+  # Verify server is running and content is correct
+  CONTENT=$(curl -sf http://localhost:10217/runbook_217.html)
+  if ! echo "$CONTENT" | grep -q "HOLMES-EVAL-RB217-4x7m"; then
+    echo "❌ HTTP server failed to start or content is wrong"
+    exit 1
+  fi
+  echo "✅ HTTP server started and serving mock runbook on port 10217"
+
+after_test: |
+  # Kill the HTTP server
+  if [ -f /tmp/holmesgpt_test_217_server.pid ]; then
+    kill $(cat /tmp/holmesgpt_test_217_server.pid) 2>/dev/null || true
+    rm -f /tmp/holmesgpt_test_217_server.pid
+  fi
+  pkill -f "python3 -m http.server 10217" 2>/dev/null || true

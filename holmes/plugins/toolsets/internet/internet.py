@@ -178,7 +178,7 @@ class FetchWebpage(Tool):
     def __init__(self, toolset: "InternetToolset"):
         super().__init__(
             name="fetch_webpage",
-            description="Fetch a webpage. Use this to fetch runbooks if they are present before starting your investigation (if no other tool like confluence is more appropriate)",
+            description="Fetch a webpage by URL. Use this to fetch runbooks from internet URLs (http/https) before starting your investigation, unless a more specific tool like confluence is available. This is the correct tool for fetching any http/https URL including runbook URLs.",
             parameters={
                 "url": ToolParameter(
                     description="The URL to fetch",
