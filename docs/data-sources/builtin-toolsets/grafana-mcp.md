@@ -119,8 +119,8 @@ The Grafana MCP server provides comprehensive access to your Grafana instance an
             extra_headers:
               X-Grafana-API-Key: "{{ env.GRAFANA_API_KEY }}"
           icon_url: "https://cdn.simpleicons.org/grafana/F46800"
-          # These instructions were tested and produce improved results
-          llm_instr uctions: |
+          # These instructions were tested and produce improved resul ts
+          llm_instructions: |
               Always use Grafana tools (e.g. query_prometheus) for metrics/PromQL. Do not use kubectl top or prometheus/metrics toolset.
               NEVER answer based on truncated data. Retry with topk/bottomk or more filters until the query succeeds.
               For high-cardinality metrics (>10 series), ALWAYS use topk(5, <query>). Check cardinality first with count() if unsure.
