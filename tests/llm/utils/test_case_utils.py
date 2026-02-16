@@ -146,6 +146,9 @@ class HolmesTestCase(BaseModel):
     port_forwards: Optional[List[Dict[str, Any]]] = (
         None  # Port forwarding configurations
     )
+    assert_compaction: Optional[bool] = (
+        None  # If True, assert that conversation history compaction occurred during the test
+    )
 
 
 class AskHolmesTestCase(HolmesTestCase, BaseModel):

@@ -167,6 +167,11 @@ def test_ask_holmes(
         int(scores.get("correctness", 0)) == 1
     ), f"Test {test_case.id} failed (score: {scores.get('correctness', 0)})\nActual: {output}\nExpected: {expected_output}"
 
+    if test_case.assert_compaction:
+        assert result.metadata and result.metadata.get(
+            "conversation_history_compacted"
+        ), f"Test {test_case.id} expected conversation history compaction to occur, but it did not"
+
 
 # TODO: can this call real ask_holmes so more of the logic is captured
 def ask_holmes(

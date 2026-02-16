@@ -461,6 +461,8 @@ class ToolCallingLLM:
             )
             messages = limit_result.messages
             metadata = metadata | limit_result.metadata
+            if limit_result.conversation_history_compacted:
+                metadata["conversation_history_compacted"] = True
 
             if (
                 limit_result.conversation_history_compacted
@@ -980,6 +982,8 @@ class ToolCallingLLM:
             yield from limit_result.events
             messages = limit_result.messages
             metadata = metadata | limit_result.metadata
+            if limit_result.conversation_history_compacted:
+                metadata["conversation_history_compacted"] = True
 
             if (
                 limit_result.conversation_history_compacted
