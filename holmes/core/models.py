@@ -36,6 +36,10 @@ class ToolCallResult(BaseModel):
             extra_metadata=extra_metadata,
         )
         if self.result.images:
+            text_content += _build_image_embed_hint(
+                tool_call_id=self.tool_call_id,
+                url=self.result.url,
+            )
             content: List[Dict[str, Any]] = [{"type": "text", "text": text_content}]
             for img in self.result.images:
                 content.append({"type": "image_url", "image_url": img})
@@ -75,6 +79,24 @@ class ToolCallResult(BaseModel):
             "name": self.tool_name,
             "result": result_dump,
         }
+
+
+def _build_image_embed_hint(tool_call_id: str, url: Optional[str] = None) -> str:
+    """Build a hint for the LLM explaining how to embed this image in its response.
+
+    The LLM can use ![caption](tool-image://<tool_call_id>) syntax in its analysis.
+    The frontend resolves these references against the tool_calls array, rendering
+    the base64 image as a clickable link to the source URL (e.g. Grafana dashboard).
+    """
+    hint = (
+        f"\n\nTo embed this image in your response, use exactly this markdown syntax:\n"
+        f"![<descriptive caption>](tool-image://{tool_call_id})\n"
+        f"The client will render the image inline in your response"
+    )
+    if url:
+        hint += f" with a link to {url}"
+    hint += "."
+    return hint
 
 
 def format_tool_result_data(
