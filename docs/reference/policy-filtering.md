@@ -47,6 +47,7 @@ When a tool call matches one or more rules:
 | `allow_if` | Yes | Condition block with `python:` or `bash:` |
 | `message` | No | Custom denial message |
 | `vars` | No | Additional variables for the expression |
+| `rate_limit` | No | Rate limiting configuration (see below) |
 
 ## Condition Types
 
@@ -123,6 +124,38 @@ Bash conditions support Jinja2-style templating:
 | `{{ vars.key }}` | Rule variable |
 | `{{ params.key \| default:"value" }}` | With default value |
 | `{{ params.key \| quote }}` | Shell-escaped value |
+
+## Rate Limiting
+
+Rules can include a `rate_limit` to restrict how many times matching tools can be called within a sliding time window. This is useful for throttling potentially destructive actions.
+
+```yaml
+rate_limit:
+  window: "30m"        # Sliding time window
+  max_total: 50        # Max total calls in window (all groups combined)
+  max_per:             # Max calls per group
+    key: "params.namespace"
+    limit: 3
+```
+
+### Rate Limit Fields
+
+| Field | Required | Description |
+|-------|----------|-------------|
+| `window` | Yes | Sliding time window (`30s`, `5m`, `1h`, `24h`, `1d`, or compound like `1h30m`) |
+| `max_total` | No* | Max total calls within the window |
+| `max_per.key` | No* | Dotted path to group by (e.g., `params.namespace`, `context.cluster`) |
+| `max_per.limit` | No* | Max calls per group within the window |
+
+*At least one of `max_total` or `max_per` is required.
+
+### How It Works
+
+1. Rate limits are checked **after** `allow_if` passes - denied calls don't count against the limit
+2. Uses a sliding window - old calls expire as time passes
+3. Each rule tracks its own counters independently
+4. When both `max_total` and `max_per` are set, both limits are enforced
+5. State is in-memory and resets when the process restarts
 
 ## Examples
 
@@ -331,6 +364,67 @@ policy:
 ```
 
 With layered constraints, a tool call must pass **all** matching rules. In this example, `kubectl_get` with `namespace=team-a-prod` and `kind=pod` would pass both constraint 1 and 2, so it's allowed. But `kubectl_get` with `kind=secret` would fail constraint 2, even if the namespace is correct.
+
+### Rate Limiting Destructive Actions
+
+Limit how often destructive tools can be called:
+
+```yaml
+policy:
+  rules:
+    - name: limit-destructive-actions
+      match: ["kubectl_delete*", "kubectl_exec"]
+      allow_if:
+        python: "True"
+      rate_limit:
+        window: "30m"
+        max_total: 50
+        max_per:
+          key: "params.namespace"
+          limit: 3
+```
+
+This allows at most 50 total destructive kubectl calls per 30-minute window, with a maximum of 3 per namespace. Calls that exceed either limit are denied.
+
+### Rate Limiting Per Cluster
+
+Limit actions across clusters:
+
+```yaml
+policy:
+  rules:
+    - name: limit-per-cluster
+      match: ["kubectl_*"]
+      allow_if:
+        python: "True"
+      rate_limit:
+        window: "1h"
+        max_per:
+          key: "context.cluster"
+          limit: 10
+```
+
+### Rate Limiting Combined with Access Control
+
+Rate limits compose with `allow_if` conditions. The `allow_if` check runs first - denied calls don't count against the rate limit:
+
+```yaml
+policy:
+  rules:
+    - name: limited-prod-access
+      match: ["kubectl_exec", "kubectl_delete*"]
+      allow_if:
+        python: 'params.get("namespace", "").startswith("prod-")'
+      rate_limit:
+        window: "1h"
+        max_total: 10
+        max_per:
+          key: "params.namespace"
+          limit: 3
+      message: "Only production namespaces allowed"
+```
+
+In this example, calls to non-production namespaces are denied by `allow_if` and don't consume rate limit quota. Only successful calls to production namespaces count toward the limits.
 
 ## Helm Configuration
 

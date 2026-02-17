@@ -81,11 +81,14 @@ import os
 import re
 import shlex
 import subprocess
+import threading
+import time
+from collections import defaultdict
 from dataclasses import dataclass
 from typing import Any, Dict, List, Literal, Optional, Tuple, Union
 
 import requests  # type: ignore[import-untyped]
-from pydantic import BaseModel, ConfigDict, model_validator
+from pydantic import BaseModel, ConfigDict, field_validator, model_validator
 from simpleeval import EvalWithCompoundTypes, NameNotDefined
 
 logger = logging.getLogger(__name__)
@@ -127,6 +130,41 @@ class AllowCondition(BaseModel):
         return self
 
 
+class RateLimitPerGroup(BaseModel):
+    """Rate limit per group (e.g., per namespace, per cluster)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    key: str  # Dotted path like "params.namespace" or "context.cluster"
+    limit: int  # Max calls per group within the window
+
+
+class RateLimitConfig(BaseModel):
+    """Rate limiting configuration for a policy rule."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    window: str  # Time window, e.g., "30m", "1h", "24h", "30s"
+    max_total: Optional[int] = None  # Max total calls in window (across all groups)
+    max_per: Optional[RateLimitPerGroup] = None  # Max calls per group in window
+
+    @field_validator("window")
+    @classmethod
+    def validate_window(cls, v: str) -> str:
+        """Validate window is a parseable duration string."""
+        _parse_duration(v)  # Will raise ValueError if invalid
+        return v
+
+    @model_validator(mode="after")
+    def validate_at_least_one_limit(self):
+        """Ensure at least one of max_total or max_per is set."""
+        if self.max_total is None and self.max_per is None:
+            raise ValueError(
+                "rate_limit must have at least one of 'max_total' or 'max_per'"
+            )
+        return self
+
+
 class PolicyRule(BaseModel):
     """A policy rule that defines conditions for tool access."""
 
@@ -137,6 +175,7 @@ class PolicyRule(BaseModel):
     allow_if: AllowCondition  # Condition that must be true to allow
     message: Optional[str] = None  # Custom denial message
     vars: Dict[str, Any] = {}  # Additional variables available in expression
+    rate_limit: Optional[RateLimitConfig] = None  # Optional rate limiting
 
 
 class PolicyConfig(BaseModel):
@@ -155,6 +194,127 @@ class PolicyConfig(BaseModel):
     # - Tools matching NO rules → use 'default' setting
     # - Tools matching rules → ALL matching 'allow_if' conditions must pass
     rules: List[PolicyRule] = []
+
+
+def _parse_duration(duration: str) -> float:
+    """
+    Parse a duration string into seconds.
+
+    Supported formats: "30s", "5m", "1h", "1d", "1h30m"
+
+    Returns:
+        Duration in seconds
+    """
+    total = 0.0
+    remaining = duration.strip()
+
+    if not remaining:
+        raise ValueError("Empty duration string")
+
+    units = {"s": 1, "m": 60, "h": 3600, "d": 86400}
+
+    while remaining:
+        # Find the next number
+        i = 0
+        while i < len(remaining) and (remaining[i].isdigit() or remaining[i] == "."):
+            i += 1
+
+        if i == 0:
+            raise ValueError(
+                f"Invalid duration format: '{duration}'. Expected number before unit"
+            )
+
+        value = float(remaining[:i])
+
+        if i >= len(remaining):
+            raise ValueError(
+                f"Invalid duration format: '{duration}'. Expected unit suffix (s/m/h/d)"
+            )
+
+        unit = remaining[i]
+        if unit not in units:
+            raise ValueError(
+                f"Invalid duration unit '{unit}' in '{duration}'. Use s, m, h, or d"
+            )
+
+        total += value * units[unit]
+        remaining = remaining[i + 1 :]
+
+    return total
+
+
+class RateLimitTracker:
+    """
+    Thread-safe in-memory tracker for rate limiting.
+
+    Uses a sliding window approach: stores timestamps of allowed calls
+    and checks against configured limits.
+    """
+
+    def __init__(self) -> None:
+        self._lock = threading.Lock()
+        # rule_name -> list of (timestamp, group_key) tuples
+        self._calls: Dict[str, List[Tuple[float, Optional[str]]]] = defaultdict(list)
+
+    def check_and_record(
+        self,
+        rule_name: str,
+        rate_limit: RateLimitConfig,
+        group_value: Optional[str] = None,
+    ) -> PolicyResult:
+        """
+        Check rate limits and record the call if allowed.
+
+        Args:
+            rule_name: Name of the policy rule
+            rate_limit: Rate limit configuration
+            group_value: Value of the group_by key (e.g., namespace name)
+
+        Returns:
+            PolicyResult - allowed if within limits, denied otherwise
+        """
+        window_seconds = _parse_duration(rate_limit.window)
+        now = time.monotonic()
+        cutoff = now - window_seconds
+
+        with self._lock:
+            # Clean up old entries
+            self._calls[rule_name] = [
+                (ts, gk) for ts, gk in self._calls[rule_name] if ts > cutoff
+            ]
+
+            calls = self._calls[rule_name]
+
+            # Check max_total
+            if rate_limit.max_total is not None:
+                if len(calls) >= rate_limit.max_total:
+                    return PolicyResult(
+                        allowed=False,
+                        rule_name=rule_name,
+                        message=f"Rate limit exceeded: {len(calls)}/{rate_limit.max_total} calls in {rate_limit.window}",
+                    )
+
+            # Check max_per group
+            if rate_limit.max_per is not None and group_value is not None:
+                group_count = sum(1 for _, gk in calls if gk == group_value)
+                if group_count >= rate_limit.max_per.limit:
+                    return PolicyResult(
+                        allowed=False,
+                        rule_name=rule_name,
+                        message=f"Rate limit exceeded for '{group_value}': {group_count}/{rate_limit.max_per.limit} calls in {rate_limit.window}",
+                    )
+
+            # Within limits - record this call
+            self._calls[rule_name].append((now, group_value))
+            return PolicyResult(allowed=True)
+
+    def reset(self, rule_name: Optional[str] = None) -> None:
+        """Reset tracked calls, optionally for a specific rule only."""
+        with self._lock:
+            if rule_name:
+                self._calls.pop(rule_name, None)
+            else:
+                self._calls.clear()
 
 
 class PolicyEnforcer:
@@ -207,6 +367,7 @@ class PolicyEnforcer:
     def __init__(self, config: Optional[PolicyConfig] = None):
         self.config = config or PolicyConfig()
         self._evaluator = EvalWithCompoundTypes()
+        self._rate_limiter = RateLimitTracker()
 
         # Add safe functions
         self._evaluator.functions.update(self.SAFE_FUNCTIONS)
@@ -272,11 +433,20 @@ class PolicyEnforcer:
                 )
             return PolicyResult(allowed=True)
 
-        # All matching rules must pass
+        # All matching rules must pass (allow_if + rate_limit)
         for rule in matching_rules:
             result = self._evaluate_condition(rule, tool_name, params, context)
             if not result.allowed:
                 return result
+
+            # Check rate limits if configured
+            if rule.rate_limit is not None:
+                rate_result = self._check_rate_limit(rule, tool_name, params, context)
+                if not rate_result.allowed:
+                    logger.info(
+                        f"Policy rate-limited tool '{tool_name}': {rate_result.message}"
+                    )
+                    return rate_result
 
         # All matching rules passed
         return PolicyResult(allowed=True)
@@ -404,6 +574,59 @@ class PolicyEnforcer:
                 rule_name=rule.name,
                 message=f"Policy check error: {e}",
             )
+
+    def _check_rate_limit(
+        self,
+        rule: PolicyRule,
+        tool_name: str,
+        params: Dict[str, Any],
+        context: Dict[str, Any],
+    ) -> PolicyResult:
+        """Check rate limits for a rule."""
+        assert rule.rate_limit is not None
+
+        # Resolve group value if max_per is configured
+        group_value: Optional[str] = None
+        if rule.rate_limit.max_per is not None:
+            group_value = self._resolve_group_value(
+                rule.rate_limit.max_per.key, tool_name, params, context
+            )
+
+        return self._rate_limiter.check_and_record(
+            rule.name, rule.rate_limit, group_value
+        )
+
+    @staticmethod
+    def _resolve_group_value(
+        key: str,
+        tool_name: str,
+        params: Dict[str, Any],
+        context: Dict[str, Any],
+    ) -> Optional[str]:
+        """Resolve a dotted path to a value for rate limit grouping."""
+        parts = key.split(".")
+        if not parts:
+            return None
+
+        root = parts[0]
+        if root == "tool":
+            return tool_name
+        elif root == "params":
+            obj: Any = params
+        elif root == "context":
+            obj = context
+        else:
+            return None
+
+        for part in parts[1:]:
+            if isinstance(obj, dict):
+                obj = obj.get(part)
+            else:
+                return None
+            if obj is None:
+                return None
+
+        return str(obj) if obj is not None else None
 
     def _render_template(
         self,

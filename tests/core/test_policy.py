@@ -1,11 +1,17 @@
 """Tests for the policy enforcement module."""
 
+import time
+
 from holmes.core.policy import (
     AllowCondition,
     PolicyConfig,
     PolicyEnforcer,
     PolicyResult,
     PolicyRule,
+    RateLimitConfig,
+    RateLimitPerGroup,
+    RateLimitTracker,
+    _parse_duration,
 )
 
 
@@ -951,7 +957,9 @@ class TestHttpHelpers:
                 PolicyRule(
                     name="env-test",
                     match=["*"],
-                    allow_if=AllowCondition(python='env("TEST_POLICY_VAR") == "test_value"'),
+                    allow_if=AllowCondition(
+                        python='env("TEST_POLICY_VAR") == "test_value"'
+                    ),
                 )
             ],
         )
@@ -1136,3 +1144,327 @@ class TestHttpHelpers:
             {"user_email": "user@example.com"},
         )
         assert result.allowed
+
+
+class TestParseDuration:
+    """Tests for duration string parsing."""
+
+    def test_seconds(self):
+        assert _parse_duration("30s") == 30.0
+
+    def test_minutes(self):
+        assert _parse_duration("5m") == 300.0
+
+    def test_hours(self):
+        assert _parse_duration("1h") == 3600.0
+
+    def test_days(self):
+        assert _parse_duration("1d") == 86400.0
+
+    def test_compound(self):
+        assert _parse_duration("1h30m") == 5400.0
+
+    def test_invalid_empty(self):
+        import pytest
+
+        with pytest.raises(ValueError):
+            _parse_duration("")
+
+    def test_invalid_no_unit(self):
+        import pytest
+
+        with pytest.raises(ValueError):
+            _parse_duration("30")
+
+    def test_invalid_unit(self):
+        import pytest
+
+        with pytest.raises(ValueError):
+            _parse_duration("30x")
+
+
+class TestRateLimitConfig:
+    """Tests for RateLimitConfig validation."""
+
+    def test_valid_max_total_only(self):
+        config = RateLimitConfig(window="30m", max_total=50)
+        assert config.max_total == 50
+        assert config.max_per is None
+
+    def test_valid_max_per_only(self):
+        config = RateLimitConfig(
+            window="1h", max_per=RateLimitPerGroup(key="params.namespace", limit=3)
+        )
+        assert config.max_total is None
+        assert config.max_per is not None
+
+    def test_valid_both(self):
+        config = RateLimitConfig(
+            window="30m",
+            max_total=50,
+            max_per=RateLimitPerGroup(key="params.namespace", limit=3),
+        )
+        assert config.max_total == 50
+        assert config.max_per is not None
+
+    def test_invalid_neither(self):
+        import pytest
+
+        with pytest.raises(ValueError, match="at least one"):
+            RateLimitConfig(window="30m")
+
+    def test_invalid_window(self):
+        import pytest
+
+        with pytest.raises(ValueError):
+            RateLimitConfig(window="invalid", max_total=10)
+
+
+class TestRateLimitTracker:
+    """Tests for the RateLimitTracker."""
+
+    def test_allows_within_total_limit(self):
+        tracker = RateLimitTracker()
+        config = RateLimitConfig(window="1h", max_total=3)
+
+        assert tracker.check_and_record("rule1", config).allowed
+        assert tracker.check_and_record("rule1", config).allowed
+        assert tracker.check_and_record("rule1", config).allowed
+        # 4th call should be denied
+        result = tracker.check_and_record("rule1", config)
+        assert not result.allowed
+        assert "3/3" in (result.message or "")
+
+    def test_allows_within_per_group_limit(self):
+        tracker = RateLimitTracker()
+        config = RateLimitConfig(
+            window="1h", max_per=RateLimitPerGroup(key="params.namespace", limit=2)
+        )
+
+        # 2 calls for group "prod" - allowed
+        assert tracker.check_and_record("rule1", config, "prod").allowed
+        assert tracker.check_and_record("rule1", config, "prod").allowed
+        # 3rd call for "prod" - denied
+        result = tracker.check_and_record("rule1", config, "prod")
+        assert not result.allowed
+        assert "prod" in (result.message or "")
+
+        # Different group "staging" still works
+        assert tracker.check_and_record("rule1", config, "staging").allowed
+
+    def test_sliding_window_expiry(self):
+        tracker = RateLimitTracker()
+        config = RateLimitConfig(window="1s", max_total=2)
+
+        assert tracker.check_and_record("rule1", config).allowed
+        assert tracker.check_and_record("rule1", config).allowed
+        # At limit
+        assert not tracker.check_and_record("rule1", config).allowed
+
+        # Wait for window to expire
+        time.sleep(1.1)
+
+        # Should be allowed again
+        assert tracker.check_and_record("rule1", config).allowed
+
+    def test_reset(self):
+        tracker = RateLimitTracker()
+        config = RateLimitConfig(window="1h", max_total=1)
+
+        assert tracker.check_and_record("rule1", config).allowed
+        assert not tracker.check_and_record("rule1", config).allowed
+
+        tracker.reset("rule1")
+        assert tracker.check_and_record("rule1", config).allowed
+
+    def test_reset_all(self):
+        tracker = RateLimitTracker()
+        config = RateLimitConfig(window="1h", max_total=1)
+
+        assert tracker.check_and_record("rule1", config).allowed
+        assert tracker.check_and_record("rule2", config).allowed
+
+        tracker.reset()
+        assert tracker.check_and_record("rule1", config).allowed
+        assert tracker.check_and_record("rule2", config).allowed
+
+    def test_separate_rules_independent(self):
+        tracker = RateLimitTracker()
+        config = RateLimitConfig(window="1h", max_total=1)
+
+        assert tracker.check_and_record("rule1", config).allowed
+        # Different rule has its own counter
+        assert tracker.check_and_record("rule2", config).allowed
+        # Original rule still blocked
+        assert not tracker.check_and_record("rule1", config).allowed
+
+    def test_both_total_and_per_group(self):
+        tracker = RateLimitTracker()
+        config = RateLimitConfig(
+            window="1h",
+            max_total=5,
+            max_per=RateLimitPerGroup(key="params.namespace", limit=2),
+        )
+
+        # Group "prod" allows 2
+        assert tracker.check_and_record("rule1", config, "prod").allowed
+        assert tracker.check_and_record("rule1", config, "prod").allowed
+        # Group "prod" at limit
+        result = tracker.check_and_record("rule1", config, "prod")
+        assert not result.allowed
+        assert "prod" in (result.message or "")
+
+        # Group "staging" still fine (total is 3, under 5)
+        assert tracker.check_and_record("rule1", config, "staging").allowed
+        assert tracker.check_and_record("rule1", config, "staging").allowed
+        # Group "staging" at per-group limit, total is 5
+        result = tracker.check_and_record("rule1", config, "staging")
+        assert not result.allowed
+
+
+class TestRateLimitIntegration:
+    """Tests for rate limiting integrated into PolicyEnforcer."""
+
+    def test_rate_limit_with_allow_if(self):
+        """Rate limit applies after allow_if passes."""
+        config = PolicyConfig(
+            rules=[
+                PolicyRule(
+                    name="limit-deletes",
+                    match=["kubectl_delete*"],
+                    allow_if=AllowCondition(python="True"),
+                    rate_limit=RateLimitConfig(window="1h", max_total=2),
+                )
+            ],
+        )
+        enforcer = PolicyEnforcer(config)
+
+        # First 2 calls pass
+        assert enforcer.check("kubectl_delete", {}).allowed
+        assert enforcer.check("kubectl_delete", {}).allowed
+        # 3rd denied by rate limit
+        result = enforcer.check("kubectl_delete", {})
+        assert not result.allowed
+        assert "Rate limit" in (result.message or "")
+
+    def test_rate_limit_per_namespace(self):
+        """Rate limit per namespace."""
+        config = PolicyConfig(
+            rules=[
+                PolicyRule(
+                    name="limit-per-ns",
+                    match=["kubectl_*"],
+                    allow_if=AllowCondition(python="True"),
+                    rate_limit=RateLimitConfig(
+                        window="1h",
+                        max_per=RateLimitPerGroup(key="params.namespace", limit=2),
+                    ),
+                )
+            ],
+        )
+        enforcer = PolicyEnforcer(config)
+
+        # 2 calls to prod - ok
+        assert enforcer.check("kubectl_exec", {"namespace": "prod"}).allowed
+        assert enforcer.check("kubectl_exec", {"namespace": "prod"}).allowed
+        # 3rd call to prod - denied
+        result = enforcer.check("kubectl_exec", {"namespace": "prod"})
+        assert not result.allowed
+
+        # staging still ok
+        assert enforcer.check("kubectl_exec", {"namespace": "staging"}).allowed
+
+    def test_allow_if_failure_skips_rate_limit(self):
+        """If allow_if denies, rate limit counter is NOT incremented."""
+        config = PolicyConfig(
+            rules=[
+                PolicyRule(
+                    name="conditional-limit",
+                    match=["kubectl_*"],
+                    allow_if=AllowCondition(
+                        python='params.get("namespace") != "forbidden"'
+                    ),
+                    rate_limit=RateLimitConfig(window="1h", max_total=2),
+                )
+            ],
+        )
+        enforcer = PolicyEnforcer(config)
+
+        # Denied by allow_if (should not count against rate limit)
+        assert not enforcer.check("kubectl_get", {"namespace": "forbidden"}).allowed
+        assert not enforcer.check("kubectl_get", {"namespace": "forbidden"}).allowed
+        assert not enforcer.check("kubectl_get", {"namespace": "forbidden"}).allowed
+
+        # These should still be allowed (rate limit not consumed by denied calls)
+        assert enforcer.check("kubectl_get", {"namespace": "allowed"}).allowed
+        assert enforcer.check("kubectl_get", {"namespace": "allowed"}).allowed
+        # 3rd allowed call - rate limited
+        assert not enforcer.check("kubectl_get", {"namespace": "allowed"}).allowed
+
+    def test_no_rate_limit_no_effect(self):
+        """Rules without rate_limit work normally."""
+        config = PolicyConfig(
+            rules=[
+                PolicyRule(
+                    name="no-limit",
+                    match=["*"],
+                    allow_if=AllowCondition(python="True"),
+                )
+            ],
+        )
+        enforcer = PolicyEnforcer(config)
+
+        # Should allow unlimited calls
+        for _ in range(100):
+            assert enforcer.check("any_tool", {}).allowed
+
+    def test_rate_limit_from_dict(self):
+        """Rate limit can be configured from dict (YAML parsing)."""
+        config = PolicyConfig(
+            **{
+                "rules": [
+                    {
+                        "name": "limit-exec",
+                        "match": ["kubectl_exec"],
+                        "allow_if": {"python": "True"},
+                        "rate_limit": {
+                            "window": "30m",
+                            "max_total": 50,
+                            "max_per": {"key": "params.namespace", "limit": 3},
+                        },
+                    }
+                ]
+            }
+        )
+        assert config.rules[0].rate_limit is not None
+        assert config.rules[0].rate_limit.window == "30m"
+        assert config.rules[0].rate_limit.max_total == 50
+        assert config.rules[0].rate_limit.max_per is not None
+        assert config.rules[0].rate_limit.max_per.key == "params.namespace"
+        assert config.rules[0].rate_limit.max_per.limit == 3
+
+    def test_rate_limit_group_by_context(self):
+        """Rate limit can group by context values (e.g., cluster)."""
+        config = PolicyConfig(
+            rules=[
+                PolicyRule(
+                    name="limit-per-cluster",
+                    match=["kubectl_*"],
+                    allow_if=AllowCondition(python="True"),
+                    rate_limit=RateLimitConfig(
+                        window="1h",
+                        max_per=RateLimitPerGroup(key="context.cluster", limit=2),
+                    ),
+                )
+            ],
+        )
+        enforcer = PolicyEnforcer(config)
+
+        # 2 calls to cluster-a
+        assert enforcer.check("kubectl_exec", {}, {"cluster": "cluster-a"}).allowed
+        assert enforcer.check("kubectl_exec", {}, {"cluster": "cluster-a"}).allowed
+        # 3rd denied
+        assert not enforcer.check("kubectl_exec", {}, {"cluster": "cluster-a"}).allowed
+
+        # cluster-b still ok
+        assert enforcer.check("kubectl_exec", {}, {"cluster": "cluster-b"}).allowed
