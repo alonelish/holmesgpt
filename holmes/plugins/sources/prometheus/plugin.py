@@ -6,8 +6,9 @@ from typing import List, Optional, Pattern
 
 import humanize
 import requests  # type: ignore
-import rich
 import rich.segment
+
+from holmes.utils.console.console import HolmesConsole
 from pydantic import parse_obj_as
 from pydantic.json import pydantic_encoder
 from requests.auth import HTTPBasicAuth  # type: ignore
@@ -124,7 +125,7 @@ class AlertManagerSource(SourcePlugin):
         with open(path, "w") as f:
             f.write(json.dumps(alerts, default=pydantic_encoder, indent=2))
 
-    def output_curl_commands(self, console: rich.console.Console) -> None:
+    def output_curl_commands(self, console: HolmesConsole) -> None:
         """
         Outputs curl commands to send each alert to Alertmanager via the API.
         """

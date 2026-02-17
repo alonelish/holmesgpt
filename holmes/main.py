@@ -44,6 +44,7 @@ from holmes.plugins.destinations import DestinationType
 from holmes.plugins.interfaces import Issue
 from holmes.plugins.prompts import load_and_render_prompt
 from holmes.plugins.sources.opsgenie import OPSGENIE_TEAM_INTEGRATION_KEY_HELP
+from holmes.utils.console.console import HolmesConsole
 from holmes.utils.console.consts import system_prompt_help
 from holmes.utils.console.logging import init_logging
 from holmes.utils.console.result import handle_result
@@ -1016,7 +1017,7 @@ def refresh_toolsets(
 
 @app.command()
 def version() -> None:
-    typer.echo(get_version())
+    HolmesConsole().print(get_version())
 
 
 def run():

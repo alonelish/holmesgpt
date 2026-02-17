@@ -33,8 +33,9 @@ from pydantic import (
     PrivateAttr,
     model_validator,
 )
-from rich.console import Console
 from rich.table import Table
+
+from holmes.utils.console.console import HolmesConsole
 
 from holmes.core.llm import LLM
 from holmes.core.openai_formatting import format_tool_to_open_ai_standard
@@ -926,7 +927,7 @@ class ToolsetDBModel(BaseModel):
     updated_at: str = Field(default_factory=datetime.now().isoformat)
 
 
-def pretty_print_toolset_status(toolsets: list[Toolset], console: Console) -> None:
+def pretty_print_toolset_status(toolsets: list[Toolset], console: HolmesConsole) -> None:
     status_fields = ["name", "enabled", "status", "type", "path", "error"]
     toolsets_status = []
     for toolset in sorted(toolsets, key=lambda ts: ts.status.value):

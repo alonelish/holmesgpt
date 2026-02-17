@@ -12,7 +12,7 @@ from openai.types.chat.chat_completion_message_tool_call import (
     ChatCompletionMessageToolCall,
 )
 from pydantic import BaseModel, Field
-from rich.console import Console
+from holmes.utils.console.console import HolmesConsole
 
 from holmes.common.env_vars import (
     LOG_LLM_USAGE_RESPONSE,
@@ -1235,7 +1235,7 @@ class IssueInvestigator(ToolCallingLLM):
         self,
         issue: Issue,
         prompt: str,
-        console: Optional[Console] = None,
+        console: Optional[HolmesConsole] = None,
         global_instructions: Optional[Instructions] = None,
         sections: Optional[InputSectionsDataType] = None,
         trace_span=DummySpan(),

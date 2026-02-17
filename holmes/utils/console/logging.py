@@ -6,6 +6,8 @@ from typing import List, Optional
 from rich.console import Console
 from rich.logging import RichHandler
 
+from holmes.utils.console.console import HolmesConsole
+
 
 class Verbosity(Enum):
     NORMAL = 0
@@ -41,13 +43,16 @@ def suppress_noisy_logs():
     warnings.filterwarnings("ignore", category=UserWarning, module="slack_sdk.*")
 
 
-def init_logging(verbose_flags: Optional[List[bool]] = None, log_costs: bool = False):
+def init_logging(verbose_flags: Optional[List[bool]] = None, log_costs: bool = False) -> HolmesConsole:
     verbosity = cli_flags_to_verbosity(verbose_flags)  # type: ignore
 
     # Setup cost logger if requested
     if log_costs:
         cost_logger = logging.getLogger("holmes.costs")
         cost_logger.setLevel(logging.DEBUG)
+
+    # Route logging to stderr so it doesn't interfere with prompt_toolkit output on stdout
+    stderr_console = Console(stderr=True, width=None)
 
     if verbosity == Verbosity.VERY_VERBOSE:
         logging.basicConfig(
@@ -60,7 +65,7 @@ def init_logging(verbose_flags: Optional[List[bool]] = None, log_costs: bool = F
                     markup=True,
                     show_time=False,
                     show_path=False,
-                    console=Console(width=None),
+                    console=stderr_console,
                 )
             ],
         )
@@ -75,7 +80,7 @@ def init_logging(verbose_flags: Optional[List[bool]] = None, log_costs: bool = F
                     markup=True,
                     show_time=False,
                     show_path=False,
-                    console=Console(width=None),
+                    console=stderr_console,
                 )
             ],
         )
@@ -92,7 +97,7 @@ def init_logging(verbose_flags: Optional[List[bool]] = None, log_costs: bool = F
                     markup=True,
                     show_time=False,
                     show_path=False,
-                    console=Console(width=None),
+                    console=stderr_console,
                 )
             ],
         )
@@ -100,4 +105,4 @@ def init_logging(verbose_flags: Optional[List[bool]] = None, log_costs: bool = F
 
     logging.debug(f"verbosity is {verbosity}")
 
-    return Console()
+    return HolmesConsole()

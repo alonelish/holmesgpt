@@ -1,4 +1,3 @@
-from rich.console import Console
 from rich.markdown import Markdown
 from rich.rule import Rule
 
@@ -7,11 +6,12 @@ from holmes.core.tool_calling_llm import LLMResult
 from holmes.plugins.destinations import DestinationType
 from holmes.plugins.interfaces import Issue
 from holmes.utils.colors import AI_COLOR
+from holmes.utils.console.console import HolmesConsole
 
 
 def handle_result(
     result: LLMResult,
-    console: Console,
+    console: HolmesConsole,
     destination: DestinationType,
     config: Config,
     issue: Issue,

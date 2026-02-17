@@ -4,8 +4,6 @@ import tempfile
 import unittest
 from unittest.mock import Mock, patch
 
-from rich.console import Console
-
 from holmes.core.feedback import FeedbackMetadata
 from holmes.core.tool_calling_llm import ToolCallingLLM
 from holmes.interactive import (
@@ -309,7 +307,9 @@ class TestRunInteractiveLoop(unittest.TestCase):
         self.mock_response.tool_calls = []
         self.mock_ai.call.return_value = self.mock_response
 
-        self.mock_console = Mock(spec=Console)
+        from holmes.utils.console.console import HolmesConsole
+
+        self.mock_console = Mock(spec=HolmesConsole)
 
         # Create a temporary directory for history file
         self.temp_dir = tempfile.mkdtemp()

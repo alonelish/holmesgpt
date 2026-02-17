@@ -1,4 +1,4 @@
-from rich.console import Console
+from holmes.utils.console.console import HolmesConsole
 
 from holmes.config import Config
 from holmes.core.issue import Issue
@@ -20,7 +20,7 @@ def _test_investigate_issue_using_fetch_webpage():
     raw_data = investigate_request.model_dump()
 
     runbook_url = "https://containersolutions.github.io/runbooks/posts/kubernetes/create-container-error/"
-    console = Console()
+    console = HolmesConsole()
     config = Config.load_from_env()
     ai = config.create_issue_investigator(console)
 
@@ -61,7 +61,7 @@ def _test_investigate_issue_without_fetch_webpage():
         prompt_template="builtin://generic_investigation.jinja2",
     )
     raw_data = investigate_request.model_dump()
-    console = Console()
+    console = HolmesConsole()
     config = Config.load_from_env()
     ai = config.create_issue_investigator(console)
 

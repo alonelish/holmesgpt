@@ -25,7 +25,6 @@ from prompt_toolkit.shortcuts.prompt import CompleteStyle
 from prompt_toolkit.styles import Style
 from prompt_toolkit.widgets import TextArea
 from pygments.lexers import guess_lexer
-from rich.console import Console
 from rich.markdown import Markdown, Panel
 from rich.markup import escape
 
@@ -54,6 +53,7 @@ from holmes.utils.colors import (
     TOOLS_COLOR,
     USER_COLOR,
 )
+from holmes.utils.console.console import HolmesConsole
 from holmes.utils.console.consts import agent_name
 from holmes.utils.file_utils import write_json_file
 from holmes.version import check_version_async
@@ -283,7 +283,7 @@ def detect_lexer(content: str) -> Optional[PygmentsLexer]:
 
 
 def handle_show_command(
-    show_arg: str, all_tool_calls_history: List[ToolCallResult], console: Console
+    show_arg: str, all_tool_calls_history: List[ToolCallResult], console: HolmesConsole
 ) -> None:
     """Handle the /show command to display tool outputs."""
     if not all_tool_calls_history:
@@ -330,7 +330,7 @@ def handle_show_command(
     show_tool_output_modal(tool_to_show, console)
 
 
-def show_tool_output_modal(tool_call: ToolCallResult, console: Console) -> None:
+def show_tool_output_modal(tool_call: ToolCallResult, console: HolmesConsole) -> None:
     """
     Display a tool output in a scrollable modal window.
 
@@ -486,7 +486,7 @@ def show_tool_output_modal(tool_call: ToolCallResult, console: Console) -> None:
         console.print(format_tool_call_output(tool_call))
 
 
-def handle_context_command(messages, ai: ToolCallingLLM, console: Console) -> None:
+def handle_context_command(messages, ai: ToolCallingLLM, console: HolmesConsole) -> None:
     """Handle the /context command to show conversation context statistics."""
     if messages is None:
         console.print(
@@ -623,7 +623,7 @@ def prompt_for_llm_sharing(
     return None
 
 
-def _run_inline_menu(options: list[str], console: Console) -> Optional[int]:
+def _run_inline_menu(options: list[str], console: HolmesConsole) -> Optional[int]:
     """
     Run an inline menu with arrow key navigation.
 
@@ -700,7 +700,7 @@ def _run_inline_menu(options: list[str], console: Console) -> Optional[int]:
 def handle_tool_approval(
     tool_result: StructuredToolResult,
     style: Style,
-    console: Console,
+    console: HolmesConsole,
 ) -> tuple[bool, Optional[str]]:
     """
     Handle user approval for potentially sensitive commands.
@@ -763,7 +763,7 @@ def handle_tool_approval(
 
 
 def handle_run_command(
-    bash_command: str, session: PromptSession, style: Style, console: Console
+    bash_command: str, session: PromptSession, style: Style, console: HolmesConsole
 ) -> Optional[str]:
     """
     Handle the /run command to execute a bash command.
@@ -836,7 +836,7 @@ def handle_run_command(
 
 
 def handle_shell_command(
-    session: PromptSession, style: Style, console: Console
+    session: PromptSession, style: Style, console: HolmesConsole
 ) -> Optional[str]:
     """
     Handle the /shell command to start an interactive shell session.
@@ -914,7 +914,7 @@ def find_tool_index_in_history(
 
 
 def handle_last_command(
-    last_response, console: Console, all_tool_calls_history: List[ToolCallResult]
+    last_response, console: HolmesConsole, all_tool_calls_history: List[ToolCallResult]
 ) -> None:
     """Handle the /last command to show recent tool outputs."""
     if last_response is None or not last_response.tool_calls:
@@ -943,7 +943,7 @@ def handle_last_command(
 
 def handle_feedback_command(
     style: Style,
-    console: Console,
+    console: HolmesConsole,
     feedback: Feedback,
     feedback_callback: FeedbackCallback,
 ) -> None:
@@ -1025,7 +1025,7 @@ def handle_feedback_command(
 
 def display_recent_tool_outputs(
     tool_calls: List[ToolCallResult],
-    console: Console,
+    console: HolmesConsole,
     all_tool_calls_history: List[ToolCallResult],
 ) -> None:
     """Display recent tool outputs in rich panels (for auto-display after responses)."""
@@ -1054,7 +1054,7 @@ def save_conversation_to_file(
     json_output_file: str,
     messages: List,
     all_tool_calls_history: List[ToolCallResult],
-    console: Console,
+    console: HolmesConsole,
 ) -> None:
     """Save the current conversation to a JSON file."""
     try:
@@ -1085,7 +1085,7 @@ def save_conversation_to_file(
 
 def run_interactive_loop(
     ai: ToolCallingLLM,
-    console: Console,
+    console: HolmesConsole,
     initial_user_input: Optional[str],
     include_files: Optional[List[Path]],
     show_tool_output: bool,
