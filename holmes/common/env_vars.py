@@ -157,6 +157,11 @@ TOOLSET_STATUS_REFRESH_INTERVAL_SECONDS = int(
 # Backoff schedule (seconds) for retrying failed MCP servers before falling
 # back to TOOLSET_STATUS_REFRESH_INTERVAL_SECONDS.
 MCP_RETRY_BACKOFF_SCHEDULE = [30, 60, 120]
+# Startup retry schedule (seconds) for MCP servers that aren't ready yet.
+# Uses shorter intervals than the background retry since startup is blocking.
+MCP_STARTUP_RETRY_SCHEDULE = [int(x) for x in os.environ.get(
+    "MCP_STARTUP_RETRY_SCHEDULE", "5,10,20"
+).split(",")]
 
 # Filesystem storage for large tool results
 HOLMES_TOOL_RESULT_STORAGE_PATH = os.environ.get(

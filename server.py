@@ -34,6 +34,7 @@ from holmes.common.env_vars import (
     HOLMES_PORT,
     LOG_PERFORMANCE,
     MCP_RETRY_BACKOFF_SCHEDULE,
+    MCP_STARTUP_RETRY_SCHEDULE,
     SENTRY_DSN,
     SENTRY_TRACES_SAMPLE_RATE,
     TOOLSET_STATUS_REFRESH_INTERVAL_SECONDS,
@@ -120,6 +121,49 @@ def init_config():
 config, dal = init_config()
 
 
+def _retry_failed_mcp_toolsets_at_startup():
+    """Retry failed MCP toolsets at startup with short intervals.
+
+    When Holmes and MCP servers start simultaneously (e.g. in Kubernetes),
+    the initial prerequisite check may fail because MCP servers aren't ready yet.
+    This retries with short intervals so tools are available before the server
+    starts accepting requests, rather than waiting for the background refresh
+    loop whose first retry is 30+ seconds later.
+    """
+    if not _has_failed_mcp_toolsets():
+        return
+
+    for i, wait_seconds in enumerate(MCP_STARTUP_RETRY_SCHEDULE):
+        logging.info(
+            f"MCP server(s) not ready at startup, retry {i + 1}/{len(MCP_STARTUP_RETRY_SCHEDULE)} in {wait_seconds}s"
+        )
+        time.sleep(wait_seconds)
+        try:
+            changes = config.refresh_server_tool_executor(dal)
+            if changes:
+                for toolset_name, old_status, new_status in changes:
+                    logging.info(
+                        f"Toolset '{toolset_name}' status changed: {old_status} -> {new_status}"
+                    )
+                holmes_sync_toolsets_status(dal, config)
+        except Exception:
+            logging.error("Error retrying MCP toolsets at startup", exc_info=True)
+
+        if not _has_failed_mcp_toolsets():
+            logging.info("All MCP servers connected successfully at startup")
+            return
+
+    failed_names = [
+        t.name
+        for t in (config._server_tool_executor.toolsets if config._server_tool_executor else [])
+        if t.type == ToolsetType.MCP and t.status == ToolsetStatusEnum.FAILED
+    ]
+    logging.warning(
+        f"MCP server(s) still not ready after startup retries: {failed_names}. "
+        "Background refresh will continue retrying."
+    )
+
+
 def sync_before_server_start():
     if not dal.enabled:
         logging.info(
@@ -134,6 +178,9 @@ def sync_before_server_start():
         holmes_sync_toolsets_status(dal, config)
     except Exception:
         logging.error("Failed to synchronise holmes toolsets", exc_info=True)
+
+    _retry_failed_mcp_toolsets_at_startup()
+
     if not ENABLED_SCHEDULED_PROMPTS:
         return
     # No need to check if dal is enabled again, done at the start of this function
