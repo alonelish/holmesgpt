@@ -1508,26 +1508,26 @@ def run_interactive_loop(
 
                 response = call_result[0]
                 trace_span.log(
-                    output=response.result,  # type: ignore
+                    output=response.result,
                 )
                 trace_url = tracer.get_trace_url()
 
-            messages = response.messages  # type: ignore
+            messages = response.messages
             last_response = response
-            feedback.metadata.add_llm_response(user_input, response.result)  # type: ignore
+            feedback.metadata.add_llm_response(user_input, response.result)
 
-            if response.tool_calls:  # type: ignore
-                all_tool_calls_history.extend(response.tool_calls)  # type: ignore
+            if response.tool_calls:
+                all_tool_calls_history.extend(response.tool_calls)
                 # Update the show completer with the latest tool call history
                 show_completer.update_history(all_tool_calls_history)
 
-            if show_tool_output and response.tool_calls:  # type: ignore
+            if show_tool_output and response.tool_calls:
                 display_recent_tool_outputs(
-                    response.tool_calls, console, all_tool_calls_history  # type: ignore
+                    response.tool_calls, console, all_tool_calls_history
                 )
             console.print(
                 Panel(
-                    Markdown(f"{response.result}"),  # type: ignore
+                    Markdown(f"{response.result}"),
                     padding=(1, 2),
                     border_style=AI_COLOR,
                     title=f"[bold {AI_COLOR}]AI Response[/bold {AI_COLOR}]",
@@ -1543,7 +1543,7 @@ def run_interactive_loop(
                     json_output_file, messages, all_tool_calls_history, console
                 )
         except LLMInterruptedError:
-            messages = messages_snapshot  # type: ignore[possibly-undefined]
+            messages = messages_snapshot
             console.print(
                 f"[bold {STATUS_COLOR}]Interrupted.[/bold {STATUS_COLOR}]\n"
             )
