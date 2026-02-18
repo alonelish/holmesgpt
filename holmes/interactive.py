@@ -2,12 +2,23 @@ import logging
 import os
 import re
 import subprocess
+import sys
 import tempfile
 import threading
+import time
 from collections import defaultdict
 from enum import Enum
 from pathlib import Path
 from typing import DefaultDict, Dict, List, Optional
+
+try:
+    import select as select_module
+    import termios
+    import tty
+
+    _HAS_TERMINAL_CONTROL = True
+except ImportError:
+    _HAS_TERMINAL_CONTROL = False
 
 import typer
 from prompt_toolkit import PromptSession
@@ -37,7 +48,12 @@ from holmes.core.feedback import (
     UserFeedback,
 )
 from holmes.core.prompt import PromptComponent, build_initial_ask_messages
-from holmes.core.tool_calling_llm import LLMResult, ToolCallingLLM, ToolCallResult
+from holmes.core.tool_calling_llm import (
+    LLMInterruptedError,
+    LLMResult,
+    ToolCallingLLM,
+    ToolCallResult,
+)
 from holmes.core.tools import StructuredToolResult, pretty_print_toolset_status
 from holmes.core.tracing import DummyTracer
 from holmes.plugins.toolsets.bash.common.cli_prefixes import (
@@ -1083,6 +1099,57 @@ def save_conversation_to_file(
         )
 
 
+def _wait_for_completion_or_escape(
+    thread: threading.Thread,
+    cancel_event: threading.Event,
+    approval_active: threading.Event,
+    poll_interval: float = 0.1,
+) -> bool:
+    """Wait for a thread to complete while monitoring stdin for Escape key press.
+
+    Returns True if interrupted by Escape, False if thread completed normally.
+    Falls back to simple thread.join() if terminal control is unavailable.
+    """
+    if not _HAS_TERMINAL_CONTROL or not sys.stdin.isatty():
+        thread.join()
+        return False
+
+    fd = sys.stdin.fileno()
+    old_settings = termios.tcgetattr(fd)
+    try:
+        tty.setcbreak(fd)
+        while thread.is_alive():
+            # If approval UI is active, restore terminal and wait for it to finish
+            if approval_active.is_set():
+                termios.tcsetattr(fd, termios.TCSADRAIN, old_settings)
+                while approval_active.is_set() and thread.is_alive():
+                    time.sleep(poll_interval)
+                if not thread.is_alive():
+                    break
+                tty.setcbreak(fd)
+                continue
+
+            ready, _, _ = select_module.select([sys.stdin], [], [], poll_interval)
+            if ready:
+                ch = sys.stdin.read(1)
+                if ch == "\x1b":
+                    # Disambiguate standalone Escape from escape sequences (arrow keys etc.)
+                    ready2, _, _ = select_module.select(
+                        [sys.stdin], [], [], 0.05
+                    )
+                    if ready2:
+                        # Part of an escape sequence — consume and discard
+                        sys.stdin.read(1)
+                        continue
+                    # Standalone Escape key pressed
+                    cancel_event.set()
+                    thread.join(timeout=2.0)
+                    return True
+        return False
+    finally:
+        termios.tcsetattr(fd, termios.TCSADRAIN, old_settings)
+
+
 def run_interactive_loop(
     ai: ToolCallingLLM,
     console: Console,
@@ -1373,40 +1440,94 @@ def run_interactive_loop(
             else:
                 messages.append({"role": "user", "content": user_input})
 
-            console.print(f"\n[bold {AI_COLOR}]Thinking...[/bold {AI_COLOR}]\n")
+            console.print(
+                f"\n[bold {AI_COLOR}]Thinking...[/bold {AI_COLOR}] [dim](press escape to interrupt)[/dim]\n"
+            )
+
+            # Snapshot messages before the call so we can rollback on interrupt
+            messages_snapshot = list(messages)
+
+            cancel_event = threading.Event()
+            approval_active = threading.Event()
+
+            # Wrap approval callback to coordinate terminal access with escape listener
+            original_approval = ai.approval_callback
+            if original_approval:
+
+                def _wrapped_approval(
+                    tool_result: StructuredToolResult,
+                    _orig=original_approval,
+                ) -> tuple[bool, Optional[str]]:
+                    approval_active.set()
+                    try:
+                        return _orig(tool_result)
+                    finally:
+                        approval_active.clear()
+
+                ai.approval_callback = _wrapped_approval
+
+            call_result: List[Optional[LLMResult]] = [None]
+            call_error: List[Optional[BaseException]] = [None]
 
             with tracer.start_trace(user_input) as trace_span:
-                # Log the user's question as input to the top-level span
                 trace_span.log(
                     input=user_input,
                     metadata={"type": "user_question"},
                 )
-                response = ai.call(
-                    messages,
-                    trace_span=trace_span,
-                    tool_number_offset=len(all_tool_calls_history),
+
+                def _run_ai_call() -> None:
+                    try:
+                        call_result[0] = ai.call(
+                            messages,
+                            trace_span=trace_span,
+                            tool_number_offset=len(all_tool_calls_history),
+                            cancel_event=cancel_event,
+                        )
+                    except BaseException as exc:
+                        call_error[0] = exc
+
+                ai_thread = threading.Thread(target=_run_ai_call, daemon=True)
+                ai_thread.start()
+
+                interrupted = _wait_for_completion_or_escape(
+                    ai_thread, cancel_event, approval_active
                 )
+
+                # Restore original approval callback
+                if original_approval:
+                    ai.approval_callback = original_approval
+
+                if interrupted or isinstance(call_error[0], LLMInterruptedError):
+                    messages = messages_snapshot
+                    console.print(
+                        f"[bold {STATUS_COLOR}]Interrupted.[/bold {STATUS_COLOR}]\n"
+                    )
+                    continue
+                elif call_error[0] is not None:
+                    raise call_error[0]
+
+                response = call_result[0]
                 trace_span.log(
-                    output=response.result,
+                    output=response.result,  # type: ignore
                 )
                 trace_url = tracer.get_trace_url()
 
             messages = response.messages  # type: ignore
             last_response = response
-            feedback.metadata.add_llm_response(user_input, response.result)
+            feedback.metadata.add_llm_response(user_input, response.result)  # type: ignore
 
-            if response.tool_calls:
-                all_tool_calls_history.extend(response.tool_calls)
+            if response.tool_calls:  # type: ignore
+                all_tool_calls_history.extend(response.tool_calls)  # type: ignore
                 # Update the show completer with the latest tool call history
                 show_completer.update_history(all_tool_calls_history)
 
-            if show_tool_output and response.tool_calls:
+            if show_tool_output and response.tool_calls:  # type: ignore
                 display_recent_tool_outputs(
-                    response.tool_calls, console, all_tool_calls_history
+                    response.tool_calls, console, all_tool_calls_history  # type: ignore
                 )
             console.print(
                 Panel(
-                    Markdown(f"{response.result}"),
+                    Markdown(f"{response.result}"),  # type: ignore
                     padding=(1, 2),
                     border_style=AI_COLOR,
                     title=f"[bold {AI_COLOR}]AI Response[/bold {AI_COLOR}]",
@@ -1421,6 +1542,11 @@ def run_interactive_loop(
                 save_conversation_to_file(
                     json_output_file, messages, all_tool_calls_history, console
                 )
+        except LLMInterruptedError:
+            messages = messages_snapshot  # type: ignore[possibly-undefined]
+            console.print(
+                f"[bold {STATUS_COLOR}]Interrupted.[/bold {STATUS_COLOR}]\n"
+            )
         except typer.Abort:
             console.print(
                 f"[bold {STATUS_COLOR}]Exiting interactive mode.[/bold {STATUS_COLOR}]"
