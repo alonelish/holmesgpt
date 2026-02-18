@@ -5,6 +5,7 @@ from functools import partial
 from typing import Generator, List, Optional, Union
 
 import litellm
+from litellm.exceptions import AuthenticationError
 from litellm.litellm_core_utils.streaming_handler import CustomStreamWrapper
 from litellm.types.utils import ModelResponse, TextCompletionResponse
 from pydantic import BaseModel, Field
@@ -54,6 +55,18 @@ create_rate_limit_error_message = partial(
     msg="Rate limit exceeded",
 )
 
+create_auth_error_message = partial(
+    create_sse_error_message,
+    error_code=5401,
+    msg="Authentication failed",
+)
+
+create_service_unavailable_error_message = partial(
+    create_sse_error_message,
+    error_code=5503,
+    msg="LLM service unavailable",
+)
+
 
 def _is_rate_limit_error(e: Exception) -> bool:
     """Check if an exception is a rate limit error.
@@ -63,6 +76,25 @@ def _is_rate_limit_error(e: Exception) -> bool:
     as a fallback.
     """
     return isinstance(e, litellm.exceptions.RateLimitError) or "Model is getting throttled" in str(e)
+
+
+def _create_sse_error_for_exception(e: Exception) -> str:
+    """Classify an LLM exception and return the appropriate SSE error message.
+
+    Maps specific litellm exception types to distinct error codes so clients
+    can display meaningful error messages (e.g. "service unavailable" vs
+    "authentication failed" vs generic errors).
+    """
+    description = str(e)
+    if _is_rate_limit_error(e):
+        return create_rate_limit_error_message(description)
+    if isinstance(e, AuthenticationError):
+        return create_auth_error_message(description)
+    if isinstance(e, (litellm.exceptions.ServiceUnavailableError, litellm.exceptions.InternalServerError)):
+        return create_service_unavailable_error_message(description)
+    if isinstance(e, (litellm.exceptions.APIConnectionError, litellm.exceptions.Timeout)):
+        return create_sse_error_message(description=description, error_code=5502, msg="Failed to connect to LLM service")
+    return create_sse_error_message(description=description, error_code=1, msg=description)
 
 
 def stream_investigate_formatter(
@@ -92,10 +124,7 @@ def stream_investigate_formatter(
                 yield create_sse_message(message.event.value, message.data)
     except Exception as e:
         logging.error(f"Error during streaming investigation: {e}", exc_info=True)
-        if _is_rate_limit_error(e):
-            yield create_rate_limit_error_message(str(e))
-        else:
-            yield create_sse_error_message(description=str(e), error_code=1, msg=str(e))
+        yield _create_sse_error_for_exception(e)
 
 
 def stream_chat_formatter(
@@ -132,10 +161,7 @@ def stream_chat_formatter(
                 yield create_sse_message(message.event.value, message.data)
     except Exception as e:
         logging.error(f"Error during streaming chat: {e}", exc_info=True)
-        if _is_rate_limit_error(e):
-            yield create_rate_limit_error_message(str(e))
-        else:
-            yield create_sse_error_message(description=str(e), error_code=1, msg=str(e))
+        yield _create_sse_error_for_exception(e)
 
 
 def add_token_count_to_metadata(

@@ -22,7 +22,10 @@ import sentry_sdk
 import uvicorn
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import StreamingResponse
-from litellm.exceptions import AuthenticationError
+from litellm.exceptions import (
+    AuthenticationError,
+    ServiceUnavailableError,
+)
 
 from holmes import get_version, is_official_release
 from holmes.common.env_vars import (
@@ -281,17 +284,13 @@ def investigate_issues(investigate_request: InvestigateRequest, http_request: Re
             )
             return result
 
-    except AuthenticationError as e:
-        raise HTTPException(status_code=401, detail=e.message)
-    except litellm.exceptions.RateLimitError as e:
-        raise HTTPException(status_code=429, detail=e.message)
     except Exception as e:
-        logging.error(f"Error in /api/investigate: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=str(e))
+        _raise_llm_http_exception(e, "/api/investigate")
 
 
 @app.post("/api/stream/investigate")
 def stream_investigate_issues(req: InvestigateRequest, http_request: Request):
+    storage = None
     try:
         req_info = f"/api/stream/investigate request: title={req.title}"
         logging.info(f"Received {req_info}")
@@ -321,13 +320,8 @@ def stream_investigate_issues(req: InvestigateRequest, http_request: Request):
             media_type="text/event-stream",
         )
 
-    except AuthenticationError as e:
-        storage.__exit__(None, None, None)
-        raise HTTPException(status_code=401, detail=e.message)
     except Exception as e:
-        storage.__exit__(None, None, None)
-        logging.exception(f"Error in /api/stream/investigate: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        _raise_llm_http_exception(e, "/api/stream/investigate", storage)
 
 
 @app.post("/api/issue_chat")
@@ -360,13 +354,8 @@ def issue_conversation(issue_chat_request: IssueChatRequest, http_request: Reque
                 conversation_history=llm_call.messages,
                 metadata=llm_call.metadata,
             )
-    except AuthenticationError as e:
-        raise HTTPException(status_code=401, detail=e.message)
-    except litellm.exceptions.RateLimitError as e:
-        raise HTTPException(status_code=429, detail=e.message)
     except Exception as e:
-        logging.error(f"Error in /api/issue_chat: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=str(e))
+        _raise_llm_http_exception(e, "/api/issue_chat")
 
 
 def already_answered(conversation_history: Optional[List[dict]]) -> bool:
@@ -407,6 +396,36 @@ def extract_passthrough_headers(request: Request) -> dict:
     return {"headers": passthrough_headers} if passthrough_headers else {}
 
 
+def _cleanup_storage(storage) -> None:
+    """Safely clean up tool result storage if it was entered."""
+    if storage is not None:
+        try:
+            storage.__exit__(None, None, None)
+        except Exception:
+            logging.debug("Error during storage cleanup", exc_info=True)
+
+
+def _raise_llm_http_exception(e: Exception, endpoint: str, storage=None) -> None:
+    """Map LLM/litellm exceptions to appropriate HTTP status codes and raise HTTPException.
+
+    Ensures storage is cleaned up before raising, and logs the error with context.
+    """
+    _cleanup_storage(storage)
+
+    if isinstance(e, AuthenticationError):
+        raise HTTPException(status_code=401, detail=e.message) from e
+    if isinstance(e, litellm.exceptions.RateLimitError):
+        raise HTTPException(status_code=429, detail=e.message) from e
+    if isinstance(e, ServiceUnavailableError):
+        raise HTTPException(status_code=503, detail=e.message) from e
+    if isinstance(e, (litellm.exceptions.APIConnectionError, litellm.exceptions.Timeout)):
+        logging.error(f"LLM provider connection error in {endpoint}: {e}", exc_info=True)
+        raise HTTPException(status_code=502, detail=str(e)) from e
+
+    logging.error(f"Error in {endpoint}: {e}", exc_info=True)
+    raise HTTPException(status_code=500, detail=str(e)) from e
+
+
 def _stream_with_storage_cleanup(storage, stream_generator, req_info):
     """Wrap a stream generator to clean up tool result files after streaming completes."""
     try:
@@ -418,6 +437,7 @@ def _stream_with_storage_cleanup(storage, stream_generator, req_info):
 
 @app.post("/api/chat")
 def chat(chat_request: ChatRequest, http_request: Request):
+    storage = None
     try:
         # Log incoming request details
         has_images = bool(chat_request.images)
@@ -520,13 +540,8 @@ def chat(chat_request: ChatRequest, http_request: Request):
                 )
             finally:
                 storage.__exit__(None, None, None)
-    except AuthenticationError as e:
-        raise HTTPException(status_code=401, detail=e.message)
-    except litellm.exceptions.RateLimitError as e:
-        raise HTTPException(status_code=429, detail=e.message)
     except Exception as e:
-        logging.error(f"Error in /api/chat: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=str(e))
+        _raise_llm_http_exception(e, "/api/chat", storage)
 
 
 scheduled_prompts_executor = ScheduledPromptsExecutor(
