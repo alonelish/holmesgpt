@@ -32,6 +32,7 @@ from holmes.common.env_vars import (
     ENABLED_SCHEDULED_PROMPTS,
     HOLMES_HOST,
     HOLMES_PORT,
+    LATEST_SYSTEM_PROMPT_VERSION,
     LOG_PERFORMANCE,
     MCP_RETRY_BACKOFF_SCHEDULE,
     SENTRY_DSN,
@@ -369,6 +370,19 @@ def issue_conversation(issue_chat_request: IssueChatRequest, http_request: Reque
         raise HTTPException(status_code=500, detail=str(e))
 
 
+def check_system_prompt_warnings(chat_request: ChatRequest) -> Optional[List[str]]:
+    """Return a list of warnings if the caller's system prompt version is missing or outdated."""
+    if chat_request.additional_system_prompt is None:
+        return None
+
+    caller_version = chat_request.system_prompt_version
+    if caller_version is None or caller_version != LATEST_SYSTEM_PROMPT_VERSION:
+        return [
+            "You are using an outdated version of Holmes. Some features may be disabled. Please upgrade to the latest version."
+        ]
+    return None
+
+
 def already_answered(conversation_history: Optional[List[dict]]) -> bool:
     if conversation_history is None:
         return False
@@ -467,6 +481,7 @@ def chat(chat_request: ChatRequest, http_request: Request):
             ]
 
         request_context = extract_passthrough_headers(http_request)
+        warnings = check_system_prompt_warnings(chat_request)
 
         storage = tool_result_storage()
         tool_results_dir = storage.__enter__()
@@ -496,6 +511,7 @@ def chat(chat_request: ChatRequest, http_request: Request):
                     request_context=request_context,
                 ),
                 [f.model_dump() for f in follow_up_actions],
+                warnings=warnings,
             )
             return StreamingResponse(
                 _stream_with_storage_cleanup(storage, stream, req_info),
@@ -516,6 +532,7 @@ def chat(chat_request: ChatRequest, http_request: Request):
                     tool_calls=llm_call.tool_calls,
                     conversation_history=llm_call.messages,
                     follow_up_actions=follow_up_actions,
+                    warnings=warnings,
                     metadata=llm_call.metadata,
                 )
             finally:

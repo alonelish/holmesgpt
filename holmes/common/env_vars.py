@@ -149,6 +149,12 @@ ROBUSTA_UI_DOMAIN = os.environ.get(
     "ROBUSTA_UI_DOMAIN",
     "https://platform.robusta.dev",
 )
+
+# Version identifier for the latest additional system prompt.
+# Bump this whenever the additional system prompt content is updated on the platform.
+# The Robusta platform UI sends its version in ChatRequest.system_prompt_version;
+# if it's missing or older, HolmesGPT returns a warning in the response.
+LATEST_SYSTEM_PROMPT_VERSION = "1"
 # Periodic refresh interval for toolset status in server mode (in seconds)
 # Set to 0 to disable periodic refresh
 TOOLSET_STATUS_REFRESH_INTERVAL_SECONDS = int(

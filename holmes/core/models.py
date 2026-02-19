@@ -202,6 +202,10 @@ class ChatRequestBaseModel(BaseModel):
     )
     tool_decisions: Optional[List[ToolApprovalDecision]] = None
     additional_system_prompt: Optional[str] = None
+    system_prompt_version: Optional[str] = Field(
+        default=None,
+        description="Version of the additional system prompt the caller is using. If missing or outdated, a warning is returned.",
+    )
     trace_span: Optional[Any] = (
         None  # Optional span for tracing and heartbeat callbacks
     )
@@ -267,4 +271,5 @@ class ChatResponse(BaseModel):
     tool_calls: Optional[List[ToolCallResult]] = []
     follow_up_actions: Optional[List[FollowUpAction]] = []
     pending_approvals: Optional[List[PendingToolApproval]] = None
+    warnings: Optional[List[str]] = None
     metadata: Optional[Dict[Any, Any]] = None

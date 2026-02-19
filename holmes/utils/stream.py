@@ -23,6 +23,7 @@ class StreamEvents(str, Enum):
     APPROVAL_REQUIRED = "approval_required"
     TOKEN_COUNT = "token_count"
     CONVERSATION_HISTORY_COMPACTED = "conversation_history_compacted"
+    WARNING = "warning"
 
 
 class StreamMessage(BaseModel):
@@ -101,8 +102,13 @@ def stream_investigate_formatter(
 def stream_chat_formatter(
     call_stream: Generator[StreamMessage, None, None],
     followups: Optional[List[dict]] = None,
+    warnings: Optional[List[str]] = None,
 ):
     try:
+        if warnings:
+            yield create_sse_message(
+                StreamEvents.WARNING.value, {"warnings": warnings}
+            )
         for message in call_stream:
             if message.event == StreamEvents.ANSWER_END:
                 response_data = {
