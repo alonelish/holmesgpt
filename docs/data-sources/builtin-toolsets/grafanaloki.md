@@ -105,7 +105,7 @@ Connect directly to the Loki API without going through Grafana. Use this if you 
 
 === "Grafana Cloud Loki"
 
-    Find your Loki URL and user ID in Grafana Cloud under "My Account → Loki":
+    Find your Loki URL in Grafana Cloud under "My Account → Loki":
 
     ```yaml-toolset-config
     toolsets:
@@ -113,8 +113,7 @@ Connect directly to the Loki API without going through Grafana. Use this if you 
         enabled: true
         config:
           api_url: https://logs-prod-XXX.grafana.net
-          additional_headers:
-            Authorization: "Basic <base64 of USER_ID:API_KEY>"
+          api_key: <your Grafana Cloud API key>
 
       kubernetes/logs:
         enabled: false # HolmesGPT's default logging mechanism MUST be disabled
