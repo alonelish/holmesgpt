@@ -1106,11 +1106,7 @@ def _wait_for_completion_or_escape(
     terminal_restored: threading.Event,
     poll_interval: float = 0.1,
 ) -> bool:
-    """Wait for a thread to complete while monitoring stdin for Escape key press.
-
-    Returns True if interrupted by Escape, False if thread completed normally.
-    Falls back to simple thread.join() if terminal control is unavailable.
-    """
+    """Monitor stdin for Escape while thread runs. Returns True if interrupted."""
     if not _HAS_TERMINAL_CONTROL or not sys.stdin.isatty():
         # Terminal is already in normal mode; signal so approval UI won't block.
         terminal_restored.set()
