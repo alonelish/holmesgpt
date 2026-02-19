@@ -34,6 +34,8 @@ data:
 
 ## Configuration
 
+--8<-- "snippets/toolset_secrets_k8s.md"
+
 In addition to setting permissions and generating an auth token, you will need to tell HolmesGPT how to connect to the server. This can be done two ways:
 
 1. **Using port forwarding**. This is the recommended approach if your ArgoCD is inside your Kubernetes cluster.

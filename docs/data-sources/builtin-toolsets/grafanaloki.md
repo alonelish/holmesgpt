@@ -17,6 +17,8 @@ Connect HolmesGPT to Loki for log analysis through Grafana or direct API access.
 
 ## Configuration
 
+--8<-- "snippets/toolset_secrets_k8s.md"
+
 Choose one of the following methods:
 
 ### Option 1: Through Grafana (Recommended)

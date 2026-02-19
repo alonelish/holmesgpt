@@ -18,6 +18,8 @@ You'll need two keys and your site URL from your Datadog account:
 
 ### 2. Configure HolmesGPT
 
+--8<-- "snippets/toolset_secrets_k8s.md"
+
 === "Holmes CLI"
 
     Set environment variables:

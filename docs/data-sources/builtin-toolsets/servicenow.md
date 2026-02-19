@@ -64,6 +64,8 @@ You should receive a JSON response. If you get an authentication error, check yo
 
 ## Configuration
 
+--8<-- "snippets/toolset_secrets_k8s.md"
+
 === "Holmes CLI"
 
     Add the following to **~/.holmes/config.yaml**. Create the file if it doesn't exist:

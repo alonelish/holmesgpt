@@ -11,6 +11,8 @@ You can find these in your New Relic account under Administration > API keys and
 
 ## Configuration
 
+--8<-- "snippets/toolset_secrets_k8s.md"
+
 === "Holmes CLI"
 
     Add the following to **~/.holmes/config.yaml**. Create the file if it doesn't exist:

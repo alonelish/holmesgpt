@@ -9,6 +9,8 @@ This toolset follows a two-step process to detect partition:
 
 ## Configuration
 
+--8<-- "snippets/toolset_secrets_k8s.md"
+
 ```yaml-toolset-config
 toolsets:
   rabbitmq/core:

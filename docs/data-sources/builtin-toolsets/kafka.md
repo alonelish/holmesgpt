@@ -6,6 +6,8 @@ This toolset uses the AdminClient of the [confluent-kafka python library](https:
 
 ## Configuration
 
+--8<-- "snippets/toolset_secrets_k8s.md"
+
 ```yaml-toolset-config
 toolsets:
     kafka/admin:

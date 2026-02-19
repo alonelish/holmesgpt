@@ -13,6 +13,8 @@ By enabling this toolset, HolmesGPT can analyze Azure SQL Database performance, 
 
 ## Configuration
 
+--8<-- "snippets/toolset_secrets_k8s.md"
+
 === "Holmes CLI"
 
     **Azure AD Workload Identity**

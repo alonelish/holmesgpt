@@ -25,6 +25,8 @@ Enabling this toolset allows HolmesGPT to fetch pages from Notion, making it use
 
 ## Configuration
 
+--8<-- "snippets/toolset_secrets_k8s.md"
+
 === "Holmes CLI"
 
     First, set the environment variable:

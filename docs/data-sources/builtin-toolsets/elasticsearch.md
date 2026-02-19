@@ -17,6 +17,8 @@ Enable only the toolset(s) you need. Most users who just want to search logs onl
 
 ## Configuration
 
+--8<-- "snippets/toolset_secrets_k8s.md"
+
 === "Holmes CLI"
 
     Add to your config file (`~/.holmes/config.yaml`):

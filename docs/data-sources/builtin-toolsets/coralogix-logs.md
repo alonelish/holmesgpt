@@ -12,6 +12,8 @@ You can find your `domain` and `team_slug` from the URL you use to access Coralo
 
 ## Configuration
 
+--8<-- "snippets/toolset_secrets_k8s.md"
+
 Configure both the Coralogix DataPrime toolset (for logs/traces) and the Prometheus metrics toolset (for metrics) using the same API key:
 
 ```yaml-toolset-config

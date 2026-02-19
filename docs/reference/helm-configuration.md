@@ -297,6 +297,80 @@ toolsets:
     enabled: true
 ```
 
+## Toolset Secrets {: #toolset-secrets }
+
+Toolset configuration is rendered into a Kubernetes **ConfigMap**, not a Secret. If you put credentials directly in `values.yaml`, they end up in plaintext in the ConfigMap:
+
+```yaml
+# BAD - credentials stored in plaintext in a ConfigMap
+toolsets:
+  prometheus/metrics:
+    enabled: true
+    config:
+      prometheus_url: "https://prometheus.example.com"
+      additional_headers:
+        Authorization: "Bearer my-secret-token"  # Visible to anyone who can read ConfigMaps
+```
+
+To keep credentials out of the ConfigMap, use the `{{ env.VAR }}` pattern. This lets you store secrets in a Kubernetes Secret, inject them as environment variables, and reference them in toolset config. HolmesGPT resolves `{{ env.VAR }}` placeholders at runtime.
+
+**Step 1: Create a Kubernetes Secret**
+
+```bash
+kubectl create secret generic prometheus-auth \
+  --from-literal=token="Bearer my-secret-token" \
+  -n <namespace>
+```
+
+**Step 2: Reference the secret in `values.yaml`**
+
+```yaml
+additionalEnvVars:
+  - name: PROMETHEUS_AUTH_TOKEN
+    valueFrom:
+      secretKeyRef:
+        name: prometheus-auth
+        key: token
+
+toolsets:
+  prometheus/metrics:
+    enabled: true
+    config:
+      prometheus_url: "https://prometheus.example.com"
+      additional_headers:
+        Authorization: "{{ env.PROMETHEUS_AUTH_TOKEN }}"
+```
+
+The ConfigMap will contain the literal string `{{ env.PROMETHEUS_AUTH_TOKEN }}` instead of the actual token. At startup, HolmesGPT resolves it from the environment variable.
+
+This pattern works for any toolset config field. Here are more examples:
+
+```yaml
+additionalEnvVars:
+  - name: GRAFANA_API_KEY
+    valueFrom:
+      secretKeyRef:
+        name: grafana-credentials
+        key: api-key
+  - name: ELASTICSEARCH_API_KEY
+    valueFrom:
+      secretKeyRef:
+        name: elasticsearch-credentials
+        key: api-key
+
+toolsets:
+  grafana/dashboards:
+    enabled: true
+    config:
+      api_url: "https://grafana.example.com"
+      api_key: "{{ env.GRAFANA_API_KEY }}"
+  elasticsearch/data:
+    enabled: true
+    config:
+      api_url: "https://es.example.com:443"
+      api_key: "{{ env.ELASTICSEARCH_API_KEY }}"
+```
+
 ## Configuration Validation
 
 ```bash

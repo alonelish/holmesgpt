@@ -6,6 +6,8 @@ Retrieve your Slab [API token](https://help.slab.com/en/articles/6545629-develop
 
 ## Configuration
 
+--8<-- "snippets/toolset_secrets_k8s.md"
+
 === "Holmes CLI"
 
     First, set the environment variable:

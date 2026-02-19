@@ -9,6 +9,8 @@ Connect HolmesGPT to Prometheus for metrics analysis and query generation.
 
 ## Configuration
 
+--8<-- "snippets/toolset_secrets_k8s.md"
+
 ```yaml-toolset-config
 toolsets:
     prometheus/metrics:

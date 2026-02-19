@@ -14,6 +14,8 @@ By enabling this toolset, HolmesGPT can access MongoDB Atlas projects and proces
 
 ## Configuration
 
+--8<-- "snippets/toolset_secrets_k8s.md"
+
 === "Holmes CLI"
 
     First, set the following environment variables:

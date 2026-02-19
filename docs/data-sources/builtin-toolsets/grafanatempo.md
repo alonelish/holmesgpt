@@ -2,6 +2,8 @@
 
 By enabling this toolset, HolmesGPT will be able to fetch trace information from Tempo to debug performance related issues, like high latency in your application.
 
+--8<-- "snippets/toolset_secrets_k8s.md"
+
 ## Proxying through Grafana
 
 This is the recommended approach because we intend to add more capabilities to the toolset that are only available with Grafana.

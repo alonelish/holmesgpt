@@ -6,6 +6,8 @@ This toolset requires an [Atlassian API Key](https://support.atlassian.com/atlas
 
 ## Configuration
 
+--8<-- "snippets/toolset_secrets_k8s.md"
+
 === "Holmes CLI"
 
     Set the following environment variables and the Confluence toolset will be automatically enabled:
