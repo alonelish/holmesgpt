@@ -604,6 +604,14 @@ class ToolCallingLLM:
                     futures.append(future)
 
                 for future in concurrent.futures.as_completed(futures):
+                    # Cooperative cancellation: f.cancel() only prevents queued tasks
+                    # from starting — it cannot stop already-running invocations.
+                    # Cancellation is observed here only as each future completes, so
+                    # in-flight tool calls will run to completion. The caller
+                    # (_wait_for_completion_or_escape) sets cancel_event and joins the
+                    # daemon thread with a timeout; shared mutable state (e.g.
+                    # _runbook_in_use, approval_callback) may still be accessed by
+                    # running workers after LLMInterruptedError is raised.
                     if cancel_event and cancel_event.is_set():
                         for f in futures:
                             f.cancel()

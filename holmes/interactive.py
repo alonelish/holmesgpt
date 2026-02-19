@@ -1440,8 +1440,13 @@ def run_interactive_loop(
             else:
                 messages.append({"role": "user", "content": user_input})
 
+            escape_hint = (
+                " [dim](press escape to interrupt)[/dim]"
+                if _HAS_TERMINAL_CONTROL and sys.stdin.isatty()
+                else ""
+            )
             console.print(
-                f"\n[bold {AI_COLOR}]Thinking...[/bold {AI_COLOR}] [dim](press escape to interrupt)[/dim]\n"
+                f"\n[bold {AI_COLOR}]Thinking...[/bold {AI_COLOR}]{escape_hint}\n"
             )
 
             # Snapshot messages before the call so we can rollback on interrupt
@@ -1457,17 +1462,18 @@ def run_interactive_loop(
                 def _wrapped_approval(
                     tool_result: StructuredToolResult,
                     _orig=original_approval,
+                    _approval_active=approval_active,
                 ) -> tuple[bool, Optional[str]]:
-                    approval_active.set()
+                    _approval_active.set()
                     try:
                         return _orig(tool_result)
                     finally:
-                        approval_active.clear()
+                        _approval_active.clear()
 
                 ai.approval_callback = _wrapped_approval
 
             call_result: List[Optional[LLMResult]] = [None]
-            call_error: List[Optional[BaseException]] = [None]
+            call_error: List[Optional[Exception]] = [None]
 
             with tracer.start_trace(user_input) as trace_span:
                 trace_span.log(
@@ -1475,16 +1481,22 @@ def run_interactive_loop(
                     metadata={"type": "user_question"},
                 )
 
-                def _run_ai_call() -> None:
+                def _run_ai_call(
+                    _call_result=call_result,
+                    _call_error=call_error,
+                    _messages=messages,
+                    _trace_span=trace_span,
+                    _cancel_event=cancel_event,
+                ) -> None:
                     try:
-                        call_result[0] = ai.call(
-                            messages,
-                            trace_span=trace_span,
+                        _call_result[0] = ai.call(
+                            _messages,
+                            trace_span=_trace_span,
                             tool_number_offset=len(all_tool_calls_history),
-                            cancel_event=cancel_event,
+                            cancel_event=_cancel_event,
                         )
-                    except BaseException as exc:
-                        call_error[0] = exc
+                    except Exception as exc:
+                        _call_error[0] = exc
 
                 ai_thread = threading.Thread(target=_run_ai_call, daemon=True)
                 ai_thread.start()
@@ -1542,11 +1554,6 @@ def run_interactive_loop(
                 save_conversation_to_file(
                     json_output_file, messages, all_tool_calls_history, console
                 )
-        except LLMInterruptedError:
-            messages = messages_snapshot
-            console.print(
-                f"[bold {STATUS_COLOR}]Interrupted.[/bold {STATUS_COLOR}]\n"
-            )
         except typer.Abort:
             console.print(
                 f"[bold {STATUS_COLOR}]Exiting interactive mode.[/bold {STATUS_COLOR}]"
