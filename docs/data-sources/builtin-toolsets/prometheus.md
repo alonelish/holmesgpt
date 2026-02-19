@@ -4,7 +4,10 @@ Connect HolmesGPT to Prometheus for metrics analysis and PromQL query generation
 
 **Jump to:** [Standard Prometheus](#configuration) | [Coralogix](#coralogix) | [AWS AMP](#aws-managed-prometheus-amp) | [Azure](#azure-managed-prometheus) | [Google Managed](#google-managed-prometheus) | [Grafana Cloud](#grafana-cloud-mimir)
 
----
+## Prerequisites
+
+- A running and accessible Prometheus server
+- Ensure HolmesGPT can connect to the Prometheus endpoint (see [Finding your Prometheus URL](#finding-your-prometheus-url))
 
 ## Configuration
 
@@ -38,33 +41,41 @@ toolsets:
 holmes ask "Show me CPU usage for the last hour"
 ```
 
-## Finding Your Prometheus URL
+## Finding your Prometheus URL
 
-??? note "Need help finding your Prometheus URL?"
+There are several ways to find your Prometheus URL:
 
-    **Ask Holmes to help you find it:**
-    ```
-    I need to configure HolmesGPT to connect to Prometheus. Can you help me:
-    1. List all Prometheus-related services in my Kubernetes cluster
-    2. Determine which one is the main Prometheus server
-    3. Provide the full service URL I should use
+**Option 1: Simple method (port-forwarding)**
 
-    Run: kubectl get svc -A | grep -i prom
-    ```
+```bash
+# Find Prometheus services
+kubectl get svc -A | grep prometheus
 
-    **Quick methods:**
+# Port forward for testing
+kubectl port-forward svc/<your-prometheus-service> 9090:9090 -n <namespace>
+# Then access Prometheus at: http://localhost:9090
+```
 
-    **Port-forward for testing:**
-    ```bash
-    kubectl get svc -A | grep prometheus
-    kubectl port-forward svc/<prometheus-service> 9090:9090 -n <namespace>
-    # Access at: http://localhost:9090
-    ```
+**Option 2: Advanced method (get full cluster DNS URL)**
 
-    **Get internal cluster URL:**
-    ```bash
-    kubectl get svc -A -o jsonpath='{range .items[*]}{.metadata.name}.{.metadata.namespace}.svc.cluster.local:{.spec.ports[0].port}{"\n"}{end}' | grep prometheus
-    ```
+If you want to find the full internal DNS URL for Prometheus, run:
+
+```bash
+kubectl get svc --all-namespaces -o jsonpath='{range .items[*]}{.metadata.name}{"."}{.metadata.namespace}{".svc.cluster.local:"}{.spec.ports[0].port}{"\n"}{end}' | grep prometheus | grep -Ev 'operat|alertmanager|node|coredns|kubelet|kube-scheduler|etcd|controller' | awk '{print "http://"$1}'
+```
+
+This will print all possible Prometheus service URLs in your cluster. Pick the one that matches your deployment.
+
+**Option 3: Ask Holmes**
+
+```
+I need to configure HolmesGPT to connect to Prometheus. Can you help me:
+1. List all Prometheus-related services in my Kubernetes cluster
+2. Determine which one is the main Prometheus server
+3. Provide the full service URL I should use
+
+Run: kubectl get svc -A | grep -i prom
+```
 
 ---
 
