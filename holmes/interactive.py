@@ -1149,6 +1149,7 @@ def _wait_for_completion_or_escape(
         return False
     finally:
         termios.tcsetattr(fd, termios.TCSADRAIN, old_settings)
+        terminal_restored.set()
 
 
 def run_interactive_loop(
