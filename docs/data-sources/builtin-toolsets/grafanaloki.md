@@ -81,8 +81,7 @@ toolsets:
     enabled: false # HolmesGPT's default logging mechanism MUST be disabled
 ```
 
-!!! warning "Common mistakes"
-    - **Do not include a trailing slash** in `api_url` (use `https://mystack.grafana.net`, not `https://mystack.grafana.net/`)
+!!! warning "Getting 404 errors?"
     - **Use your Grafana instance URL** (`https://YOUR-INSTANCE.grafana.net`), not the Loki endpoint URL (`https://logs-prod-xxx.grafana.net`)
     - **Verify the datasource UID** using the `curl` command above — a wrong UID is the most common cause of 404 errors
 
