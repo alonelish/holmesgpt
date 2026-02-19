@@ -4,4 +4,5 @@ nav:
   - Custom Toolsets: custom-toolsets.md
   - HTTP Connectors: api-toolsets.md
   - MCP Servers: remote-mcp-servers.md
+  - HTTP Header Propagation: header-propagation.md
   - Adding Permissions for Additional Resources: permissions.md
