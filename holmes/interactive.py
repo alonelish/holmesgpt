@@ -38,7 +38,12 @@ from holmes.core.feedback import (
 )
 from holmes.core.prompt import PromptComponent, build_initial_ask_messages
 from holmes.core.tool_calling_llm import LLMResult, ToolCallingLLM, ToolCallResult
-from holmes.core.tools import StructuredToolResult, pretty_print_toolset_status
+from holmes.core.tools import (
+    StructuredToolResult,
+    Toolset,
+    ToolsetStatusEnum,
+    pretty_print_toolset_status,
+)
 from holmes.core.tracing import DummyTracer
 from holmes.plugins.toolsets.bash.common.cli_prefixes import (
     enable_cli_mode,
@@ -77,6 +82,7 @@ class SlashCommands(Enum):
     CONTEXT = ("/context", "Show conversation context size and token count")
     SHOW = ("/show", "Show specific tool output in scrollable view")
     FEEDBACK = ("/feedback", "Provide feedback on the agent's response")
+    TEST = ("/test", "Test a toolset by running its initialization")
 
     def __init__(self, command, description):
         self.command = command
@@ -1023,6 +1029,67 @@ def handle_feedback_command(
         return
 
 
+def handle_test_command(toolsets: List[Toolset], console: Console) -> None:
+    """Handle the /test command to test a toolset's initialization."""
+    if not toolsets:
+        console.print(
+            f"[bold {ERROR_COLOR}]No toolsets available.[/bold {ERROR_COLOR}]"
+        )
+        return
+
+    sorted_toolsets = sorted(toolsets, key=lambda ts: ts.name)
+
+    options = []
+    for ts in sorted_toolsets:
+        status_char = {"enabled": "✔", "failed": "✗", "disabled": "○"}.get(
+            ts.status.value, "?"
+        )
+        options.append(f"{ts.name} ({status_char} {ts.status.value})")
+
+    console.print(
+        f"[bold {STATUS_COLOR}]Select a toolset to test:[/bold {STATUS_COLOR}]"
+    )
+    selected = _run_inline_menu(options, console)
+
+    if selected is None:
+        console.print("[dim]Cancelled.[/dim]")
+        return
+
+    toolset = sorted_toolsets[selected]
+    console.print(
+        f"\n[bold {STATUS_COLOR}]Testing toolset: {toolset.name}...[/bold {STATUS_COLOR}]"
+    )
+
+    if toolset.prerequisites:
+        console.print(
+            f"  Checking {len(toolset.prerequisites)} prerequisite(s)..."
+        )
+    else:
+        console.print("  No prerequisites to check.")
+
+    # Reset and re-run prerequisites
+    toolset.error = None
+    toolset.check_prerequisites()
+
+    if toolset.status == ToolsetStatusEnum.ENABLED:
+        console.print(
+            f"[bold green]✔ {toolset.name}: initialization successful "
+            f"({len(toolset.tools)} tools available)[/bold green]"
+        )
+    else:
+        console.print(
+            f"[bold red]✗ {toolset.name}: initialization failed[/bold red]"
+        )
+        if toolset.error:
+            console.print(f"  [red]{toolset.error}[/red]")
+        if toolset.installation_instructions:
+            console.print(
+                f"  [dim]Installation: {toolset.installation_instructions}[/dim]"
+            )
+        if toolset.docs_url:
+            console.print(f"  [dim]Docs: {toolset.docs_url}[/dim]")
+
+
 def display_recent_tool_outputs(
     tool_calls: List[ToolCallResult],
     console: Console,
@@ -1308,6 +1375,9 @@ def run_interactive_loop(
                     continue
                 elif command == SlashCommands.TOOLS_CONFIG.command:
                     pretty_print_toolset_status(ai.tool_executor.toolsets, console)
+                    continue
+                elif command == SlashCommands.TEST.command:
+                    handle_test_command(ai.tool_executor.toolsets, console)
                     continue
                 elif command == SlashCommands.TOGGLE_TOOL_OUTPUT.command:
                     show_tool_output = not show_tool_output
