@@ -2,8 +2,11 @@ import json
 import logging
 import os
 import re
+import time
 from datetime import datetime
 from typing import Any, Optional, Tuple
+
+import requests
 
 
 from holmes.core.tools import (
@@ -732,9 +735,10 @@ class DatadogMetricsToolset(Toolset):
         try:
             logging.debug("Performing Datadog metrics configuration healthcheck...")
 
-            url = f"{dd_config.api_url}/api/v1/validate"
             headers = get_headers(dd_config)
 
+            # Step 1: Validate API key
+            url = f"{dd_config.api_url}/api/v1/validate"
             data = execute_datadog_http_request(
                 url=url,
                 headers=headers,
@@ -743,17 +747,65 @@ class DatadogMetricsToolset(Toolset):
                 method="GET",
             )
 
-            if data.get("valid", False):
-                logging.info("Datadog metrics healthcheck completed successfully")
-                return True, ""
-            else:
+            if not data.get("valid", False):
                 error_msg = "Datadog API key validation failed"
                 logging.error(f"Datadog metrics healthcheck failed: {error_msg}")
                 return False, f"Datadog metrics healthcheck failed: {error_msg}"
 
+            # Step 2: Verify metrics_read permission by probing /api/v1/metrics.
+            # Use a direct request (no retries) so a rate-limit doesn't block startup.
+            permission_error = self._check_metrics_permission(dd_config, headers)
+            if permission_error:
+                return False, permission_error
+
+            logging.info("Datadog metrics healthcheck completed successfully")
+            return True, ""
+
         except Exception as e:
             logging.exception("Failed during Datadog metrics healthcheck")
             return False, f"Healthcheck failed with exception: {str(e)}"
+
+    def _check_metrics_permission(self, dd_config: DatadogMetricsConfig, headers: dict) -> Optional[str]:
+        """Probe /api/v1/metrics to verify the Application Key has metrics_read scope.
+
+        Returns an error message string if the permission check fails definitively (403),
+        or None if the check passed or was inconclusive (e.g. rate-limited).
+        """
+        metrics_url = f"{dd_config.api_url}/api/v1/metrics"
+        from_time = int(time.time()) - 300  # last 5 minutes
+        try:
+            response = requests.get(
+                metrics_url,
+                headers=headers,
+                params={"from": from_time},
+                timeout=dd_config.timeout_seconds,
+            )
+            if response.status_code == 200:
+                return None
+            if response.status_code == 403:
+                return (
+                    "Datadog metrics healthcheck failed: Permission denied when accessing metrics API. "
+                    "Ensure your Datadog Application Key has the 'metrics_read' and 'timeseries_query' permissions. "
+                    "For details: https://holmesgpt.dev/data-sources/builtin-toolsets/datadog/"
+                )
+            if response.status_code == 429:
+                logging.warning(
+                    "Datadog metrics permission check was rate-limited. "
+                    "Skipping permission verification — permission errors may surface later when tools are used."
+                )
+                return None
+            # Other unexpected errors — log and pass through, don't block startup
+            logging.warning(
+                f"Datadog metrics permission check returned unexpected status {response.status_code}: {response.text}. "
+                "Skipping permission verification."
+            )
+            return None
+        except Exception as e:
+            logging.warning(
+                f"Datadog metrics permission check failed with exception: {e}. "
+                "Skipping permission verification."
+            )
+            return None
 
     def prerequisites_callable(self, config: dict[str, Any]) -> Tuple[bool, str]:
         if not config:

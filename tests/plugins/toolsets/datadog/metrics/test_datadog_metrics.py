@@ -255,22 +255,30 @@ class TestDatadogMetricsToolset:
         assert "rate limit exceeded" in result.error.lower()
         assert "5 retry attempts" in result.error
 
-    @patch("holmes.plugins.toolsets.datadog.datadog_api.requests.get")
+    @patch("requests.get")
     def test_healthcheck_success(self, mock_get):
-        response = Mock()
-        response.status_code = 200
-        response.json.return_value = {"valid": True}
-        mock_get.return_value = response
+        validate_response = Mock(status_code=200)
+        validate_response.json.return_value = {"valid": True}
+        metrics_response = Mock(status_code=200)
+
+        def route_by_url(url, **kwargs):
+            if "/api/v1/metrics" in url:
+                return metrics_response
+            return validate_response
+
+        mock_get.side_effect = route_by_url
 
         success, error_msg = self.toolset._perform_healthcheck(self.config)
 
         assert success is True
         assert error_msg == ""
 
-        call_args = mock_get.call_args
-        assert "/api/v1/validate" in call_args[0][0]
+        # Verify both endpoints were called
+        called_urls = [call[0][0] for call in mock_get.call_args_list]
+        assert any("/api/v1/validate" in u for u in called_urls)
+        assert any("/api/v1/metrics" in u for u in called_urls)
 
-    @patch("holmes.plugins.toolsets.datadog.datadog_api.requests.get")
+    @patch("requests.get")
     def test_healthcheck_failure(self, mock_get):
         response = Mock()
         response.status_code = 200
@@ -282,12 +290,75 @@ class TestDatadogMetricsToolset:
         assert success is False
         assert "validation failed" in error_msg.lower()
 
-    @patch("holmes.plugins.toolsets.datadog.datadog_api.requests.get")
+    @patch("requests.get")
+    def test_healthcheck_permission_denied(self, mock_get):
+        validate_response = Mock(status_code=200)
+        validate_response.json.return_value = {"valid": True}
+        metrics_response = Mock(status_code=403, text="Forbidden")
+
+        def route_by_url(url, **kwargs):
+            if "/api/v1/metrics" in url:
+                return metrics_response
+            return validate_response
+
+        mock_get.side_effect = route_by_url
+
+        success, error_msg = self.toolset._perform_healthcheck(self.config)
+
+        assert success is False
+        assert "permission denied" in error_msg.lower()
+        assert "metrics_read" in error_msg
+        assert "timeseries_query" in error_msg
+
+    @patch("requests.get")
+    def test_healthcheck_rate_limited_passes_with_warning(self, mock_get):
+        validate_response = Mock(status_code=200)
+        validate_response.json.return_value = {"valid": True}
+        metrics_response = Mock(status_code=429, text="Rate limit exceeded")
+
+        def route_by_url(url, **kwargs):
+            if "/api/v1/metrics" in url:
+                return metrics_response
+            return validate_response
+
+        mock_get.side_effect = route_by_url
+
+        success, error_msg = self.toolset._perform_healthcheck(self.config)
+
+        # Should pass — don't block startup on rate limits
+        assert success is True
+        assert error_msg == ""
+
+    @patch("requests.get")
+    def test_healthcheck_probe_network_error_passes(self, mock_get):
+        validate_response = Mock(status_code=200)
+        validate_response.json.return_value = {"valid": True}
+
+        def route_by_url(url, **kwargs):
+            if "/api/v1/metrics" in url:
+                raise Exception("Connection timeout")
+            return validate_response
+
+        mock_get.side_effect = route_by_url
+
+        success, error_msg = self.toolset._perform_healthcheck(self.config)
+
+        # Should pass — don't block startup on transient errors
+        assert success is True
+        assert error_msg == ""
+
+    @patch("requests.get")
     def test_prerequisites_callable_success(self, mock_get):
-        response = Mock()
-        response.status_code = 200
-        response.json.return_value = {"valid": True}
-        mock_get.return_value = response
+        validate_response = Mock(status_code=200)
+        validate_response.json.return_value = {"valid": True}
+        metrics_response = Mock(status_code=200)
+
+        def route_by_url(url, **kwargs):
+            if "/api/v1/metrics" in url:
+                return metrics_response
+            return validate_response
+
+        mock_get.side_effect = route_by_url
 
         config = {
             "api_key": "test-api-key",
