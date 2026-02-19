@@ -426,7 +426,9 @@ class TestHttpRequest:
 
     @pytest.fixture
     def mock_context(self):
-        return Mock(spec=ToolInvokeContext)
+        ctx = Mock(spec=ToolInvokeContext)
+        ctx.rendered_extra_headers = {}
+        return ctx
 
     def test_headers_must_be_dict(self, toolset, mock_context):
         tool = HttpRequest(toolset)

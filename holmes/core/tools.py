@@ -45,6 +45,7 @@ from holmes.core.transformers import (
 )
 from holmes.plugins.prompts import load_and_render_prompt
 from holmes.utils.config_utils import merge_transformers
+from holmes.utils.header_rendering import render_template_headers
 from holmes.utils.memory_limit import check_oom_and_append_hint, get_ulimit_prefix
 from holmes.utils.pydantic_utils import build_config_example
 
@@ -188,6 +189,9 @@ class ToolInvokeContext(BaseModel):
         str
     ] = []  # Bash prefixes approved during this session
     request_context: Optional[Dict[str, Any]] = None
+    # Pre-rendered extra headers from the parent toolset's extra_headers templates.
+    # Computed at invocation time using request_context. Available for all tool types.
+    rendered_extra_headers: Dict[str, str] = Field(default_factory=dict)
 
     def model_dump(self, **kwargs):
         """Override to exclude sensitive context from serialization"""
@@ -196,6 +200,10 @@ class ToolInvokeContext(BaseModel):
             # Sanitize: show keys but not values
             data["request_context"] = {
                 k: "***REDACTED***" for k in data["request_context"].keys()
+            }
+        if data.get("rendered_extra_headers"):
+            data["rendered_extra_headers"] = {
+                k: "***REDACTED***" for k in data["rendered_extra_headers"].keys()
             }
         return data
 
@@ -509,10 +517,11 @@ class YAMLTool(Tool, BaseModel):
         params: dict,
         context: ToolInvokeContext,
     ) -> StructuredToolResult:
+        extra_env = self._build_header_env_vars(context.rendered_extra_headers)
         if self.command is not None:
-            raw_output, return_code, invocation = self.__invoke_command(params)
+            raw_output, return_code, invocation = self.__invoke_command(params, extra_env)
         else:
-            raw_output, return_code, invocation = self.__invoke_script(params)  # type: ignore
+            raw_output, return_code, invocation = self.__invoke_script(params, extra_env)  # type: ignore
 
         error = (
             None
@@ -530,15 +539,33 @@ class YAMLTool(Tool, BaseModel):
             invocation=invocation,
         )
 
-    def __invoke_command(self, params) -> Tuple[str, int, str]:
+    @staticmethod
+    def _build_header_env_vars(rendered_extra_headers: Dict[str, str]) -> Dict[str, str]:
+        """Convert rendered extra_headers to environment variables.
+
+        Header names are uppercased and non-alphanumeric characters are replaced
+        with underscores, prefixed with ``HOLMES_HEADER_``.
+        For example, ``X-Custom-Token`` becomes ``HOLMES_HEADER_X_CUSTOM_TOKEN``.
+        """
+        env_vars: Dict[str, str] = {}
+        for header_name, header_value in rendered_extra_headers.items():
+            env_name = "HOLMES_HEADER_" + re.sub(r"[^A-Za-z0-9]", "_", header_name).upper()
+            env_vars[env_name] = header_value
+        return env_vars
+
+    def __invoke_command(
+        self, params: dict, extra_env: Optional[Dict[str, str]] = None
+    ) -> Tuple[str, int, str]:
         context = self._build_context(params)
         command = os.path.expandvars(self.command)  # type: ignore
         template = Template(command)  # type: ignore
         rendered_command = template.render(context)
-        output, return_code = self.__execute_subprocess(rendered_command)
+        output, return_code = self.__execute_subprocess(rendered_command, extra_env)
         return output, return_code, rendered_command
 
-    def __invoke_script(self, params) -> str:
+    def __invoke_script(
+        self, params: dict, extra_env: Optional[Dict[str, str]] = None
+    ) -> str:
         context = self._build_context(params)
         script = os.path.expandvars(self.script)  # type: ignore
         template = Template(script)  # type: ignore
@@ -552,15 +579,23 @@ class YAMLTool(Tool, BaseModel):
         subprocess.run(["chmod", "+x", temp_script_path], check=True)
 
         try:
-            output, return_code = self.__execute_subprocess(temp_script_path)
+            output, return_code = self.__execute_subprocess(temp_script_path, extra_env)
         finally:
             subprocess.run(["rm", temp_script_path])
         return output, return_code, rendered_script  # type: ignore
 
-    def __execute_subprocess(self, cmd) -> Tuple[str, int]:
+    def __execute_subprocess(
+        self, cmd: str, extra_env: Optional[Dict[str, str]] = None
+    ) -> Tuple[str, int]:
         try:
             logger.debug(f"Running `{cmd}`")
             protected_cmd = get_ulimit_prefix() + cmd
+
+            # Merge extra headers as env vars into the subprocess environment
+            env = None
+            if extra_env:
+                env = {**os.environ, **extra_env}
+
             result = subprocess.run(
                 protected_cmd,
                 shell=True,
@@ -569,6 +604,7 @@ class YAMLTool(Tool, BaseModel):
                 stdin=subprocess.DEVNULL,
                 stdout=subprocess.PIPE,
                 stderr=subprocess.STDOUT,
+                env=env,
             )
 
             output = result.stdout.strip()
@@ -629,6 +665,16 @@ class Toolset(BaseModel):
     llm_instructions: Optional[str] = None
     transformers: Optional[List[Transformer]] = None
 
+    extra_headers: Optional[Dict[str, str]] = Field(
+        default=None,
+        description=(
+            "Jinja2 template headers rendered with request context and environment variables. "
+            "These headers are merged into outgoing HTTP requests made by this toolset. "
+            "Templates can reference {{ request_context.headers['Header-Name'] }} for "
+            "pass-through headers from the incoming request, {{ env.ENV_VAR }} for "
+            "environment variables, or plain strings for static values."
+        ),
+    )
     restricted_tools: List[str] = Field(
         default_factory=list,
         description="Tool names/patterns that require runbook authorization (use '*' for all tools)",
@@ -754,6 +800,21 @@ class Toolset(BaseModel):
         interpolated_command = os.path.expandvars(command)
 
         return interpolated_command
+
+    def render_extra_headers(
+        self, request_context: Optional[Dict[str, Any]] = None
+    ) -> Dict[str, str]:
+        """Render extra_headers templates with request context and environment variables.
+
+        Returns an empty dict if no extra_headers are configured.
+        """
+        if not self.extra_headers:
+            return {}
+        return render_template_headers(
+            extra_headers=self.extra_headers,
+            request_context=request_context,
+            source_name=self.name,
+        )
 
     def check_prerequisites(self, silent: bool = False):
         self.status = ToolsetStatusEnum.ENABLED

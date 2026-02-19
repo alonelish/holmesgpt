@@ -34,6 +34,7 @@ class ToolExecutor:
             toolsets_by_name[ts.name] = ts
 
         self.tools_by_name: dict[str, Tool] = {}
+        self.tool_to_toolset: dict[str, Toolset] = {}
         for ts in toolsets_by_name.values():
             for tool in ts.tools:
                 if tool.icon_url is None and ts.icon_url is not None:
@@ -43,12 +44,16 @@ class ToolExecutor:
                         f"Overriding existing tool '{tool.name} with new tool from {ts.name} at {ts.path}'!"
                     )
                 self.tools_by_name[tool.name] = tool
+                self.tool_to_toolset[tool.name] = ts
 
     def get_tool_by_name(self, name: str) -> Optional[Tool]:
         if name in self.tools_by_name:
             return self.tools_by_name[name]
         logging.warning(f"could not find tool {name}. skipping")
         return None
+
+    def get_toolset_for_tool(self, tool_name: str) -> Optional[Toolset]:
+        return self.tool_to_toolset.get(tool_name)
 
     @sentry_sdk.trace
     def get_all_tools_openai_format(

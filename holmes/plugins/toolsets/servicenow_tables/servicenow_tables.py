@@ -134,6 +134,7 @@ class ServiceNowTablesToolset(Toolset):
         endpoint: str,
         query_params: Optional[Dict] = None,
         timeout: int = 30,
+        extra_headers: Optional[Dict[str, str]] = None,
     ) -> Tuple[Dict[str, Any], Dict[str, str]]:
         """Make a GET request to ServiceNow API and return JSON data and headers.
 
@@ -141,6 +142,8 @@ class ServiceNowTablesToolset(Toolset):
             endpoint: API endpoint path (e.g., "api/now/v2/table/incident")
             query_params: Optional query parameters for the request
             timeout: Request timeout in seconds
+            extra_headers: Optional extra headers to merge into the request
+                (e.g., from toolset-level extra_headers rendered with request_context)
 
         Returns:
             Tuple of (parsed JSON response data, response headers dict)
@@ -160,6 +163,9 @@ class ServiceNowTablesToolset(Toolset):
             "Accept": "application/json",
             "Content-Type": "application/json",
         }
+
+        if extra_headers:
+            headers.update(extra_headers)
 
         response = requests.get(
             url, headers=headers, params=query_params, timeout=timeout
@@ -181,6 +187,7 @@ class BaseServiceNowTool(Tool, ABC):
         params: dict,
         query_params: Optional[Dict] = None,
         timeout: int = 30,
+        extra_headers: Optional[Dict[str, str]] = None,
     ) -> StructuredToolResult:
         """Make a GET request to ServiceNow API and return structured result.
 
@@ -189,6 +196,7 @@ class BaseServiceNowTool(Tool, ABC):
             params: Original parameters passed to the tool
             query_params: Optional query parameters for the request
             timeout: Request timeout in seconds
+            extra_headers: Optional extra headers to merge into the request
 
         Returns:
             StructuredToolResult with the API response data
@@ -197,7 +205,10 @@ class BaseServiceNowTool(Tool, ABC):
 
         # Use the toolset's shared API request method
         data, headers = self._toolset._make_api_request(
-            endpoint=endpoint, query_params=query_params, timeout=timeout
+            endpoint=endpoint,
+            query_params=query_params,
+            timeout=timeout,
+            extra_headers=extra_headers,
         )
 
         return StructuredToolResult(
@@ -334,7 +345,10 @@ class GetRecords(BaseServiceNowTool):
 
         # Get data and headers from the API request
         data, headers = self._toolset._make_api_request(
-            endpoint=endpoint, query_params=query_params, timeout=30
+            endpoint=endpoint,
+            query_params=query_params,
+            timeout=30,
+            extra_headers=context.rendered_extra_headers or None,
         )
 
         # Create the response with records and relevant headers
@@ -433,7 +447,9 @@ class GetRecord(BaseServiceNowTool):
             query_params["sysparm_view"] = params["sysparm_view"]
 
         endpoint = f"/api/now/v2/table/{table_name}/{sys_id}"
-        return self._make_servicenow_request(endpoint, params, query_params)
+        return self._make_servicenow_request(
+            endpoint, params, query_params, extra_headers=context.rendered_extra_headers or None
+        )
 
     def get_parameterized_one_liner(self, params: Dict) -> str:
         table_name = params.get("table_name", "unknown")
