@@ -12,6 +12,8 @@ from requests.structures import CaseInsensitiveDict  # type: ignore
 from tenacity import retry, retry_if_exception, stop_after_attempt, wait_incrementing
 from tenacity.wait import wait_base
 
+from holmes.plugins.toolsets.utils import parse_datetime
+
 START_RETRY_DELAY = (
     5.0  # Initial fallback delay if datadog does not return a reset_time
 )
@@ -496,7 +498,7 @@ def convert_relative_time(time_str: str) -> Tuple[str, str]:
         if "T" in time_str and (
             time_str.endswith("Z") or "+" in time_str or "-" in time_str[-6:]
         ):
-            datetime.fromisoformat(time_str.replace("Z", "+00:00"))
+            parse_datetime(time_str)
             return time_str, "rfc3339"
     except (ValueError, AttributeError):
         pass
@@ -512,6 +514,14 @@ def convert_relative_time(time_str: str) -> Tuple[str, str]:
     # Check for relative time
     match = RELATIVE_TIME_PATTERN.match(time_str.strip())
     if not match:
+        # Try flexible datetime parsing as fallback for non-standard formats
+        # (e.g. '2026-01-22 00:00:00' with space instead of 'T')
+        try:
+            dt = parse_datetime(time_str)
+            rfc3339 = dt.strftime("%Y-%m-%dT%H:%M:%SZ")
+            return rfc3339, "rfc3339"
+        except (ValueError, TypeError):
+            pass
         # Return as-is if not recognized
         return time_str, "unknown"
 

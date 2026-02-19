@@ -1,9 +1,10 @@
 import json
 import logging
-from datetime import datetime
 from typing import Any, Dict, List, NamedTuple, Optional
 
 from pydantic import BaseModel
+
+from holmes.plugins.toolsets.utils import parse_datetime
 
 
 class FlattenedLog(NamedTuple):
@@ -59,13 +60,7 @@ def normalize_datetime(date_str: Optional[str]) -> str:
         return "UNKNOWN_TIMESTAMP"
 
     try:
-        date_str_no_z = date_str.rstrip("Z")
-
-        parts = date_str_no_z.split(".")
-        if len(parts) > 1 and len(parts[1]) > 6:
-            date_str_no_z = f"{parts[0]}.{parts[1][:6]}"
-
-        date = datetime.fromisoformat(date_str_no_z)
+        date = parse_datetime(date_str)
 
         normalized_date_time = date.strftime("%Y-%m-%dT%H:%M:%S.%f")
         return normalized_date_time + "Z"

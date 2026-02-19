@@ -14,6 +14,7 @@ from holmes.core.tools import (
     Toolset,
     ToolsetTag,
 )
+from holmes.plugins.toolsets.utils import parse_datetime
 
 PULL_EXTERNAL_FINDINGS = load_bool("PULL_EXTERNAL_FINDINGS", False)
 
@@ -256,9 +257,12 @@ class FetchConfigurationChangesMetadataBase(Tool):
         finding_type: FindingType = FindingType.CONFIGURATION_CHANGE,
     ) -> Optional[List[Dict]]:
         if self._dal and self._dal.enabled:
+            # Normalize datetime strings to RFC3339 for flexible LLM input handling
+            start_dt = parse_datetime(params["start_datetime"])
+            end_dt = parse_datetime(params["end_datetime"])
             return self._dal.get_issues_metadata(
-                start_datetime=params["start_datetime"],
-                end_datetime=params["end_datetime"],
+                start_datetime=start_dt.strftime("%Y-%m-%dT%H:%M:%SZ"),
+                end_datetime=end_dt.strftime("%Y-%m-%dT%H:%M:%SZ"),
                 limit=min(
                     params.get("limit") or DEFAULT_LIMIT_CHANGE_ROWS,
                     MAX_LIMIT_CHANGE_ROWS,
