@@ -1103,6 +1103,7 @@ def _wait_for_completion_or_escape(
     thread: threading.Thread,
     cancel_event: threading.Event,
     approval_active: threading.Event,
+    terminal_restored: threading.Event,
     poll_interval: float = 0.1,
 ) -> bool:
     """Wait for a thread to complete while monitoring stdin for Escape key press.
@@ -1111,6 +1112,8 @@ def _wait_for_completion_or_escape(
     Falls back to simple thread.join() if terminal control is unavailable.
     """
     if not _HAS_TERMINAL_CONTROL or not sys.stdin.isatty():
+        # Terminal is already in normal mode; signal so approval UI won't block.
+        terminal_restored.set()
         thread.join()
         return False
 
@@ -1122,8 +1125,10 @@ def _wait_for_completion_or_escape(
             # If approval UI is active, restore terminal and wait for it to finish
             if approval_active.is_set():
                 termios.tcsetattr(fd, termios.TCSADRAIN, old_settings)
+                terminal_restored.set()
                 while approval_active.is_set() and thread.is_alive():
                     time.sleep(poll_interval)
+                terminal_restored.clear()
                 if not thread.is_alive():
                     break
                 tty.setcbreak(fd)
@@ -1454,6 +1459,7 @@ def run_interactive_loop(
 
             cancel_event = threading.Event()
             approval_active = threading.Event()
+            terminal_restored = threading.Event()
 
             # Wrap approval callback to coordinate terminal access with escape listener
             original_approval = ai.approval_callback
@@ -1463,8 +1469,12 @@ def run_interactive_loop(
                     tool_result: StructuredToolResult,
                     _orig=original_approval,
                     _approval_active=approval_active,
+                    _terminal_restored=terminal_restored,
                 ) -> tuple[bool, Optional[str]]:
                     _approval_active.set()
+                    # Wait for the escape listener to restore the terminal
+                    # from cbreak mode before launching the prompt_toolkit UI.
+                    _terminal_restored.wait(timeout=2.0)
                     try:
                         return _orig(tool_result)
                     finally:
@@ -1495,19 +1505,23 @@ def run_interactive_loop(
                             tool_number_offset=len(all_tool_calls_history),
                             cancel_event=_cancel_event,
                         )
-                    except Exception as exc:
+                    except Exception as exc:  # noqa: BLE001
                         _call_error[0] = exc
 
                 ai_thread = threading.Thread(target=_run_ai_call, daemon=True)
                 ai_thread.start()
 
-                interrupted = _wait_for_completion_or_escape(
-                    ai_thread, cancel_event, approval_active
-                )
-
-                # Restore original approval callback
-                if original_approval:
-                    ai.approval_callback = original_approval
+                try:
+                    interrupted = _wait_for_completion_or_escape(
+                        ai_thread, cancel_event, approval_active,
+                        terminal_restored,
+                    )
+                finally:
+                    # Restore original approval callback even if the escape
+                    # listener raises (e.g. termios.error), so ai doesn't
+                    # keep a _wrapped_approval referencing a stale event.
+                    if original_approval:
+                        ai.approval_callback = original_approval
 
                 if interrupted or isinstance(call_error[0], LLMInterruptedError):
                     messages = messages_snapshot
