@@ -1,0 +1,13 @@
+# Toolset configuration for Notion database query test
+toolsets:
+  notion:
+    enabled: true
+    config:
+      api_key: "{{ env.NOTION_API_KEY }}"
+  # Disable K8s-dependent toolsets (no K8s in this test)
+  kubernetes/core:
+    enabled: false
+  kubernetes/logs:
+    enabled: false
+  helm/core:
+    enabled: false

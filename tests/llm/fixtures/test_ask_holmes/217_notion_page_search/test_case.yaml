@@ -1,0 +1,117 @@
+# Test: Notion page search and content read
+# Tests that Holmes can search Notion for pages and read their content.
+#
+# Anti-hallucination: Page contains a unique verification code (EVAL-n8k3p2v7)
+# that can only be discovered by querying the Notion API.
+#
+# Requirements:
+#   NOTION_API_KEY - Notion internal integration token
+#   NOTION_TEST_PAGE_ID - Parent page ID where the integration can create content
+
+user_prompt: |
+  Search Notion for pages about "platform infrastructure review" and tell me the
+  verification code mentioned in the page content.
+
+expected_output:
+  - "Must report the verification code: EVAL-n8k3p2v7"
+
+include_tool_calls: true
+
+tags:
+  - notion
+  - question-answer
+  - fast
+  - medium
+
+setup_timeout: 60
+
+before_test: |
+  set -e
+
+  if [ -z "$NOTION_API_KEY" ]; then
+    echo "❌ NOTION_API_KEY is not set"
+    exit 1
+  fi
+  if [ -z "$NOTION_TEST_PAGE_ID" ]; then
+    echo "❌ NOTION_TEST_PAGE_ID is not set"
+    exit 1
+  fi
+
+  NOTION_VERSION="2022-06-28"
+  API="https://api.notion.com/v1"
+
+  echo "⏳ Creating test page in Notion..."
+  PAGE_RESPONSE=$(curl -sf -X POST "${API}/pages" \
+    -H "Authorization: Bearer ${NOTION_API_KEY}" \
+    -H "Notion-Version: ${NOTION_VERSION}" \
+    -H "Content-Type: application/json" \
+    -d '{
+      "parent": {"page_id": "'"${NOTION_TEST_PAGE_ID}"'"},
+      "properties": {
+        "title": [{"text": {"content": "Q4 Platform Infrastructure Review"}}]
+      },
+      "children": [
+        {
+          "object": "block",
+          "type": "paragraph",
+          "paragraph": {
+            "rich_text": [{"text": {"content": "This document covers the quarterly platform infrastructure review. All services maintained 99.7% uptime during the period."}}]
+          }
+        },
+        {
+          "object": "block",
+          "type": "paragraph",
+          "paragraph": {
+            "rich_text": [{"text": {"content": "Review verification code: EVAL-n8k3p2v7"}}]
+          }
+        },
+        {
+          "object": "block",
+          "type": "paragraph",
+          "paragraph": {
+            "rich_text": [{"text": {"content": "Recommended actions include scaling the payment service and upgrading the monitoring stack."}}]
+          }
+        }
+      ]
+    }')
+
+  PAGE_ID=$(echo "$PAGE_RESPONSE" | python3 -c "import sys,json;print(json.load(sys.stdin)['id'])")
+
+  if [ -z "$PAGE_ID" ] || [ "$PAGE_ID" = "None" ]; then
+    echo "❌ Failed to create test page"
+    echo "Response: $PAGE_RESPONSE"
+    exit 1
+  fi
+
+  echo "$PAGE_ID" > /tmp/notion_test_217_page_id.txt
+
+  # Verify the needle: page content contains the verification code
+  BLOCKS=$(curl -sf -X GET "${API}/blocks/${PAGE_ID}/children" \
+    -H "Authorization: Bearer ${NOTION_API_KEY}" \
+    -H "Notion-Version: ${NOTION_VERSION}")
+
+  if echo "$BLOCKS" | grep -q "EVAL-n8k3p2v7"; then
+    echo "✅ Verification code confirmed in page: $PAGE_ID"
+  else
+    echo "❌ Verification code not found in page content"
+    echo "Blocks response: $BLOCKS"
+    exit 1
+  fi
+
+after_test: |
+  NOTION_VERSION="2022-06-28"
+  API="https://api.notion.com/v1"
+
+  if [ -f /tmp/notion_test_217_page_id.txt ]; then
+    PAGE_ID=$(cat /tmp/notion_test_217_page_id.txt)
+    echo "⏳ Archiving test page: $PAGE_ID"
+    curl -sf -X PATCH "${API}/pages/${PAGE_ID}" \
+      -H "Authorization: Bearer ${NOTION_API_KEY}" \
+      -H "Notion-Version: ${NOTION_VERSION}" \
+      -H "Content-Type: application/json" \
+      -d '{"archived": true}' || true
+    rm -f /tmp/notion_test_217_page_id.txt
+    echo "✅ Cleanup complete"
+  else
+    echo "⚠️ No page ID file found, skipping cleanup"
+  fi

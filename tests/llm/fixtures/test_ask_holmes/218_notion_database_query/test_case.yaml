@@ -1,0 +1,171 @@
+# Test: Notion database query
+# Tests that Holmes can find a Notion database and query entries from it.
+#
+# Anti-hallucination: Database entry contains a unique incident ID (INC-4m7x9k2p)
+# that can only be discovered by querying the Notion database.
+#
+# Requirements:
+#   NOTION_API_KEY - Notion internal integration token
+#   NOTION_TEST_PAGE_ID - Parent page ID where the integration can create content
+
+user_prompt: |
+  Find the service incidents database in Notion and tell me the incident ID
+  for the entry with "Critical" priority.
+
+expected_output:
+  - "Must report the incident ID: INC-4m7x9k2p"
+  - "Must mention the service name associated with the critical incident (checkout-api)"
+
+include_tool_calls: true
+
+tags:
+  - notion
+  - question-answer
+  - fast
+  - medium
+
+setup_timeout: 60
+
+before_test: |
+  set -e
+
+  if [ -z "$NOTION_API_KEY" ]; then
+    echo "❌ NOTION_API_KEY is not set"
+    exit 1
+  fi
+  if [ -z "$NOTION_TEST_PAGE_ID" ]; then
+    echo "❌ NOTION_TEST_PAGE_ID is not set"
+    exit 1
+  fi
+
+  NOTION_VERSION="2022-06-28"
+  API="https://api.notion.com/v1"
+
+  # Clean up any leftover resources from previous runs
+  if [ -f /tmp/notion_test_218_ids.txt ]; then
+    echo "⏳ Cleaning up leftover resources..."
+    while IFS= read -r OLD_ID; do
+      curl -sf -X PATCH "${API}/pages/${OLD_ID}" \
+        -H "Authorization: Bearer ${NOTION_API_KEY}" \
+        -H "Notion-Version: ${NOTION_VERSION}" \
+        -H "Content-Type: application/json" \
+        -d '{"archived": true}' 2>/dev/null || true
+      curl -sf -X PATCH "${API}/databases/${OLD_ID}" \
+        -H "Authorization: Bearer ${NOTION_API_KEY}" \
+        -H "Notion-Version: ${NOTION_VERSION}" \
+        -H "Content-Type: application/json" \
+        -d '{"archived": true}' 2>/dev/null || true
+    done < /tmp/notion_test_218_ids.txt
+    rm -f /tmp/notion_test_218_ids.txt
+  fi
+
+  echo "⏳ Creating test database in Notion..."
+  DB_RESPONSE=$(curl -sf -X POST "${API}/databases" \
+    -H "Authorization: Bearer ${NOTION_API_KEY}" \
+    -H "Notion-Version: ${NOTION_VERSION}" \
+    -H "Content-Type: application/json" \
+    -d '{
+      "parent": {"page_id": "'"${NOTION_TEST_PAGE_ID}"'"},
+      "title": [{"type": "text", "text": {"content": "Service Incidents Tracker"}}],
+      "properties": {
+        "Name": {"title": {}},
+        "Priority": {
+          "select": {
+            "options": [
+              {"name": "Critical", "color": "red"},
+              {"name": "High", "color": "orange"},
+              {"name": "Low", "color": "green"}
+            ]
+          }
+        },
+        "Incident ID": {"rich_text": {}},
+        "Status": {
+          "select": {
+            "options": [
+              {"name": "Open", "color": "red"},
+              {"name": "Investigating", "color": "yellow"},
+              {"name": "Resolved", "color": "green"}
+            ]
+          }
+        }
+      }
+    }')
+
+  DB_ID=$(echo "$DB_RESPONSE" | python3 -c "import sys,json;print(json.load(sys.stdin)['id'])")
+
+  if [ -z "$DB_ID" ] || [ "$DB_ID" = "None" ]; then
+    echo "❌ Failed to create database"
+    echo "Response: $DB_RESPONSE"
+    exit 1
+  fi
+
+  # Track all created resource IDs for cleanup
+  echo "$DB_ID" > /tmp/notion_test_218_ids.txt
+  echo "✅ Created database: $DB_ID"
+
+  # Helper function to create database entries
+  create_entry() {
+    local name="$1" priority="$2" incident_id="$3" status="$4"
+    ENTRY_RESPONSE=$(curl -sf -X POST "${API}/pages" \
+      -H "Authorization: Bearer ${NOTION_API_KEY}" \
+      -H "Notion-Version: ${NOTION_VERSION}" \
+      -H "Content-Type: application/json" \
+      -d '{
+        "parent": {"database_id": "'"${DB_ID}"'"},
+        "properties": {
+          "Name": {"title": [{"text": {"content": "'"${name}"'"}}]},
+          "Priority": {"select": {"name": "'"${priority}"'"}},
+          "Incident ID": {"rich_text": [{"text": {"content": "'"${incident_id}"'"}}]},
+          "Status": {"select": {"name": "'"${status}"'"}}
+        }
+      }')
+    ENTRY_ID=$(echo "$ENTRY_RESPONSE" | python3 -c "import sys,json;print(json.load(sys.stdin)['id'])")
+    echo "$ENTRY_ID" >> /tmp/notion_test_218_ids.txt
+    echo "  Created entry: $name ($incident_id)"
+  }
+
+  echo "⏳ Adding entries to database..."
+  create_entry "checkout-api" "Critical" "INC-4m7x9k2p" "Open"
+  create_entry "user-service" "High" "INC-8r2t5w3n" "Investigating"
+  create_entry "inventory-db" "Low" "INC-1v6j4h8q" "Resolved"
+  create_entry "payment-gateway" "High" "INC-3f9d7m2k" "Open"
+  create_entry "notification-svc" "Low" "INC-5x1c6b9w" "Resolved"
+
+  # Verify the needle: query database for the critical entry
+  QUERY_RESPONSE=$(curl -sf -X POST "${API}/databases/${DB_ID}/query" \
+    -H "Authorization: Bearer ${NOTION_API_KEY}" \
+    -H "Notion-Version: ${NOTION_VERSION}" \
+    -H "Content-Type: application/json" \
+    -d '{"filter": {"property": "Priority", "select": {"equals": "Critical"}}}')
+
+  if echo "$QUERY_RESPONSE" | grep -q "INC-4m7x9k2p"; then
+    echo "✅ Critical incident INC-4m7x9k2p confirmed in database"
+  else
+    echo "❌ Critical incident not found in database query"
+    echo "Query response: $QUERY_RESPONSE"
+    exit 1
+  fi
+
+after_test: |
+  NOTION_VERSION="2022-06-28"
+  API="https://api.notion.com/v1"
+
+  if [ -f /tmp/notion_test_218_ids.txt ]; then
+    echo "⏳ Archiving test resources..."
+    tac /tmp/notion_test_218_ids.txt | while IFS= read -r RESOURCE_ID; do
+      curl -sf -X PATCH "${API}/pages/${RESOURCE_ID}" \
+        -H "Authorization: Bearer ${NOTION_API_KEY}" \
+        -H "Notion-Version: ${NOTION_VERSION}" \
+        -H "Content-Type: application/json" \
+        -d '{"archived": true}' 2>/dev/null || true
+      curl -sf -X PATCH "${API}/databases/${RESOURCE_ID}" \
+        -H "Authorization: Bearer ${NOTION_API_KEY}" \
+        -H "Notion-Version: ${NOTION_VERSION}" \
+        -H "Content-Type: application/json" \
+        -d '{"archived": true}' 2>/dev/null || true
+    done
+    rm -f /tmp/notion_test_218_ids.txt
+    echo "✅ Cleanup complete"
+  else
+    echo "⚠️ No resource ID file found, skipping cleanup"
+  fi
