@@ -17,9 +17,9 @@ Connect HolmesGPT to Loki for log analysis through Grafana or direct API access.
 
 ## Configuration
 
-Choose one of the following methods:
-
 ### Option 1: Through Grafana (Recommended)
+
+HolmesGPT queries Loki through Grafana's datasource proxy. This works with any Grafana instance — self-hosted or Grafana Cloud.
 
 **Required:**
 
@@ -27,95 +27,98 @@ Choose one of the following methods:
 - Loki datasource UID from Grafana
 
 **Find your Loki datasource UID:**
-```bash
-# Port forward to Grafana
-kubectl port-forward svc/grafana 3000:80
 
-# Get Loki datasource UID
-curl -s -u admin:admin http://localhost:3000/api/datasources | jq '.[] | select(.type == "loki") | .uid'
-```
+=== "Self-Hosted Grafana"
 
-**Configuration (Grafana Proxy):**
+    ```bash
+    # Port forward to Grafana
+    kubectl port-forward svc/grafana 3000:80
 
-```yaml-toolset-config
-toolsets:
-  grafana/loki:
-    enabled: true
-    config:
-      api_key: <your grafana service account token>
-      api_url: http://grafana.monitoring.svc:3000
-      grafana_datasource_uid: <the UID of the loki data source in Grafana>
+    # Get Loki datasource UID
+    curl -s -u admin:admin http://localhost:3000/api/datasources | jq '.[] | select(.type == "loki") | .uid'
+    ```
 
-  kubernetes/logs:
-    enabled: false # HolmesGPT's default logging mechanism MUST be disabled
-```
+=== "Grafana Cloud"
 
-### Option 2: Grafana Cloud
+    ```bash
+    curl -H "Authorization: Bearer YOUR_GLSA_TOKEN" \
+         "https://YOUR-INSTANCE.grafana.net/api/datasources" | \
+         jq '.[] | select(.type=="loki") | {name, uid}'
+    ```
 
-**1. Create a service account token in Grafana Cloud:**
+    To create a service account token: navigate to "Administration → Service accounts", create a new service account with "Viewer" role, and generate a token (starts with `glsa_`).
 
-   - Navigate to "Administration → Service accounts"
-   - Create a new service account with "Viewer" role
-   - Generate a service account token (starts with `glsa_`)
+**Configure HolmesGPT:**
 
-**2. Find your Loki datasource UID:**
+=== "Self-Hosted Grafana"
 
-```bash
-curl -H "Authorization: Bearer YOUR_GLSA_TOKEN" \
-     "https://YOUR-INSTANCE.grafana.net/api/datasources" | \
-     jq '.[] | select(.type=="loki") | {name, uid}'
-```
+    ```yaml-toolset-config
+    toolsets:
+      grafana/loki:
+        enabled: true
+        config:
+          api_key: <your grafana service account token>
+          api_url: http://grafana.monitoring.svc:3000
+          grafana_datasource_uid: <the UID of the loki data source in Grafana>
 
-**3. Configure HolmesGPT:**
+      kubernetes/logs:
+        enabled: false # HolmesGPT's default logging mechanism MUST be disabled
+    ```
 
-```yaml-toolset-config
-toolsets:
-  grafana/loki:
-    enabled: true
-    config:
-      api_key: <your glsa_ service account token>
-      api_url: https://YOUR-INSTANCE.grafana.net
-      grafana_datasource_uid: <the UID of the loki data source in Grafana>
+=== "Grafana Cloud"
 
-  kubernetes/logs:
-    enabled: false # HolmesGPT's default logging mechanism MUST be disabled
-```
+    ```yaml-toolset-config
+    toolsets:
+      grafana/loki:
+        enabled: true
+        config:
+          api_key: <your glsa_ service account token>
+          api_url: https://YOUR-INSTANCE.grafana.net
+          grafana_datasource_uid: <the UID of the loki data source in Grafana>
+
+      kubernetes/logs:
+        enabled: false # HolmesGPT's default logging mechanism MUST be disabled
+    ```
 
 !!! warning "Getting 404 errors?"
     - **Use your Grafana instance URL** (`https://YOUR-INSTANCE.grafana.net`), not the Loki endpoint URL (`https://logs-prod-xxx.grafana.net`)
     - **Verify the datasource UID** using the `curl` command above — a wrong UID is the most common cause of 404 errors
 
-### Option 3: Direct Connection
+### Option 2: Direct to Loki
 
-The toolset can directly connect to a Loki instance without proxying through a Grafana instance. This is done by not setting the `grafana_datasource_uid` field.
+Connect directly to the Loki API without going through Grafana. Use this if you don't have Grafana or prefer not to proxy through it.
 
-```yaml-toolset-config
-toolsets:
-  grafana/loki:
-    enabled: true
-    config:
-      api_url: http://loki.logging
-      additional_headers:
-        X-Scope-OrgID: "<tenant id>" # Set the X-Scope-OrgID if loki multitenancy is enabled
+=== "Self-Hosted Loki"
 
-  kubernetes/logs:
-    enabled: false # HolmesGPT's default logging mechanism MUST be disabled
-```
+    ```yaml-toolset-config
+    toolsets:
+      grafana/loki:
+        enabled: true
+        config:
+          api_url: http://loki.logging
+          additional_headers:
+            X-Scope-OrgID: "<tenant id>" # Set if Loki multitenancy is enabled
 
-For **Grafana Cloud Loki direct access** (without proxying through Grafana), find your Loki URL and user ID in Grafana Cloud under "My Account → Loki":
+      kubernetes/logs:
+        enabled: false # HolmesGPT's default logging mechanism MUST be disabled
+    ```
 
-```yaml-toolset-config
-toolsets:
-  grafana/loki:
-    enabled: true
-    config:
-      api_url: https://logs-prod-XXX.grafana.net
-      additional_headers:
-        Authorization: "Basic <base64 of USER_ID:API_KEY>"
+=== "Grafana Cloud Loki"
 
-  kubernetes/logs:
-    enabled: false # HolmesGPT's default logging mechanism MUST be disabled
-```
+    Find your Loki URL and user ID in Grafana Cloud under "My Account → Loki":
+
+    ```yaml-toolset-config
+    toolsets:
+      grafana/loki:
+        enabled: true
+        config:
+          api_url: https://logs-prod-XXX.grafana.net
+          additional_headers:
+            Authorization: "Basic <base64 of USER_ID:API_KEY>"
+
+      kubernetes/logs:
+        enabled: false # HolmesGPT's default logging mechanism MUST be disabled
+    ```
 
 ## Advanced Configuration
 
