@@ -35,26 +35,60 @@ kubectl port-forward svc/grafana 3000:80
 curl -s -u admin:admin http://localhost:3000/api/datasources | jq '.[] | select(.type == "loki") | .uid'
 ```
 
-### Configuration (Grafana Proxy)
+**Configuration (Grafana Proxy):**
 
 ```yaml-toolset-config
 toolsets:
   grafana/loki:
     enabled: true
     config:
-      api_key: <your grafana API key>
-      api_url: https://xxxxxxx.grafana.net # Your Grafana cloud account URL
+      api_key: <your grafana service account token>
+      api_url: http://grafana.monitoring.svc:3000
       grafana_datasource_uid: <the UID of the loki data source in Grafana>
 
   kubernetes/logs:
     enabled: false # HolmesGPT's default logging mechanism MUST be disabled
 ```
 
-## Direct Connection
+### Option 2: Grafana Cloud
 
-The toolset can directly connect to a Loki instance without proxying through a Grafana instance. This is done by not setting the `grafana_datasource_uid` field. Not setting this field makes HolmesGPT assume that it is directly connecting to Loki.
+**1. Create a service account token in Grafana Cloud:**
 
-### Configuration (Direct Connection)
+   - Navigate to "Administration → Service accounts"
+   - Create a new service account with "Viewer" role
+   - Generate a service account token (starts with `glsa_`)
+
+**2. Find your Loki datasource UID:**
+
+```bash
+curl -H "Authorization: Bearer YOUR_GLSA_TOKEN" \
+     "https://YOUR-INSTANCE.grafana.net/api/datasources" | \
+     jq '.[] | select(.type=="loki") | {name, uid}'
+```
+
+**3. Configure HolmesGPT:**
+
+```yaml-toolset-config
+toolsets:
+  grafana/loki:
+    enabled: true
+    config:
+      api_key: <your glsa_ service account token>
+      api_url: https://YOUR-INSTANCE.grafana.net
+      grafana_datasource_uid: <the UID of the loki data source in Grafana>
+
+  kubernetes/logs:
+    enabled: false # HolmesGPT's default logging mechanism MUST be disabled
+```
+
+!!! warning "Common mistakes"
+    - **Do not include a trailing slash** in `api_url` (use `https://mystack.grafana.net`, not `https://mystack.grafana.net/`)
+    - **Use your Grafana instance URL** (`https://YOUR-INSTANCE.grafana.net`), not the Loki endpoint URL (`https://logs-prod-xxx.grafana.net`)
+    - **Verify the datasource UID** using the `curl` command above — a wrong UID is the most common cause of 404 errors
+
+### Option 3: Direct Connection
+
+The toolset can directly connect to a Loki instance without proxying through a Grafana instance. This is done by not setting the `grafana_datasource_uid` field.
 
 ```yaml-toolset-config
 toolsets:
@@ -64,6 +98,21 @@ toolsets:
       api_url: http://loki.logging
       additional_headers:
         X-Scope-OrgID: "<tenant id>" # Set the X-Scope-OrgID if loki multitenancy is enabled
+
+  kubernetes/logs:
+    enabled: false # HolmesGPT's default logging mechanism MUST be disabled
+```
+
+For **Grafana Cloud Loki direct access** (without proxying through Grafana), find your Loki URL and user ID in Grafana Cloud under "My Account → Loki":
+
+```yaml-toolset-config
+toolsets:
+  grafana/loki:
+    enabled: true
+    config:
+      api_url: https://logs-prod-XXX.grafana.net
+      additional_headers:
+        Authorization: "Basic <base64 of USER_ID:API_KEY>"
 
   kubernetes/logs:
     enabled: false # HolmesGPT's default logging mechanism MUST be disabled
@@ -101,4 +150,4 @@ toolsets:
 
 | Tool Name | Description |
 |-----------|-------------|
-| fetch_pod_logs | Fetches pod logs from Loki |
+| grafana_loki_query | Run LogQL queries against Loki |
