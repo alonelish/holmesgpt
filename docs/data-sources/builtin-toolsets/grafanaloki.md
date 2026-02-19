@@ -40,13 +40,13 @@ HolmesGPT queries Loki through Grafana's datasource proxy. This works with any G
 
 === "Grafana Cloud"
 
+    Create a [service account token](https://grafana.com/docs/grafana-cloud/account-management/authentication-and-permissions/service-accounts/): navigate to "Administration → Service accounts", create a new service account with "Viewer" role, and generate a token (starts with `glsa_`).
+
     ```bash
     curl -H "Authorization: Bearer YOUR_GLSA_TOKEN" \
          "https://YOUR-INSTANCE.grafana.net/api/datasources" | \
          jq '.[] | select(.type=="loki") | {name, uid}'
     ```
-
-    To create a service account token: navigate to "Administration → Service accounts", create a new service account with "Viewer" role, and generate a token (starts with `glsa_`).
 
 **Configure HolmesGPT:**
 
@@ -146,9 +146,3 @@ toolsets:
       api_url: http://loki.internal:3100  # Internal URL for API calls
       external_url: https://loki.example.com  # URL for links in results
 ```
-
-## Capabilities
-
-| Tool Name | Description |
-|-----------|-------------|
-| grafana_loki_query | Run LogQL queries against Loki |
