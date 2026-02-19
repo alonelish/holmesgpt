@@ -103,6 +103,7 @@ class ToolsetManager:
         enable_all_toolsets=False,
         toolset_tags: Optional[List[ToolsetTag]] = None,
         silent: bool = False,
+        python_toolset_names_filter: Optional[set[str]] = None,
     ) -> List[Toolset]:
         """
         List all built-in and custom toolsets.
@@ -111,6 +112,11 @@ class ToolsetManager:
         1. Built-in toolsets
         2. Toolsets defined in self.toolsets can override both built-in and add new custom toolsets
         3. custom toolset from config can override both built-in and add new custom toolsets # for backward compatibility
+
+        Args:
+            python_toolset_names_filter: If provided, only load Python toolsets whose name
+                                         is in this set. YAML toolsets are always loaded.
+                                         If None, load all Python toolsets.
         """
         # Load built-in toolsets
         # Extract search paths from custom catalog files
@@ -121,7 +127,11 @@ class ToolsetManager:
                 for catalog_path in self.custom_runbook_catalogs
             ]
 
-        builtin_toolsets = load_builtin_toolsets(dal, additional_search_paths)
+        builtin_toolsets = load_builtin_toolsets(
+            dal,
+            additional_search_paths,
+            python_toolset_names_filter=python_toolset_names_filter,
+        )
         toolsets_by_name: dict[str, Toolset] = {
             toolset.name: toolset for toolset in builtin_toolsets
         }
@@ -317,8 +327,28 @@ class ToolsetManager:
         toolsets_status_by_name: dict[str, dict[str, Any]] = {
             cached_toolset["name"]: cached_toolset for cached_toolset in cached_toolsets
         }
+
+        # When using cache, only load Python toolsets that are enabled or configured.
+        # This avoids importing modules for toolsets that won't be used.
+        python_names_filter: Optional[set[str]] = None
+        if using_cached:
+            needed_names: set[str] = set()
+            for cached in cached_toolsets:
+                if cached.get("enabled") and (
+                    cached.get("status") == ToolsetStatusEnum.ENABLED.value
+                    or cached.get("type") == ToolsetType.MCP.value
+                ):
+                    needed_names.add(cached["name"])
+            # Also include toolsets from config (they might be newly enabled or override builtins)
+            if self.toolsets:
+                needed_names.update(self.toolsets.keys())
+            python_names_filter = needed_names
+
         all_toolsets_with_status = self._list_all_toolsets(
-            dal=dal, check_prerequisites=False, toolset_tags=toolset_tags
+            dal=dal,
+            check_prerequisites=False,
+            toolset_tags=toolset_tags,
+            python_toolset_names_filter=python_names_filter,
         )
 
         enabled_toolsets_from_cache: List[Toolset] = []
@@ -400,11 +430,15 @@ class ToolsetManager:
         server will sync the status of toolsets to DB during startup instead of local cache.
         Refreshing the status by default for server to keep the toolsets up-to-date instead of relying on local cache.
         """
+        # In server mode, only configured toolsets are enabled. Filter Python toolsets
+        # to avoid importing modules for toolsets that won't be used.
+        python_names_filter = set(self.toolsets.keys()) if self.toolsets else None
         toolsets_with_status = self._list_all_toolsets(
             dal,
             check_prerequisites=True,
             enable_all_toolsets=False,
             toolset_tags=self.server_tool_tags,
+            python_toolset_names_filter=python_names_filter,
         )
         return toolsets_with_status
 
@@ -417,12 +451,14 @@ class ToolsetManager:
             toolset.name: toolset.status for toolset in current_toolsets
         }
 
+        python_names_filter = set(self.toolsets.keys()) if self.toolsets else None
         new_toolsets = self._list_all_toolsets(
             dal,
             check_prerequisites=True,
             enable_all_toolsets=False,
             toolset_tags=self.server_tool_tags,
             silent=True,
+            python_toolset_names_filter=python_names_filter,
         )
 
         changes: List[tuple[str, ToolsetStatusEnum, ToolsetStatusEnum]] = []
