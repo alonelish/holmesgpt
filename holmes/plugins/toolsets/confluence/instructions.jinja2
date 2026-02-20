@@ -1,0 +1,23 @@
+## Confluence
+
+You can fetch and search Confluence pages.
+
+**Available Tools:**
+1. **confluence_get_page**: Fetch a page by its content ID. The body is automatically converted from Confluence storage format to clean markdown.
+2. **confluence_search**: Search using CQL (Confluence Query Language). Use `expand_body=true` to fetch full page content.
+
+**CQL Query Examples:**
+- Search by title: `title="Runbook Title"`
+- Search by text content: `text~"error message"`
+- Search in a specific space: `space=SRE AND title~"runbook"`
+- Search by label: `label="incident-response"`
+- Combine conditions: `space=OPS AND label="runbook" AND text~"database"`
+
+**Extracting page IDs from URLs:**
+- URL format: `https://company.atlassian.net/wiki/spaces/SPACE/pages/12345/Page+Title`
+- The content ID is the numeric part: `12345`
+
+**Tips:**
+- Use `confluence_search` first to find pages, then `confluence_get_page` for full content.
+- Page bodies are automatically converted to markdown — code blocks, tables, warnings, and other Confluence macros are preserved.
+- For large search results, keep `limit` low and use `expand_body=false` to get titles first, then fetch specific pages.
