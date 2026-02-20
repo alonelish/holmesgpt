@@ -66,16 +66,20 @@ kubectl get svc --all-namespaces -o jsonpath='{range .items[*]}{.metadata.name}{
 
 This will print all possible Prometheus service URLs in your cluster. Pick the one that matches your deployment.
 
-**Option 3: Ask Holmes**
+??? tip "Prompt for AI agent"
 
-```
-I need to configure HolmesGPT to connect to Prometheus. Can you help me:
-1. List all Prometheus-related services in my Kubernetes cluster
-2. Determine which one is the main Prometheus server
-3. Provide the full service URL I should use
+    Paste this into any AI coding assistant (Claude Code, Cursor, etc.) to have it find and configure your Prometheus URL automatically:
 
-Run: kubectl get svc -A | grep -i prom
-```
+    ```
+    I need to find my Prometheus server URL for HolmesGPT configuration.
+    1. Run: kubectl get svc -A | grep -i prom
+    2. Identify which service is the main Prometheus query endpoint
+       (ignore alertmanager, node-exporter, operator, pushgateway)
+    3. Give me the full internal DNS URL in the format:
+       http://<service>.<namespace>.svc.cluster.local:<port>
+    4. Verify it works by running:
+       kubectl run --rm -it prom-test --image=curlimages/curl --restart=Never -- curl -s <url>/api/v1/status/buildinfo
+    ```
 
 ---
 
