@@ -85,17 +85,17 @@ This will print all possible Prometheus service URLs in your cluster. Pick the o
 
 ## Coralogix
 
-```yaml
+```yaml-toolset-config
 toolsets:
-  prometheus/metrics:
-    enabled: true
-    config:
-      prometheus_url: "https://prom-api.<region>.coralogix.com"  # See regions below
-      additional_headers:
-        token: "{{ env.CORALOGIX_API_KEY }}"
-      discover_metrics_from_last_hours: 72
-      # query_timeout_seconds_default: 20
-      # query_timeout_seconds_hard_max: 180
+    prometheus/metrics:
+        enabled: true
+        config:
+            prometheus_url: "https://prom-api.<region>.coralogix.com"  # See regions below
+            additional_headers:
+                token: "{{ env.CORALOGIX_API_KEY }}"
+            discover_metrics_from_last_hours: 72
+            # query_timeout_seconds_default: 20
+            # query_timeout_seconds_hard_max: 180
 ```
 
 **Setup:**
@@ -108,21 +108,21 @@ toolsets:
 
 ## AWS Managed Prometheus (AMP)
 
-```yaml
+```yaml-toolset-config
 toolsets:
-  prometheus/metrics:
-    enabled: true
-    config:
-      prometheus_url: https://aps-workspaces.<region>.amazonaws.com/workspaces/<workspace-id>/
-      aws_region: us-east-1
-      # aws_service_name: aps                    # Default: aps
-      # aws_access_key: "{{ env.AWS_ACCESS_KEY_ID }}"
-      # aws_secret_access_key: "{{ env.AWS_SECRET_ACCESS_KEY }}"
-      # assume_role_arn: "arn:aws:iam::123456789012:role/PrometheusReadRole"
-      # refresh_interval_seconds: 900            # AWS credential refresh (default: 900)
-      # verify_ssl: false                        # Default: false for AMP
-      # additional_labels:                       # Labels added to all queries
-      #   cluster: "production"
+    prometheus/metrics:
+        enabled: true
+        config:
+            prometheus_url: https://aps-workspaces.<region>.amazonaws.com/workspaces/<workspace-id>/
+            aws_region: us-east-1
+            # aws_service_name: aps                    # Default: aps
+            # aws_access_key: "{{ env.AWS_ACCESS_KEY_ID }}"
+            # aws_secret_access_key: "{{ env.AWS_SECRET_ACCESS_KEY }}"
+            # assume_role_arn: "arn:aws:iam::123456789012:role/PrometheusReadRole"
+            # refresh_interval_seconds: 900            # AWS credential refresh (default: 900)
+            # verify_ssl: false                        # Default: false for AMP
+            # additional_labels:                       # Labels added to all queries
+            #     cluster: "production"
 ```
 
 **Notes:**
@@ -135,18 +135,18 @@ toolsets:
 
 ## Azure Managed Prometheus
 
-```yaml
+```yaml-toolset-config
 toolsets:
-  prometheus/metrics:
-    enabled: true
-    config:
-      prometheus_url: "https://<your-workspace>.<region>.prometheus.monitor.azure.com:443/"
-      # azure_client_id: "{{ env.AZURE_CLIENT_ID }}"
-      # azure_tenant_id: "{{ env.AZURE_TENANT_ID }}"
-      # azure_client_secret: "{{ env.AZURE_CLIENT_SECRET }}"
-      # azure_use_managed_id: false              # Use managed identity instead of service principal
-      # refresh_interval_seconds: 900            # Token refresh interval (default: 900)
-      # verify_ssl: true                         # SSL verification (default: true)
+    prometheus/metrics:
+        enabled: true
+        config:
+            prometheus_url: "https://<your-workspace>.<region>.prometheus.monitor.azure.com:443/"
+            # azure_client_id: "{{ env.AZURE_CLIENT_ID }}"
+            # azure_tenant_id: "{{ env.AZURE_TENANT_ID }}"
+            # azure_client_secret: "{{ env.AZURE_CLIENT_SECRET }}"
+            # azure_use_managed_id: false              # Use managed identity instead of service principal
+            # refresh_interval_seconds: 900            # Token refresh interval (default: 900)
+            # verify_ssl: true                         # SSL verification (default: true)
 ```
 
 **Environment variables** (alternative to config):
@@ -166,12 +166,12 @@ toolsets:
 
 ## Google Managed Prometheus
 
-```yaml
+```yaml-toolset-config
 toolsets:
-  prometheus/metrics:
-    enabled: true
-    config:
-      prometheus_url: http://frontend.<namespace>.svc.cluster.local:9090
+    prometheus/metrics:
+        enabled: true
+        config:
+            prometheus_url: http://frontend.<namespace>.svc.cluster.local:9090
 ```
 
 **Prerequisites:**
@@ -185,14 +185,14 @@ Authentication is automatic via Workload Identity or default service account.
 
 ## Grafana Cloud (Mimir)
 
-```yaml
+```yaml-toolset-config
 toolsets:
-  prometheus/metrics:
-    enabled: true
-    config:
-      prometheus_url: https://<instance>.grafana.net/api/datasources/proxy/uid/<datasource-uid>
-      additional_headers:
-        Authorization: "Bearer <glsa_token>"
+    prometheus/metrics:
+        enabled: true
+        config:
+            prometheus_url: https://<instance>.grafana.net/api/datasources/proxy/uid/<datasource-uid>
+            additional_headers:
+                Authorization: "Bearer <glsa_token>"
 ```
 
 **Setup:**
