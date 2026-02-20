@@ -1,12 +1,10 @@
 import logging
 import os
-import re
 from abc import ABC
-from typing import Any, ClassVar, Dict, List, Optional, Tuple, Type, cast
-from urllib.parse import urljoin
+from typing import Any, ClassVar, Dict, Literal, Optional, Tuple, Type, cast
 
 import requests  # type: ignore
-from pydantic import Field
+from pydantic import ConfigDict, Field, model_validator
 
 from holmes.core.tools import (
     CallablePrerequisite,
@@ -28,7 +26,9 @@ logger = logging.getLogger(__name__)
 class ConfluenceConfig(ToolsetConfig):
     """Configuration for Confluence REST API access.
 
-    Example configuration:
+    Supports both Confluence Cloud and Data Center/Server.
+
+    Cloud example:
     ```yaml
     toolsets:
       confluence:
@@ -37,22 +37,71 @@ class ConfluenceConfig(ToolsetConfig):
           user: "user@example.com"
           api_key: "your-atlassian-api-token"
     ```
+
+    Data Center with Personal Access Token:
+    ```yaml
+    toolsets:
+      confluence:
+        config:
+          api_url: "https://confluence.mycompany.com"
+          api_key: "your-personal-access-token"
+          auth_type: "bearer"
+          api_path_prefix: ""
+    ```
     """
+
+    model_config = ConfigDict(extra="allow")
 
     api_url: str = Field(
         title="API URL",
-        description="Confluence base URL (e.g., https://mycompany.atlassian.net)",
-        examples=["https://mycompany.atlassian.net"],
+        description="Confluence base URL (e.g., https://mycompany.atlassian.net for Cloud, https://confluence.mycompany.com for Data Center)",
+        examples=["https://mycompany.atlassian.net", "https://confluence.mycompany.com"],
     )
-    user: str = Field(
+    user: Optional[str] = Field(
+        default=None,
         title="User",
-        description="Confluence user email for authentication",
+        description="Confluence user email (Cloud) or username (Data Center). Required for basic auth, not needed for bearer auth.",
         examples=["user@example.com"],
     )
     api_key: str = Field(
         title="API Key",
-        description="Atlassian API token for authentication",
+        description="Atlassian API token (Cloud) or Personal Access Token (Data Center)",
     )
+    auth_type: Literal["basic", "bearer"] = Field(
+        default="basic",
+        title="Auth Type",
+        description="Authentication type: 'basic' for Cloud (user + API token) or Data Center (user + password), 'bearer' for Data Center Personal Access Tokens (PAT).",
+    )
+    api_path_prefix: str = Field(
+        default="/wiki",
+        title="API Path Prefix",
+        description="Path prefix before /rest/api. Cloud uses '/wiki' (default). Data Center typically uses '' (empty string). Set to match your instance's context path.",
+        examples=["/wiki", "", "/confluence"],
+    )
+
+    @model_validator(mode="after")
+    def handle_deprecated_fields(self) -> "ConfluenceConfig":
+        extra = self.model_extra or {}
+        deprecated = []
+
+        # Support old env var naming convention
+        if "base_url" in extra and not self.api_url:
+            self.api_url = extra["base_url"]
+            deprecated.append("base_url -> api_url")
+
+        if deprecated:
+            logging.warning(f"Deprecated Confluence config names: {', '.join(deprecated)}")
+
+        return self
+
+    @model_validator(mode="after")
+    def validate_auth(self) -> "ConfluenceConfig":
+        if self.auth_type == "basic" and not self.user:
+            raise ValueError(
+                "Confluence 'user' is required when auth_type is 'basic'. "
+                "For Data Center Personal Access Tokens, set auth_type to 'bearer'."
+            )
+        return self
 
 
 class ConfluenceToolset(Toolset):
@@ -85,14 +134,7 @@ class ConfluenceToolset(Toolset):
 
     def _perform_health_check(self) -> Tuple[bool, str]:
         try:
-            url = self._build_url("/wiki/rest/api/space", {"limit": "1"})
-            response = requests.get(
-                url,
-                auth=(self.confluence_config.user, self.confluence_config.api_key),
-                headers={"Accept": "application/json"},
-                timeout=10,
-            )
-            response.raise_for_status()
+            data = self.make_request("/rest/api/space", query_params={"limit": "1"})
             return True, "Confluence API is accessible."
         except requests.exceptions.HTTPError as e:
             status = e.response.status_code
@@ -114,11 +156,23 @@ class ConfluenceToolset(Toolset):
 
     def _build_url(self, path: str, params: Optional[Dict[str, str]] = None) -> str:
         base = self.confluence_config.api_url.rstrip("/")
-        url = f"{base}{path}"
+        prefix = self.confluence_config.api_path_prefix.rstrip("/")
+        url = f"{base}{prefix}{path}"
         if params:
             query = "&".join(f"{k}={v}" for k, v in params.items())
             url = f"{url}?{query}"
         return url
+
+    def _build_auth_headers(self) -> Dict[str, str]:
+        headers: Dict[str, str] = {"Accept": "application/json"}
+        if self.confluence_config.auth_type == "bearer":
+            headers["Authorization"] = f"Bearer {self.confluence_config.api_key}"
+        return headers
+
+    def _build_auth_tuple(self) -> Optional[Tuple[str, str]]:
+        if self.confluence_config.auth_type == "basic":
+            return (self.confluence_config.user or "", self.confluence_config.api_key)
+        return None
 
     def make_request(
         self,
@@ -129,8 +183,8 @@ class ConfluenceToolset(Toolset):
         url = self._build_url(path, query_params)
         response = requests.get(
             url,
-            auth=(self.confluence_config.user, self.confluence_config.api_key),
-            headers={"Accept": "application/json"},
+            auth=self._build_auth_tuple(),
+            headers=self._build_auth_headers(),
             timeout=timeout,
         )
         response.raise_for_status()
@@ -179,7 +233,7 @@ class GetPage(BaseConfluenceTool):
         content_id = params["content_id"]
         try:
             data = self._toolset.make_request(
-                f"/wiki/rest/api/content/{content_id}",
+                f"/rest/api/content/{content_id}",
                 query_params={"expand": "body.storage,version,space"},
             )
         except requests.exceptions.HTTPError as e:
@@ -255,7 +309,7 @@ class SearchPages(BaseConfluenceTool):
 
         try:
             data = self._toolset.make_request(
-                "/wiki/rest/api/content/search",
+                "/rest/api/content/search",
                 query_params={
                     "cql": cql,
                     "limit": str(limit),
