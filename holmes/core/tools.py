@@ -536,9 +536,13 @@ class YAMLTool(Tool, BaseModel):
         template = Template(command)  # type: ignore
         rendered_command = template.render(context)
         output, return_code = self.__execute_subprocess(rendered_command)
-        return output, return_code, rendered_command
+        # Build invocation without expanding env vars to avoid leaking secrets
+        # in error messages sent to the LLM
+        safe_template = Template(self.command)  # type: ignore
+        safe_invocation = safe_template.render(context)
+        return output, return_code, safe_invocation
 
-    def __invoke_script(self, params) -> str:
+    def __invoke_script(self, params) -> Tuple[str, int, str]:
         context = self._build_context(params)
         script = os.path.expandvars(self.script)  # type: ignore
         template = Template(script)  # type: ignore
@@ -555,7 +559,11 @@ class YAMLTool(Tool, BaseModel):
             output, return_code = self.__execute_subprocess(temp_script_path)
         finally:
             subprocess.run(["rm", temp_script_path])
-        return output, return_code, rendered_script  # type: ignore
+        # Build invocation without expanding env vars to avoid leaking secrets
+        # in error messages sent to the LLM
+        safe_template = Template(self.script)  # type: ignore
+        safe_invocation = safe_template.render(context)
+        return output, return_code, safe_invocation
 
     def __execute_subprocess(self, cmd) -> Tuple[str, int]:
         try:
