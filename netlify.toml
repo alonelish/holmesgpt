@@ -1,0 +1,6 @@
+[build]
+  command = "pip install mkdocs-material mkdocs-glightbox mkdocs-awesome-nav && python -m mkdocs build"
+  publish = "site"
+  # Only build when docs-related files change.
+  # git diff --quiet exits 0 (skip build) when no changes, 1 (proceed) when changed.
+  ignore = "git diff --quiet $CACHED_COMMIT_REF $COMMIT_REF -- docs/ mkdocs.yml"
