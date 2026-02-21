@@ -20,5 +20,9 @@ tags:
   - datadog
   - embeds
 
+toolsets_matrix:
+  - toolsets.yaml
+  - toolsets_http.yaml
+
 after_test: |
   # No cleanup needed - we only sent metrics to Datadog which don't need cleanup

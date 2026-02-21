@@ -1,0 +1,66 @@
+toolsets:
+  datadog-traces-api:
+    type: http
+    enabled: true
+    config:
+      endpoints:
+        - hosts: ["api.us5.datadoghq.com"]
+          paths: ["/api/v2/spans/*"]
+          methods: ["POST"]
+          auth:
+            type: header
+            name: "DD-API-KEY"
+            value: "{{env.DATADOG_API_KEY}}"
+      default_headers:
+        DD-APPLICATION-KEY: "{{env.DATADOG_APP_KEY}}"
+      timeout_seconds: 30
+    llm_instructions: |
+      ### Datadog Traces/APM REST API
+
+      Base URL: https://api.us5.datadoghq.com
+
+      Available endpoints:
+
+      **Search spans:**
+      - POST /api/v2/spans/events/search
+      Request body:
+      {
+        "data": {
+          "type": "search_request",
+          "attributes": {
+            "filter": {
+              "query": "search query (supports wildcards: @http.route:*payment*, resource_name:*checkout*)",
+              "from": "unix_epoch_milliseconds_as_string",
+              "to": "unix_epoch_milliseconds_as_string"
+            },
+            "page": {"limit": 10},
+            "sort": "-timestamp"
+          }
+        }
+      }
+
+      **Aggregate spans:**
+      - POST /api/v2/spans/analytics/aggregate
+      Request body:
+      {
+        "data": {
+          "type": "aggregate_request",
+          "attributes": {
+            "filter": {
+              "query": "search query",
+              "from": "unix_epoch_milliseconds_as_string",
+              "to": "unix_epoch_milliseconds_as_string"
+            },
+            "compute": [
+              {"aggregation": "count|avg|sum|min|max|pc75|pc90|pc95|pc99", "metric": "@duration", "type": "total"}
+            ],
+            "group_by": [
+              {"facet": "@http.route", "limit": 10}
+            ]
+          }
+        }
+      }
+
+      Time parameters use unix epoch MILLISECONDS as strings.
+      Common query fields: service, resource_name, @http.route, @http.method, @http.status_code, @duration
+      Percentile aggregations use "pc" prefix: pc75, pc90, pc95, pc98, pc99 (not p95).

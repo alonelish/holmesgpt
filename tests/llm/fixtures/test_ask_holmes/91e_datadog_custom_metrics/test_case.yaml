@@ -30,6 +30,10 @@ tags:
   - datadog
   - embeds
 
+toolsets_matrix:
+  - toolsets.yaml
+  - toolsets_http.yaml
+
 test_type: server
 
 after_test: |
