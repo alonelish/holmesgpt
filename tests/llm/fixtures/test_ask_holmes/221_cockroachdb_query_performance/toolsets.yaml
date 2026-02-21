@@ -1,5 +1,6 @@
 toolsets:
   test-cockroachdb:
     type: database
+    enabled: true
     config:
       connection_url: "postgresql://root@localhost:10221/testdb?sslmode=disable"

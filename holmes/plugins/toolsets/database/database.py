@@ -124,18 +124,6 @@ class DatabaseConfig(ToolsetConfig):
         ),
     )
 
-    timeout_seconds: int = Field(
-        default=30,
-        title="Query Timeout",
-        description=(
-            "Maximum time in seconds to wait for query execution. "
-            "Increase for analytical queries on large datasets. "
-            "Default: 30 seconds."
-        ),
-        ge=1,
-        le=300,
-    )
-
     max_rows: int = Field(
         default=200,
         title="Maximum Rows",
@@ -184,10 +172,11 @@ class DatabaseToolset(Toolset):
             tags=[ToolsetTag.CORE],
             **kwargs,
         )
+        tool_prefix = re.sub(r"[^a-zA-Z0-9]+", "_", name).strip("_")
         self.tools = [
-            DatabaseQuery(self),
-            DatabaseListTables(self),
-            DatabaseDescribeTable(self),
+            DatabaseQuery(self, tool_prefix),
+            DatabaseListTables(self, tool_prefix),
+            DatabaseDescribeTable(self, tool_prefix),
         ]
         self._load_llm_instructions_from_file(
             os.path.dirname(__file__), "instructions.jinja2"
@@ -222,17 +211,10 @@ class DatabaseToolset(Toolset):
     def _create_engine(self, url: str):
         connect_args = {}
 
-        if "postgresql" in url or "pg8000" in url:
-            connect_args["connect_timeout"] = self.database_config.timeout_seconds
-        elif "mysql" in url or "pymysql" in url:
-            connect_args["connect_timeout"] = self.database_config.timeout_seconds
-        elif "mssql" in url or "pymssql" in url:
-            connect_args["timeout"] = self.database_config.timeout_seconds
-
         if not self.database_config.verify_ssl:
-            if "postgresql" in url or "pg8000" in url:
-                connect_args["sslmode"] = "disable"
-            elif "mysql" in url or "pymysql" in url:
+            # Note: PostgreSQL/CockroachDB sslmode should be in URL (?sslmode=disable)
+            # pg8000 doesn't support sslmode in connect_args
+            if "mysql" in url or "pymysql" in url:
                 connect_args["ssl_disabled"] = True
             elif "clickhouse" in url:
                 connect_args["verify"] = False
@@ -346,10 +328,10 @@ class BaseDatabaseTool(Tool, ABC):
 class DatabaseQuery(BaseDatabaseTool):
     """Execute a SQL query against the connected database."""
 
-    def __init__(self, toolset: DatabaseToolset):
+    def __init__(self, toolset: DatabaseToolset, tool_prefix: str):
         super().__init__(
             toolset=toolset,
-            name="database_query",
+            name=f"{tool_prefix}_query",
             description=(
                 "Execute a SQL query against the database. "
                 "In read-only mode (default), only SELECT, SHOW, DESCRIBE, EXPLAIN, "
@@ -409,10 +391,10 @@ class DatabaseQuery(BaseDatabaseTool):
 class DatabaseListTables(BaseDatabaseTool):
     """List tables in the connected database."""
 
-    def __init__(self, toolset: DatabaseToolset):
+    def __init__(self, toolset: DatabaseToolset, tool_prefix: str):
         super().__init__(
             toolset=toolset,
-            name="database_list_tables",
+            name=f"{tool_prefix}_list_tables",
             description=(
                 "List all tables (and optionally views) in the database. "
                 "Use schema parameter to filter by schema."
@@ -478,10 +460,10 @@ class DatabaseListTables(BaseDatabaseTool):
 class DatabaseDescribeTable(BaseDatabaseTool):
     """Describe the schema of a specific table."""
 
-    def __init__(self, toolset: DatabaseToolset):
+    def __init__(self, toolset: DatabaseToolset, tool_prefix: str):
         super().__init__(
             toolset=toolset,
-            name="database_describe_table",
+            name=f"{tool_prefix}_describe_table",
             description=(
                 "Get the column definitions and constraints for a table. "
                 "Shows column names, types, nullability, defaults, primary keys, "

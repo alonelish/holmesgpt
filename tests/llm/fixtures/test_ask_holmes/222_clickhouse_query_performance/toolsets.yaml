@@ -1,5 +1,6 @@
 toolsets:
   test-clickhouse:
     type: database
+    enabled: true
     config:
       connection_url: "clickhouse://default@localhost:10222/testdb"
