@@ -87,9 +87,18 @@ class JsonFilterMixin:
                 return data, None
 
         if params.get("jq"):
+            original_data = parsed_data
             parsed_data, error = _apply_jq_filter(parsed_data, params["jq"])
             if error:
-                return None, error
+                # Return original data with error hint so the LLM can see the
+                # actual response shape and self-correct its jq expression.
+                # Use max_depth=2 to keep the fallback output concise.
+                truncated = _truncate_to_depth(original_data, max_depth=2)
+                return {
+                    "jq_error": f"{error}. Use null-safe patterns like (.key // [])[] instead of .key[] to handle missing/null fields.",
+                    "jq_expression": params["jq"],
+                    "raw_response_preview": truncated,
+                }, None
 
         parsed_data = _truncate_to_depth(parsed_data, params.get("max_depth"))
         return parsed_data, None
