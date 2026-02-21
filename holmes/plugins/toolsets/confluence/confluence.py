@@ -117,13 +117,14 @@ class ConfluenceToolset(Toolset):
             tools=[
                 GetPage(self),
                 SearchPages(self),
+                ListSpaces(self),
+                GetChildPages(self),
+                GetComments(self),
             ],
             tags=[ToolsetTag.CORE],
         )
 
-        self._load_llm_instructions_from_file(
-            os.path.dirname(__file__), "instructions.jinja2"
-        )
+        self._load_llm_instructions_from_file(os.path.dirname(__file__), "instructions.jinja2")
 
     def prerequisites_callable(self, config: dict[str, Any]) -> Tuple[bool, str]:
         try:
@@ -219,22 +220,97 @@ class GetPage(BaseConfluenceTool):
         super().__init__(
             toolset=toolset,
             name="confluence_get_page",
-            description="Get a Confluence page by its content ID. Returns the page title, body content (converted to markdown), and metadata.",
+            description=(
+                "Get a Confluence page by content ID, or by title and space key. "
+                "Returns the page title, body (converted to markdown), ancestors, "
+                "and whether child pages, comments, or attachments exist."
+            ),
             parameters={
                 "content_id": ToolParameter(
-                    description="The numeric content ID of the Confluence page. This can be found in the page URL (e.g., /pages/12345/Page+Title) or from search results.",
+                    description="The numeric content ID of the Confluence page. Use this OR title+space_key.",
                     type="string",
-                    required=True,
+                    required=False,
+                ),
+                "title": ToolParameter(
+                    description="Exact page title to look up. Must be used together with space_key.",
+                    type="string",
+                    required=False,
+                ),
+                "space_key": ToolParameter(
+                    description="Space key (e.g., 'SRE', 'ENG'). Must be used together with title.",
+                    type="string",
+                    required=False,
+                ),
+                "include_body": ToolParameter(
+                    description="Whether to include the full page body. Set to false for a lightweight fetch (title, ancestors, child info only). Default: true.",
+                    type="boolean",
+                    required=False,
                 ),
             },
         )
 
+    def _resolve_content_id(self, params: dict) -> Tuple[Optional[str], Optional[StructuredToolResult]]:
+        """Resolve content_id from params. Returns (content_id, error_result)."""
+        content_id = params.get("content_id")
+        title = params.get("title")
+        space_key = params.get("space_key")
+
+        if content_id:
+            return content_id, None
+
+        if title and space_key:
+            try:
+                data = self._toolset.make_request(
+                    "/rest/api/content",
+                    query_params={
+                        "title": title,
+                        "spaceKey": space_key,
+                        "type": "page",
+                        "limit": "1",
+                    },
+                )
+            except requests.exceptions.HTTPError as e:
+                return None, StructuredToolResult(
+                    status=StructuredToolResultStatus.ERROR,
+                    error=f"Failed to look up page title='{title}' space='{space_key}': HTTP {e.response.status_code}: {e.response.text}",
+                    params=params,
+                )
+            except Exception as e:
+                return None, StructuredToolResult(
+                    status=StructuredToolResultStatus.ERROR,
+                    error=f"Failed to look up page title='{title}' space='{space_key}': {e}",
+                    params=params,
+                )
+
+            results = data.get("results", [])
+            if not results:
+                return None, StructuredToolResult(
+                    status=StructuredToolResultStatus.ERROR,
+                    error=f"No page found with title='{title}' in space='{space_key}'.",
+                    params=params,
+                )
+            return results[0]["id"], None
+
+        return None, StructuredToolResult(
+            status=StructuredToolResultStatus.ERROR,
+            error="Provide either 'content_id' or both 'title' and 'space_key'.",
+            params=params,
+        )
+
     def _invoke(self, params: dict, context: ToolInvokeContext) -> StructuredToolResult:
-        content_id = params["content_id"]
+        content_id, error = self._resolve_content_id(params)
+        if error:
+            return error
+
+        include_body = params.get("include_body", True)
+        expand_parts = ["version", "space", "ancestors", "childTypes.all"]
+        if include_body:
+            expand_parts.append("body.storage")
+
         try:
             data = self._toolset.make_request(
                 f"/rest/api/content/{content_id}",
-                query_params={"expand": "body.storage,version,space"},
+                query_params={"expand": ",".join(expand_parts)},
             )
         except requests.exceptions.HTTPError as e:
             return StructuredToolResult(
@@ -249,7 +325,8 @@ class GetPage(BaseConfluenceTool):
                 params=params,
             )
 
-        data = self._convert_body(data)
+        if include_body:
+            data = self._convert_body(data)
         data = self._strip_metadata(data)
 
         return StructuredToolResult(
@@ -259,8 +336,11 @@ class GetPage(BaseConfluenceTool):
         )
 
     def get_parameterized_one_liner(self, params: Dict) -> str:
-        content_id = params.get("content_id", "unknown")
-        return f"{toolset_name_for_one_liner(self._toolset.name)}: Get Confluence page {content_id}"
+        content_id = params.get("content_id")
+        title = params.get("title")
+        if content_id:
+            return f"{toolset_name_for_one_liner(self._toolset.name)}: Get Confluence page {content_id}"
+        return f"{toolset_name_for_one_liner(self._toolset.name)}: Get Confluence page '{title}'"
 
 
 class SearchPages(BaseConfluenceTool):
@@ -290,6 +370,11 @@ class SearchPages(BaseConfluenceTool):
                     type="integer",
                     required=False,
                 ),
+                "start": ToolParameter(
+                    description="Starting index for pagination (default: 0). Use with limit to page through results.",
+                    type="integer",
+                    required=False,
+                ),
                 "expand_body": ToolParameter(
                     description="If true, fetch and convert the full page body for each result. Use sparingly — increases response size. Default: false.",
                     type="boolean",
@@ -301,6 +386,7 @@ class SearchPages(BaseConfluenceTool):
     def _invoke(self, params: dict, context: ToolInvokeContext) -> StructuredToolResult:
         cql = params["cql"]
         limit = min(params.get("limit", 10), 50)
+        start = params.get("start", 0)
         expand_body = params.get("expand_body", False)
 
         expand = "version,space"
@@ -313,6 +399,7 @@ class SearchPages(BaseConfluenceTool):
                 query_params={
                     "cql": cql,
                     "limit": str(limit),
+                    "start": str(start),
                     "expand": expand,
                 },
             )
@@ -340,6 +427,8 @@ class SearchPages(BaseConfluenceTool):
             status=StructuredToolResultStatus.SUCCESS,
             data={
                 "total_size": data.get("totalSize", len(results)),
+                "start": start,
+                "limit": limit,
                 "results": results,
             },
             params=params,
@@ -348,3 +437,272 @@ class SearchPages(BaseConfluenceTool):
     def get_parameterized_one_liner(self, params: Dict) -> str:
         cql = params.get("cql", "")
         return f"{toolset_name_for_one_liner(self._toolset.name)}: Search Confluence '{cql}'"
+
+
+class ListSpaces(BaseConfluenceTool):
+    def __init__(self, toolset: ConfluenceToolset) -> None:
+        super().__init__(
+            toolset=toolset,
+            name="confluence_list_spaces",
+            description=(
+                "List Confluence spaces with optional filtering by type, status, or label. "
+                "Returns space keys, names, and descriptions."
+            ),
+            parameters={
+                "type": ToolParameter(
+                    description="Filter by space type: 'global' or 'personal'. Default: all types.",
+                    type="string",
+                    required=False,
+                    enum=["global", "personal"],
+                ),
+                "status": ToolParameter(
+                    description="Filter by space status: 'current' or 'archived'. Default: 'current'.",
+                    type="string",
+                    required=False,
+                    enum=["current", "archived"],
+                ),
+                "label": ToolParameter(
+                    description="Filter spaces by label (e.g., 'team-sre', 'production').",
+                    type="string",
+                    required=False,
+                ),
+                "limit": ToolParameter(
+                    description="Maximum number of spaces to return (default: 25, max: 100).",
+                    type="integer",
+                    required=False,
+                ),
+                "start": ToolParameter(
+                    description="Starting index for pagination (default: 0).",
+                    type="integer",
+                    required=False,
+                ),
+            },
+        )
+
+    def _invoke(self, params: dict, context: ToolInvokeContext) -> StructuredToolResult:
+        limit = min(params.get("limit", 25), 100)
+        start = params.get("start", 0)
+
+        query_params: Dict[str, str] = {
+            "limit": str(limit),
+            "start": str(start),
+            "expand": "description.plain",
+        }
+        if params.get("type"):
+            query_params["type"] = params["type"]
+        if params.get("status"):
+            query_params["status"] = params["status"]
+        if params.get("label"):
+            query_params["label"] = params["label"]
+
+        try:
+            data = self._toolset.make_request("/rest/api/space", query_params=query_params)
+        except requests.exceptions.HTTPError as e:
+            return StructuredToolResult(
+                status=StructuredToolResultStatus.ERROR,
+                error=f"Failed to list Confluence spaces: HTTP {e.response.status_code}: {e.response.text}",
+                params=params,
+            )
+        except Exception as e:
+            return StructuredToolResult(
+                status=StructuredToolResultStatus.ERROR,
+                error=f"Failed to list Confluence spaces: {e}",
+                params=params,
+            )
+
+        spaces = []
+        for space in data.get("results", []):
+            space.pop("_links", None)
+            space.pop("_expandable", None)
+            spaces.append(space)
+
+        return StructuredToolResult(
+            status=StructuredToolResultStatus.SUCCESS,
+            data={
+                "total_size": data.get("size", len(spaces)),
+                "start": start,
+                "limit": limit,
+                "results": spaces,
+            },
+            params=params,
+        )
+
+    def get_parameterized_one_liner(self, params: Dict) -> str:
+        filters = []
+        if params.get("type"):
+            filters.append(f"type={params['type']}")
+        if params.get("status"):
+            filters.append(f"status={params['status']}")
+        if params.get("label"):
+            filters.append(f"label={params['label']}")
+        suffix = f" ({', '.join(filters)})" if filters else ""
+        return f"{toolset_name_for_one_liner(self._toolset.name)}: List Confluence spaces{suffix}"
+
+
+class GetChildPages(BaseConfluenceTool):
+    def __init__(self, toolset: ConfluenceToolset) -> None:
+        super().__init__(
+            toolset=toolset,
+            name="confluence_get_child_pages",
+            description=(
+                "Get child pages of a Confluence page. "
+                "Returns a paginated list of direct child pages with their titles and IDs. "
+                "Use confluence_get_page first — if childTypes.page is true, call this to list children."
+            ),
+            parameters={
+                "content_id": ToolParameter(
+                    description="The content ID of the parent page.",
+                    type="string",
+                    required=True,
+                ),
+                "limit": ToolParameter(
+                    description="Maximum number of child pages to return (default: 25, max: 100).",
+                    type="integer",
+                    required=False,
+                ),
+                "start": ToolParameter(
+                    description="Starting index for pagination (default: 0).",
+                    type="integer",
+                    required=False,
+                ),
+                "expand_body": ToolParameter(
+                    description="If true, fetch and convert the full page body for each child. Default: false.",
+                    type="boolean",
+                    required=False,
+                ),
+            },
+        )
+
+    def _invoke(self, params: dict, context: ToolInvokeContext) -> StructuredToolResult:
+        content_id = params["content_id"]
+        limit = min(params.get("limit", 25), 100)
+        start = params.get("start", 0)
+        expand_body = params.get("expand_body", False)
+
+        expand = "version"
+        if expand_body:
+            expand += ",body.storage"
+
+        try:
+            data = self._toolset.make_request(
+                f"/rest/api/content/{content_id}/child/page",
+                query_params={
+                    "limit": str(limit),
+                    "start": str(start),
+                    "expand": expand,
+                },
+            )
+        except requests.exceptions.HTTPError as e:
+            return StructuredToolResult(
+                status=StructuredToolResultStatus.ERROR,
+                error=f"Failed to get child pages for {content_id}: HTTP {e.response.status_code}: {e.response.text}",
+                params=params,
+            )
+        except Exception as e:
+            return StructuredToolResult(
+                status=StructuredToolResultStatus.ERROR,
+                error=f"Failed to get child pages for {content_id}: {e}",
+                params=params,
+            )
+
+        children = []
+        for item in data.get("results", []):
+            item = self._strip_metadata(item)
+            if expand_body:
+                item = self._convert_body(item)
+            children.append(item)
+
+        return StructuredToolResult(
+            status=StructuredToolResultStatus.SUCCESS,
+            data={
+                "parent_id": content_id,
+                "total_size": data.get("size", len(children)),
+                "start": start,
+                "limit": limit,
+                "results": children,
+            },
+            params=params,
+        )
+
+    def get_parameterized_one_liner(self, params: Dict) -> str:
+        content_id = params.get("content_id", "unknown")
+        return f"{toolset_name_for_one_liner(self._toolset.name)}: Get child pages of {content_id}"
+
+
+class GetComments(BaseConfluenceTool):
+    def __init__(self, toolset: ConfluenceToolset) -> None:
+        super().__init__(
+            toolset=toolset,
+            name="confluence_get_comments",
+            description=(
+                "Get comments on a Confluence page. "
+                "Returns a paginated list of comments with their content converted to markdown. "
+                "Use confluence_get_page first — if childTypes.comment is true, call this to read comments."
+            ),
+            parameters={
+                "content_id": ToolParameter(
+                    description="The content ID of the page to get comments for.",
+                    type="string",
+                    required=True,
+                ),
+                "limit": ToolParameter(
+                    description="Maximum number of comments to return (default: 25, max: 100).",
+                    type="integer",
+                    required=False,
+                ),
+                "start": ToolParameter(
+                    description="Starting index for pagination (default: 0).",
+                    type="integer",
+                    required=False,
+                ),
+            },
+        )
+
+    def _invoke(self, params: dict, context: ToolInvokeContext) -> StructuredToolResult:
+        content_id = params["content_id"]
+        limit = min(params.get("limit", 25), 100)
+        start = params.get("start", 0)
+
+        try:
+            data = self._toolset.make_request(
+                f"/rest/api/content/{content_id}/child/comment",
+                query_params={
+                    "limit": str(limit),
+                    "start": str(start),
+                    "expand": "body.storage,version",
+                },
+            )
+        except requests.exceptions.HTTPError as e:
+            return StructuredToolResult(
+                status=StructuredToolResultStatus.ERROR,
+                error=f"Failed to get comments for page {content_id}: HTTP {e.response.status_code}: {e.response.text}",
+                params=params,
+            )
+        except Exception as e:
+            return StructuredToolResult(
+                status=StructuredToolResultStatus.ERROR,
+                error=f"Failed to get comments for page {content_id}: {e}",
+                params=params,
+            )
+
+        comments = []
+        for item in data.get("results", []):
+            item = self._convert_body(item)
+            item = self._strip_metadata(item)
+            comments.append(item)
+
+        return StructuredToolResult(
+            status=StructuredToolResultStatus.SUCCESS,
+            data={
+                "page_id": content_id,
+                "total_size": data.get("size", len(comments)),
+                "start": start,
+                "limit": limit,
+                "results": comments,
+            },
+            params=params,
+        )
+
+    def get_parameterized_one_liner(self, params: Dict) -> str:
+        content_id = params.get("content_id", "unknown")
+        return f"{toolset_name_for_one_liner(self._toolset.name)}: Get comments on page {content_id}"
