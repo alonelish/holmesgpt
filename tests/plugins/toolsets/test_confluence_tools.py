@@ -439,8 +439,9 @@ class TestGatewayAutoDetection:
         assert ok is True
         assert ts._gateway_base_url == f"{ATLASSIAN_GATEWAY_BASE}/abc-123"
 
-    def test_gateway_fallback_on_403(self):
-        """When direct URL returns 403 'not permitted', auto-detect cloud_id and switch to gateway."""
+    @pytest.mark.parametrize("status_code", [401, 403])
+    def test_gateway_fallback_on_auth_error(self, status_code):
+        """When direct URL returns 401 or 403, auto-detect cloud_id and switch to gateway."""
         ts = ConfluenceToolset()
         config = {
             "api_url": "https://mycompany.atlassian.net",
@@ -448,10 +449,10 @@ class TestGatewayAutoDetection:
             "api_key": "scoped-token",
         }
 
-        # First call (direct) fails with 403, second call (gateway) succeeds
-        forbidden_resp = MagicMock()
-        forbidden_resp.status_code = 403
-        forbidden_resp.text = '{"message":"Current user not permitted to use Confluence"}'
+        # First call (direct) fails, second call (gateway) succeeds
+        error_resp = MagicMock()
+        error_resp.status_code = status_code
+        error_resp.text = '{"message":"auth error"}'
 
         call_count = 0
 
@@ -459,7 +460,7 @@ class TestGatewayAutoDetection:
             nonlocal call_count
             call_count += 1
             if call_count == 1:
-                raise requests.exceptions.HTTPError(response=forbidden_resp)
+                raise requests.exceptions.HTTPError(response=error_resp)
             return {"results": []}
 
         tenant_resp = MagicMock()

@@ -185,15 +185,15 @@ class ConfluenceToolset(Toolset):
             return True, "Confluence API is accessible."
         except requests.exceptions.HTTPError as e:
             status = e.response.status_code
+            # Scoped tokens on Cloud return 401 or 403 on direct site URLs.
+            # Try the api.atlassian.com gateway automatically before giving up.
+            if status in (401, 403) and self._is_cloud_url() and not self._gateway_base_url:
+                gateway_ok, gateway_msg = self._try_gateway_fallback()
+                if gateway_ok:
+                    return True, gateway_msg
             if status == 401:
                 return False, f"Confluence authentication failed. Check user/api_key. HTTP {status}: {e.response.text}"
             if status == 403:
-                # Scoped tokens on Cloud return 403 "not permitted" on direct URLs.
-                # Try the api.atlassian.com gateway automatically.
-                if self._is_cloud_url() and not self._gateway_base_url:
-                    gateway_ok, gateway_msg = self._try_gateway_fallback()
-                    if gateway_ok:
-                        return True, gateway_msg
                 return False, f"Confluence access denied. Check permissions. HTTP {status}: {e.response.text}"
             return False, f"Confluence API error: HTTP {status}: {e.response.text}"
         except requests.exceptions.ConnectionError as e:
