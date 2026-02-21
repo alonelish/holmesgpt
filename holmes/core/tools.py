@@ -127,7 +127,7 @@ class StructuredToolResult(BaseModel):
 class ApprovalRequirement(BaseModel):
     needs_approval: bool
     reason: str = ""
-    # Prefixes to save when user approves (for bash toolset)
+    # Prefixes/domains to save when user approves (used by bash for command prefixes, HTTP for domains)
     prefixes_to_save: Optional[List[str]] = None
 
 
@@ -186,7 +186,7 @@ class ToolInvokeContext(BaseModel):
     tool_name: str
     session_approved_prefixes: List[
         str
-    ] = []  # Bash prefixes approved during this session
+    ] = []  # Prefixes/domains approved during this session (bash commands, HTTP domains)
     request_context: Optional[Dict[str, Any]] = None
 
     def model_dump(self, **kwargs):

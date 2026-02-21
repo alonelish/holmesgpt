@@ -38,7 +38,7 @@ from holmes.plugins.toolsets.elasticsearch.opensearch_query_assist import (
 from holmes.plugins.toolsets.grafana.loki.toolset_grafana_loki import GrafanaLokiToolset
 from holmes.plugins.toolsets.grafana.toolset_grafana import GrafanaToolset
 from holmes.plugins.toolsets.grafana.toolset_grafana_tempo import GrafanaTempoToolset
-from holmes.plugins.toolsets.http.http_toolset import HttpToolset
+from holmes.plugins.toolsets.http.http_toolset import GenericHttpToolset, HttpToolset
 from holmes.plugins.toolsets.internet.internet import InternetToolset
 from holmes.plugins.toolsets.internet.notion import NotionToolset
 from holmes.plugins.toolsets.investigator.core_investigation import (
@@ -114,6 +114,7 @@ def load_python_toolsets(
         ServiceNowTablesToolset(),
         ElasticsearchDataToolset(),
         ElasticsearchClusterToolset(),
+        GenericHttpToolset(),
     ]
 
     if not DISABLE_PROMETHEUS_TOOLSET:

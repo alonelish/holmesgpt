@@ -178,7 +178,11 @@ class FetchWebpage(Tool):
     def __init__(self, toolset: "InternetToolset"):
         super().__init__(
             name="fetch_webpage",
-            description="Fetch a webpage. Use this to fetch runbooks if they are present before starting your investigation (if no other tool like confluence is more appropriate)",
+            description=(
+                "Fetch a webpage and convert HTML to readable text. "
+                "Use this for fetching runbooks, documentation pages, or other web content. "
+                "For API calls that return JSON data, use the http_request tool instead."
+            ),
             parameters={
                 "url": ToolParameter(
                     description="The URL to fetch",
@@ -275,7 +279,7 @@ class InternetToolset(InternetBaseToolset):
     def __init__(self):
         super().__init__(
             name="internet",
-            description="Fetch webpages",
+            description="Fetch webpages and convert HTML to readable text (for runbooks, docs, web content)",
             icon_url="https://platform.robusta.dev/demos/internet-access.svg",
             tools=[
                 FetchWebpage(self),

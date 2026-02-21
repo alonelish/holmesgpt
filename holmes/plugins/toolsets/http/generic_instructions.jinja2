@@ -1,0 +1,15 @@
+You have access to a generic HTTP tool (http_request) for making API requests.
+
+This is a **fallback tool** — always prefer dedicated toolsets (Grafana, Prometheus, Elasticsearch, etc.) when available.
+
+Use http_request only when:
+1. No dedicated toolset exists for the API you need to access
+2. You need to query an external REST API to gather diagnostic information
+
+Important behavior:
+- Requests to domains without pre-configured access will require user approval before execution
+- Once a domain is approved, subsequent requests to that domain are auto-approved for the rest of the session
+- Requests are sent without authentication unless the domain has a pre-configured endpoint with auth
+- The tool supports JSON response filtering with `jq` expressions and `max_depth`
+
+For fetching web pages or HTML documentation, use the fetch_webpage tool instead.

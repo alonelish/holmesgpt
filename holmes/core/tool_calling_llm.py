@@ -98,18 +98,18 @@ def _extract_text_from_content(content: Any) -> str:
     return ""
 
 
-def extract_bash_session_prefixes(messages: List[Dict[str, Any]]) -> List[str]:
-    """Extract bash session approved prefixes from conversation history.
+def extract_session_approved_prefixes(messages: List[Dict[str, Any]]) -> List[str]:
+    """Extract session-approved prefixes from conversation history.
 
-    Scans tool result messages for bash_session_approved_prefixes stored in
-    tool_call_metadata. These prefixes were approved by the user via the
-    "Yes, and don't ask again" option.
+    Scans tool result messages for approved prefixes stored in tool_call_metadata.
+    Supports both bash command prefixes (bash_session_approved_prefixes) and
+    HTTP domains (http_session_approved_domains), approved via "Yes, and don't ask again".
 
     Args:
         messages: Conversation history messages
 
     Returns:
-        List of approved prefixes accumulated from all tool results
+        List of approved prefixes/domains accumulated from all tool results
     """
     prefixes: set[str] = set()
 
@@ -131,14 +131,20 @@ def extract_bash_session_prefixes(messages: List[Dict[str, Any]]) -> List[str]:
             metadata = json.loads(match.group(1))
             if "bash_session_approved_prefixes" in metadata:
                 prefixes.update(metadata["bash_session_approved_prefixes"])
+            if "http_session_approved_domains" in metadata:
+                prefixes.update(metadata["http_session_approved_domains"])
         except (json.JSONDecodeError, KeyError):
             continue
 
     if prefixes:
         logging.info(
-            f"Found {len(prefixes)} session-approved bash prefixes from conversation: {list(prefixes)}"
+            f"Found {len(prefixes)} session-approved prefixes from conversation: {list(prefixes)}"
         )
     return list(prefixes)
+
+
+# Backwards-compatible alias
+extract_bash_session_prefixes = extract_session_approved_prefixes
 
 
 class LLMCosts(BaseModel):
@@ -323,7 +329,7 @@ class ToolCallingLLM:
             logging.error(error_message)
             raise Exception(error_message)
         # Extract existing session prefixes from conversation history
-        session_prefixes = extract_bash_session_prefixes(messages)
+        session_prefixes = extract_session_approved_prefixes(messages)
 
         for tool_call_with_decision in pending_tool_calls:
             tool_call_message: dict
@@ -362,12 +368,22 @@ class ToolCallingLLM:
             # If user chose "Yes, and don't ask again", include prefixes in metadata
             extra_metadata = None
             if decision and decision.approved and decision.save_prefixes:
-                logging.info(
-                    f"Saving bash session prefixes for future commands: {decision.save_prefixes}"
-                )
-                extra_metadata = {
-                    "bash_session_approved_prefixes": decision.save_prefixes
-                }
+                tool_name = tool_call.function.name
+                is_http_tool = tool_name.endswith("_request") and tool_name != "bash"
+                if is_http_tool:
+                    logging.info(
+                        f"Saving HTTP session-approved domains: {decision.save_prefixes}"
+                    )
+                    extra_metadata = {
+                        "http_session_approved_domains": decision.save_prefixes
+                    }
+                else:
+                    logging.info(
+                        f"Saving bash session prefixes for future commands: {decision.save_prefixes}"
+                    )
+                    extra_metadata = {
+                        "bash_session_approved_prefixes": decision.save_prefixes
+                    }
 
             tool_call_message = tool_result.as_tool_call_message(
                 extra_metadata=extra_metadata
@@ -1088,7 +1104,7 @@ class ToolCallingLLM:
             approval_required_tools = []
 
             # Extract session approved prefixes from conversation history
-            session_prefixes = extract_bash_session_prefixes(messages)
+            session_prefixes = extract_session_approved_prefixes(messages)
 
             with concurrent.futures.ThreadPoolExecutor(max_workers=16) as executor:
                 futures = []

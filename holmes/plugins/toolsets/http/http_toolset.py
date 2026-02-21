@@ -10,6 +10,7 @@ import requests  # type: ignore
 from pydantic import BaseModel, Field, model_validator
 
 from holmes.core.tools import (
+    ApprovalRequirement,
     CallablePrerequisite,
     StructuredToolResult,
     StructuredToolResultStatus,
@@ -17,6 +18,7 @@ from holmes.core.tools import (
     ToolInvokeContext,
     ToolParameter,
     Toolset,
+    ToolsetTag,
 )
 from holmes.plugins.toolsets.json_filter_mixin import JsonFilterMixin
 
@@ -342,7 +344,13 @@ class HttpToolset(Toolset):
 
 
 class HttpRequest(Tool, JsonFilterMixin):
-    def __init__(self, toolset: HttpToolset, tool_name: str = "http_request", tool_description: Optional[str] = None):
+    def __init__(
+        self,
+        toolset: HttpToolset,
+        tool_name: str = "http_request",
+        tool_description: Optional[str] = None,
+        dynamic_approval: bool = False,
+    ):
         if not tool_description:
             if toolset.name == "http":
                 tool_description = "Make HTTP requests to whitelisted API endpoints"
@@ -351,12 +359,12 @@ class HttpRequest(Tool, JsonFilterMixin):
 
         base_params = {
             "url": ToolParameter(
-                description="The full URL to request (must match a whitelisted endpoint)",
+                description="The full URL to request",
                 type="string",
                 required=True,
             ),
             "method": ToolParameter(
-                description="HTTP method (default: GET). Must be allowed by the endpoint configuration.",
+                description="HTTP method (default: GET).",
                 type="string",
                 required=False,
             ),
@@ -380,6 +388,40 @@ class HttpRequest(Tool, JsonFilterMixin):
             parameters=parameters,
         )
         self._toolset = toolset
+        self._dynamic_approval = dynamic_approval
+
+    def _extract_domain(self, url: str) -> Optional[str]:
+        try:
+            parsed = urlparse(url)
+            return parsed.hostname
+        except Exception:
+            return None
+
+    def requires_approval(
+        self, params: Dict[str, Any], context: ToolInvokeContext
+    ) -> Optional[ApprovalRequirement]:
+        if not self._dynamic_approval:
+            return None
+
+        url = params.get("url", "")
+        domain = self._extract_domain(url)
+        if not domain:
+            return None  # Let _invoke handle invalid URLs
+
+        # Check if domain is already session-approved
+        if domain in context.session_approved_prefixes:
+            return None
+
+        # Check if URL matches a configured endpoint
+        endpoint, _ = self._toolset.match_endpoint(url)
+        if endpoint is not None:
+            return None
+
+        return ApprovalRequirement(
+            needs_approval=True,
+            reason=f"HTTP request to unconfigured domain '{domain}' requires approval",
+            prefixes_to_save=[domain],
+        )
 
     def _invoke(self, params: dict, context: ToolInvokeContext) -> StructuredToolResult:
         url = params.get("url", "")
@@ -388,7 +430,15 @@ class HttpRequest(Tool, JsonFilterMixin):
         extra_headers_str = params.get("headers")
 
         endpoint, error = self._toolset.match_endpoint(url)
-        if error or endpoint is None:
+
+        # Dynamic approval fallback: domain not configured but user approved
+        if (error or endpoint is None) and self._dynamic_approval:
+            domain = self._extract_domain(url) or ""
+            if context.user_approved or domain in context.session_approved_prefixes:
+                endpoint = None
+                error = None
+
+        if error or (endpoint is None and not self._dynamic_approval):
             return StructuredToolResult(
                 status=StructuredToolResultStatus.ERROR,
                 error=error or "URL not matched",
@@ -404,7 +454,7 @@ class HttpRequest(Tool, JsonFilterMixin):
                 url=url,
             )
 
-        if not self._toolset.is_method_allowed(method, endpoint):
+        if endpoint and not self._toolset.is_method_allowed(method, endpoint):
             return StructuredToolResult(
                 status=StructuredToolResultStatus.ERROR,
                 error=f"Method {method} not allowed for this endpoint. Allowed methods: {endpoint.get_methods()}",
@@ -431,11 +481,32 @@ class HttpRequest(Tool, JsonFilterMixin):
                     url=url,
                 )
 
-        headers = self._toolset.build_headers(endpoint, extra_headers)
-        basic_auth = self._toolset.get_basic_auth(endpoint)
-        timeout = self._toolset.http_config.timeout_seconds
-        verify_ssl = self._toolset.http_config.verify_ssl
+        # Build headers and auth: use endpoint config if available, otherwise plain defaults
+        if endpoint:
+            headers = self._toolset.build_headers(endpoint, extra_headers)
+            basic_auth = self._toolset.get_basic_auth(endpoint)
+        else:
+            headers = {"Accept": "application/json", "Content-Type": "application/json"}
+            if extra_headers:
+                headers.update(extra_headers)
+            basic_auth = None
 
+        timeout = self._toolset.http_config.timeout_seconds if self._toolset._http_config else 30
+        verify_ssl = self._toolset.http_config.verify_ssl if self._toolset._http_config else True
+
+        return self._execute_request(url, method, body, headers, basic_auth, timeout, verify_ssl, params)
+
+    def _execute_request(
+        self,
+        url: str,
+        method: str,
+        body: Optional[str],
+        headers: Dict[str, str],
+        basic_auth: Optional[Tuple[str, str]],
+        timeout: int,
+        verify_ssl: bool,
+        params: dict,
+    ) -> StructuredToolResult:
         try:
             request_kwargs: Dict[str, Any] = {
                 "headers": headers,
@@ -500,3 +571,56 @@ class HttpRequest(Tool, JsonFilterMixin):
         if len(url) > 50:
             url = url[:47] + "..."
         return f"HTTP {method} {url}"
+
+
+class GenericHttpToolset(HttpToolset):
+    """Built-in always-loaded HTTP toolset that provides generic HTTP access with dynamic approval.
+
+    Unlike configured HttpToolset instances (type: http) which require pre-configured endpoints,
+    this toolset is always available and allows the LLM to make HTTP requests to any domain.
+    Requests to domains without a pre-configured endpoint require user approval before execution.
+    Once a domain is approved, subsequent requests to that domain are auto-approved for the session.
+    """
+
+    def __init__(self) -> None:
+        Toolset.__init__(
+            self,
+            name="generic_http",
+            description=(
+                "Fallback HTTP client for making API requests to any endpoint. "
+                "Requests to unconfigured domains require user approval. "
+                "Prefer dedicated API toolsets (Grafana, Prometheus, etc.) when available."
+            ),
+            icon_url="https://cdn-icons-png.flaticon.com/512/2165/2165004.png",
+            docs_url="https://holmesgpt.dev/data-sources/builtin-toolsets/http/",
+            prerequisites=[CallablePrerequisite(callable=self.prerequisites_callable)],
+            tools=[],
+            enabled=True,
+            is_default=True,
+            tags=[ToolsetTag.CORE],
+        )
+        self._http_config: Optional[HttpToolsetConfig] = None
+        self._user_llm_instructions = None
+
+    def prerequisites_callable(self, config: Dict[str, Any]) -> Tuple[bool, str]:
+        self._http_config = HttpToolsetConfig(endpoints=[], **(config or {}))
+        self.config = self._http_config
+
+        self.tools = [
+            HttpRequest(
+                self,
+                tool_name="http_request",
+                tool_description=(
+                    "Make an HTTP request to any API endpoint. "
+                    "This is a fallback tool - prefer dedicated API toolsets when available. "
+                    "Requests to domains not pre-configured will require user approval before execution."
+                ),
+                dynamic_approval=True,
+            )
+        ]
+
+        self._load_llm_instructions_from_file(
+            os.path.dirname(__file__), "generic_instructions.jinja2"
+        )
+
+        return True, "Generic HTTP toolset ready (requests to unconfigured domains require approval)"
