@@ -595,6 +595,55 @@ def test_custom_runbook_catalogs_empty_list(tmp_path):
         assert additional_search_paths is None or additional_search_paths == []
 
 
+@patch("holmes.core.toolset_manager.load_builtin_toolsets")
+def test_removed_toolsets_are_skipped(mock_load_builtin_toolsets, toolset_manager):
+    """Test that removed toolsets (helm/core, argocd/core) are silently skipped with a warning."""
+    builtin_toolset = YAMLToolset(
+        name="bash",
+        tags=[ToolsetTag.CORE],
+        description="Bash toolset",
+    )
+    mock_load_builtin_toolsets.return_value = [builtin_toolset]
+
+    # Simulate a user config that still references the removed toolsets
+    toolset_manager.toolsets = {
+        "helm/core": {"enabled": True},
+        "argocd/core": {"enabled": True},
+        "bash": {"enabled": True},
+    }
+
+    toolsets = toolset_manager._list_all_toolsets(check_prerequisites=False)
+    names = [t.name for t in toolsets]
+
+    # Removed toolsets should NOT appear
+    assert "helm/core" not in names
+    assert "argocd/core" not in names
+    # Bash should still be there
+    assert "bash" in names
+
+
+@patch("holmes.core.toolset_manager.load_builtin_toolsets")
+def test_removed_toolsets_disabled_are_skipped(mock_load_builtin_toolsets, toolset_manager):
+    """Test that removed toolsets with enabled: false are also silently skipped."""
+    builtin_toolset = YAMLToolset(
+        name="bash",
+        tags=[ToolsetTag.CORE],
+        description="Bash toolset",
+    )
+    mock_load_builtin_toolsets.return_value = [builtin_toolset]
+
+    toolset_manager.toolsets = {
+        "helm/core": {"enabled": False},
+        "argocd/core": {"enabled": False},
+    }
+
+    toolsets = toolset_manager._list_all_toolsets(check_prerequisites=False)
+    names = [t.name for t in toolsets]
+
+    assert "helm/core" not in names
+    assert "argocd/core" not in names
+
+
 def test_custom_runbook_catalogs_none(tmp_path):
     """Test that None custom_runbook_catalogs is handled correctly."""
     toolset_manager = ToolsetManager(custom_runbook_catalogs=None)

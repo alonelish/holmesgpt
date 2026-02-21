@@ -25,6 +25,13 @@ DEPRECATED_TOOLSET_NAMES: dict[str, str] = {
     "coralogix/logs": "coralogix",
 }
 
+# Toolsets that have been removed and folded into the bash toolset's allowlist.
+# References to these in user configs are silently ignored with a deprecation warning.
+REMOVED_TOOLSET_NAMES: dict[str, str] = {
+    "helm/core": "Helm commands are now in the bash toolset's allowlist (helm list, helm get, helm status, helm history).",
+    "argocd/core": "ArgoCD commands are now in the bash toolset's allowlist (argocd app list, argocd app get, etc.).",
+}
+
 
 def handle_deprecated_toolset_name(
     toolset_name: str, builtin_toolset_names: list[str]
@@ -199,6 +206,14 @@ class ToolsetManager:
         builtin_toolsets_dict: dict[str, dict[str, Any]] = {}
         custom_toolsets_dict: dict[str, dict[str, Any]] = {}
         for toolset_name, toolset_config in toolsets.items():
+            if toolset_name in REMOVED_TOOLSET_NAMES:
+                logging.warning(
+                    f"The toolset '{toolset_name}' has been removed. "
+                    f"{REMOVED_TOOLSET_NAMES[toolset_name]} "
+                    "You can safely remove this entry from your config."
+                )
+                continue
+
             toolset_name = handle_deprecated_toolset_name(
                 toolset_name, builtin_toolset_names
             )
