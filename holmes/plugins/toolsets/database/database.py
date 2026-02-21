@@ -20,10 +20,7 @@ from holmes.core.tools import (
 from holmes.plugins.toolsets.utils import toolset_name_for_one_liner
 from holmes.utils.pydantic_utils import ToolsetConfig
 
-try:
-    import sqlalchemy
-except ImportError:
-    sqlalchemy = None  # type: ignore[assignment]
+import sqlalchemy
 
 logger = logging.getLogger(__name__)
 
@@ -42,7 +39,7 @@ _WRITE_PATTERN = re.compile(
 # Write keywords anywhere in the query (catches writable CTEs like
 # "WITH cte AS (DELETE FROM users RETURNING *) SELECT * FROM cte")
 _WRITE_ANYWHERE_PATTERN = re.compile(
-    r"\b(INSERT|UPDATE|DELETE|DROP|CREATE|ALTER|TRUNCATE|REPLACE|MERGE|GRANT|REVOKE)\b",
+    r"\b(INSERT|UPDATE|DELETE|DROP|CREATE|ALTER|TRUNCATE|REPLACE|MERGE|GRANT|REVOKE|VACUUM)\b",
     re.IGNORECASE,
 )
 
@@ -150,7 +147,6 @@ class DatabaseToolset(Toolset):
 
     def __init__(self, name: str = "database/sql", **kwargs: Any):
         llm_instructions = kwargs.pop("llm_instructions", None)
-        config = kwargs.pop("config", None)
         enabled = kwargs.pop("enabled", False)
         kwargs.pop("type", None)
 
@@ -183,9 +179,14 @@ class DatabaseToolset(Toolset):
         )
 
         self._user_llm_instructions = llm_instructions
+        self._dialect: Optional[str] = None
+        if self._user_llm_instructions:
+            self.llm_instructions = (
+                (self.llm_instructions or "")
+                + "\n\n## Database-Specific Instructions\n\n"
+                + self._user_llm_instructions
+            )
 
-        if config:
-            self.config = config
 
     def prerequisites_callable(self, config: Dict[str, Any]) -> Tuple[bool, str]:
         try:
@@ -196,17 +197,31 @@ class DatabaseToolset(Toolset):
 
     def _perform_health_check(self) -> Tuple[bool, str]:
         try:
-            if sqlalchemy is None:
-                return False, "sqlalchemy is not installed"
             url = _normalise_url(self.database_config.connection_url)
             engine = self._create_engine(url)
             with engine.connect() as conn:
                 conn.execute(sqlalchemy.text("SELECT 1"))
-            dialect = engine.dialect.name
+            self._dialect = engine.dialect.name
             engine.dispose()
-            return True, f"Connected to {dialect} database"
+            self._update_tool_descriptions()
+            return True, f"Connected to {self._dialect} database"
         except Exception as e:
             return False, f"Database connection failed: {e}"
+
+    def _update_tool_descriptions(self) -> None:
+        for tool in self.tools:
+            if isinstance(tool, DatabaseQuery):
+                tool.description = (
+                    f"Execute a {self._dialect} SQL query against the database. "
+                    "In read-only mode (default), only SELECT, SHOW, DESCRIBE, EXPLAIN, "
+                    "and WITH (CTE) statements are allowed. Write operations can be enabled via configuration. "
+                    "Returns up to 200 rows."
+                )
+                tool.parameters["sql"].description = (
+                    f"The {self._dialect} SQL query to execute. Must be a read-only statement "
+                    "(SELECT, SHOW, DESCRIBE, EXPLAIN, WITH). "
+                    "Always limit the number of rows returned using the appropriate syntax for the database."
+                )
 
     def _create_engine(self, url: str):
         connect_args = {}
@@ -237,9 +252,6 @@ class DatabaseToolset(Toolset):
         Returns:
             Dict with keys: columns, rows, row_count, truncated
         """
-        if sqlalchemy is None:
-            raise RuntimeError("sqlalchemy is not installed")
-
         if self.database_config.read_only:
             if _WRITE_PATTERN.match(sql):
                 raise ValueError(
