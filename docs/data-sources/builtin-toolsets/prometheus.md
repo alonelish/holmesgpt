@@ -85,24 +85,24 @@ This will print all possible Prometheus service URLs in your cluster. Pick the o
 
 ## Coralogix
 
+**Setup:**
+
+1. Find your [regional PromQL endpoint](https://coralogix.com/docs/integrations/coralogix-endpoints/#promql)
+2. Create API key in Coralogix (Data Flow → API Keys) with metrics query permissions
+3. Store key in Kubernetes secret and reference via `{{ env.CORALOGIX_API_KEY }}`
+
 ```yaml-toolset-config
 toolsets:
     prometheus/metrics:
         enabled: true
         config:
-            prometheus_url: "https://prom-api.<region>.coralogix.com"  # See regions below
+            prometheus_url: "https://prom-api.<region>.coralogix.com"
             additional_headers:
                 token: "{{ env.CORALOGIX_API_KEY }}"
             discover_metrics_from_last_hours: 72
             # query_timeout_seconds_default: 20
             # query_timeout_seconds_hard_max: 180
 ```
-
-**Setup:**
-
-1. Find your [regional PromQL endpoint](https://coralogix.com/docs/integrations/coralogix-endpoints/#promql)
-2. Create API key in Coralogix (Data Flow → API Keys) with metrics query permissions
-3. Store key in Kubernetes secret and reference via `{{ env.CORALOGIX_API_KEY }}`
 
 ---
 
@@ -135,6 +135,18 @@ toolsets:
 
 ## Azure Managed Prometheus
 
+**Prerequisites:**
+
+- An Azure Monitor workspace with Managed Prometheus enabled
+- A service principal or managed identity with access to the workspace
+
+**Environment variables:**
+
+- `AZURE_CLIENT_ID`: Service principal client ID
+- `AZURE_TENANT_ID`: Azure AD tenant ID
+- `AZURE_CLIENT_SECRET`: Service principal secret
+- `AZURE_USE_MANAGED_ID`: Set to `true` for managed identity auth
+
 ```yaml-toolset-config
 toolsets:
     prometheus/metrics:
@@ -149,13 +161,6 @@ toolsets:
             # verify_ssl: true                         # SSL verification (default: true)
 ```
 
-**Environment variables** (alternative to config):
-
-- `AZURE_CLIENT_ID`: Service principal client ID
-- `AZURE_TENANT_ID`: Azure AD tenant ID
-- `AZURE_CLIENT_SECRET`: Service principal secret
-- `AZURE_USE_MANAGED_ID`: Set to `true` for managed identity auth
-
 **Notes:**
 
 - Authentication is handled automatically via Azure AD
@@ -166,6 +171,11 @@ toolsets:
 
 ## Google Managed Prometheus
 
+**Prerequisites:**
+
+- Google Managed Prometheus enabled
+- [Prometheus Frontend](https://cloud.google.com/stackdriver/docs/managed-prometheus/query-api-ui#ui-prometheus) deployed and accessible
+
 ```yaml-toolset-config
 toolsets:
     prometheus/metrics:
@@ -174,26 +184,11 @@ toolsets:
             prometheus_url: http://frontend.<namespace>.svc.cluster.local:9090
 ```
 
-**Prerequisites:**
-
-- Google Managed Prometheus enabled
-- [Prometheus Frontend](https://cloud.google.com/stackdriver/docs/managed-prometheus/query-api-ui#ui-prometheus) deployed and accessible
-
 Authentication is automatic via Workload Identity or default service account.
 
 ---
 
 ## Grafana Cloud (Mimir)
-
-```yaml-toolset-config
-toolsets:
-    prometheus/metrics:
-        enabled: true
-        config:
-            prometheus_url: https://<instance>.grafana.net/api/datasources/proxy/uid/<datasource-uid>
-            additional_headers:
-                Authorization: "Bearer <glsa_token>"
-```
 
 **Setup:**
 
@@ -204,7 +199,16 @@ toolsets:
         "https://<instance>.grafana.net/api/datasources" | \
         jq '.[] | select(.type=="prometheus") | .uid'
    ```
-3. Use the proxy endpoint format: `/api/datasources/proxy/uid/<uid>`
+
+```yaml-toolset-config
+toolsets:
+    prometheus/metrics:
+        enabled: true
+        config:
+            prometheus_url: https://<instance>.grafana.net/api/datasources/proxy/uid/<datasource-uid>
+            additional_headers:
+                Authorization: "Bearer <glsa_token>"
+```
 
 ---
 
