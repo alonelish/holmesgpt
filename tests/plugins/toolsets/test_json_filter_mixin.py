@@ -51,6 +51,9 @@ def test_invalid_jq_returns_data_with_error_hint():
     assert "jq_error" in result.data
     assert "Invalid jq expression" in result.data["jq_error"]
     assert "raw_response_preview" in result.data
+    # Preview is a size-capped string, not a dict
+    assert isinstance(result.data["raw_response_preview"], str)
+    assert "dashboard" in result.data["raw_response_preview"]
 
 
 def test_depth_applies_after_filters():
