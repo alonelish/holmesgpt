@@ -33,10 +33,6 @@ tags:
   - datadog
   - embeds
 
-toolsets_matrix:
-  - toolsets.yaml
-  - toolsets_http.yaml
-
 after_test: |
   # Cleanup the deployed resources
   kubectl delete -f manifest.yaml --ignore-not-found=true
