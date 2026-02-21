@@ -5,6 +5,7 @@ import requests
 
 from holmes.core.tools import ToolInvokeContext, ToolsetStatusEnum
 from holmes.plugins.toolsets.confluence.confluence import (
+    ATLASSIAN_GATEWAY_BASE,
     ConfluenceConfig,
     ConfluenceToolset,
     GetChildPages,
@@ -408,3 +409,170 @@ class TestGetComments:
     def test_one_liner(self, toolset):
         tool = GetComments(toolset)
         assert "100" in tool.get_parameterized_one_liner({"content_id": "100"})
+
+
+# ---------------------------------------------------------------------------
+# Gateway auto-detection for scoped tokens
+# ---------------------------------------------------------------------------
+
+
+class TestGatewayAutoDetection:
+    def test_direct_url_used_when_no_gateway_needed(self, toolset):
+        """When direct URL works, no gateway is activated."""
+        url = toolset._build_url("/rest/api/space", {"limit": "1"})
+        assert url.startswith("https://test.atlassian.net/wiki/rest/api/space")
+        assert toolset._gateway_base_url is None
+
+    def test_gateway_activated_with_explicit_cloud_id(self):
+        """When cloud_id is configured, gateway is activated during health check."""
+        ts = ConfluenceToolset()
+        config = {
+            "api_url": "https://mycompany.atlassian.net",
+            "user": "user@test.com",
+            "api_key": "scoped-token",
+            "cloud_id": "abc-123",
+        }
+
+        with patch.object(ConfluenceToolset, "make_request", return_value={"results": []}):
+            ok, msg = ts.prerequisites_callable(config)
+
+        assert ok is True
+        assert ts._gateway_base_url == f"{ATLASSIAN_GATEWAY_BASE}/abc-123"
+
+    def test_gateway_fallback_on_403(self):
+        """When direct URL returns 403 'not permitted', auto-detect cloud_id and switch to gateway."""
+        ts = ConfluenceToolset()
+        config = {
+            "api_url": "https://mycompany.atlassian.net",
+            "user": "user@test.com",
+            "api_key": "scoped-token",
+        }
+
+        # First call (direct) fails with 403, second call (gateway) succeeds
+        forbidden_resp = MagicMock()
+        forbidden_resp.status_code = 403
+        forbidden_resp.text = '{"message":"Current user not permitted to use Confluence"}'
+
+        call_count = 0
+
+        def side_effect(*args, **kwargs):
+            nonlocal call_count
+            call_count += 1
+            if call_count == 1:
+                raise requests.exceptions.HTTPError(response=forbidden_resp)
+            return {"results": []}
+
+        tenant_resp = MagicMock()
+        tenant_resp.status_code = 200
+        tenant_resp.json.return_value = {"cloudId": "detected-cloud-id"}
+        tenant_resp.raise_for_status.return_value = None
+
+        with (
+            patch.object(ConfluenceToolset, "make_request", side_effect=side_effect),
+            patch("holmes.plugins.toolsets.confluence.confluence.requests.get", return_value=tenant_resp),
+        ):
+            ok, msg = ts.prerequisites_callable(config)
+
+        assert ok is True
+        assert "gateway" in msg.lower()
+        assert ts._gateway_base_url == f"{ATLASSIAN_GATEWAY_BASE}/detected-cloud-id"
+
+    def test_gateway_url_used_in_build_url(self):
+        """Once gateway is activated, _build_url uses the gateway base URL."""
+        ts = ConfluenceToolset()
+        ts.config = ConfluenceConfig(
+            api_url="https://mycompany.atlassian.net",
+            user="user@test.com",
+            api_key="token",
+        )
+        ts._gateway_base_url = f"{ATLASSIAN_GATEWAY_BASE}/my-cloud-id"
+
+        url = ts._build_url("/rest/api/space", {"limit": "5"})
+        assert url.startswith(f"{ATLASSIAN_GATEWAY_BASE}/my-cloud-id/wiki/rest/api/space")
+        assert "mycompany.atlassian.net" not in url
+
+    def test_no_gateway_for_data_center(self):
+        """Data Center URLs (non-atlassian.net) should never trigger gateway fallback."""
+        ts = ConfluenceToolset()
+        config = {
+            "api_url": "https://confluence.mycompany.com",
+            "api_key": "pat-token",
+            "auth_type": "bearer",
+            "api_path_prefix": "",
+        }
+
+        forbidden_resp = MagicMock()
+        forbidden_resp.status_code = 403
+        forbidden_resp.text = "Forbidden"
+
+        with patch.object(
+            ConfluenceToolset,
+            "make_request",
+            side_effect=requests.exceptions.HTTPError(response=forbidden_resp),
+        ):
+            ok, msg = ts.prerequisites_callable(config)
+
+        assert ok is False
+        assert ts._gateway_base_url is None
+
+    def test_gateway_fallback_fails_gracefully(self):
+        """If gateway fallback also fails, report the original error."""
+        ts = ConfluenceToolset()
+        config = {
+            "api_url": "https://mycompany.atlassian.net",
+            "user": "user@test.com",
+            "api_key": "bad-token",
+        }
+
+        forbidden_resp = MagicMock()
+        forbidden_resp.status_code = 403
+        forbidden_resp.text = '{"message":"Current user not permitted to use Confluence"}'
+
+        # Both direct and gateway calls fail with 403
+        with (
+            patch.object(
+                ConfluenceToolset,
+                "make_request",
+                side_effect=requests.exceptions.HTTPError(response=forbidden_resp),
+            ),
+            patch("holmes.plugins.toolsets.confluence.confluence.requests.get") as mock_get,
+        ):
+            tenant_resp = MagicMock()
+            tenant_resp.status_code = 200
+            tenant_resp.json.return_value = {"cloudId": "some-id"}
+            tenant_resp.raise_for_status.return_value = None
+            mock_get.return_value = tenant_resp
+
+            ok, msg = ts.prerequisites_callable(config)
+
+        assert ok is False
+        assert ts._gateway_base_url is None
+
+    def test_cloud_id_resolution_failure(self):
+        """If cloud_id cannot be resolved, fallback fails gracefully."""
+        ts = ConfluenceToolset()
+        config = {
+            "api_url": "https://mycompany.atlassian.net",
+            "user": "user@test.com",
+            "api_key": "scoped-token",
+        }
+
+        forbidden_resp = MagicMock()
+        forbidden_resp.status_code = 403
+        forbidden_resp.text = '{"message":"Current user not permitted to use Confluence"}'
+
+        with (
+            patch.object(
+                ConfluenceToolset,
+                "make_request",
+                side_effect=requests.exceptions.HTTPError(response=forbidden_resp),
+            ),
+            patch(
+                "holmes.plugins.toolsets.confluence.confluence.requests.get",
+                side_effect=requests.exceptions.ConnectionError("DNS failure"),
+            ),
+        ):
+            ok, msg = ts.prerequisites_callable(config)
+
+        assert ok is False
+        assert ts._gateway_base_url is None

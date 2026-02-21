@@ -12,7 +12,7 @@ Works with both **Confluence Cloud** and **Confluence Data Center / Server**.
 
     **Create an API token:**
 
-    Go to [Atlassian API Tokens](https://id.atlassian.com/manage/api-tokens){:target="_blank"} and create a new token.
+    Go to [Atlassian API Tokens](https://id.atlassian.com/manage/api-tokens){:target="_blank"} and create a new token. For service accounts, create a scoped API token in the [Atlassian Admin](https://admin.atlassian.com){:target="_blank"} under **Security** > **API tokens**.
 
     === "Holmes CLI"
 
@@ -60,6 +60,9 @@ Works with both **Confluence Cloud** and **Confluence Data Center / Server**.
         ```
 
         --8<-- "snippets/helm_upgrade_command.md"
+
+    !!! note "Scoped tokens and service accounts"
+        Scoped API tokens and service account tokens on Confluence Cloud require routing through the Atlassian API gateway (`api.atlassian.com`). HolmesGPT auto-detects this and switches to the gateway transparently — no extra configuration needed. If auto-detection doesn't work, you can set `cloud_id` explicitly (find it at `https://yourcompany.atlassian.net/_edge/tenant_info`).
 
 === "Confluence Data Center / Server"
 
@@ -133,6 +136,7 @@ Works with both **Confluence Cloud** and **Confluence Data Center / Server**.
 | `user` | `null` | User email (Cloud) or username (Data Center). Required for basic auth. |
 | `auth_type` | `basic` | `basic` for Cloud or Data Center username/password. `bearer` for Data Center PATs. |
 | `api_path_prefix` | `/wiki` | Path prefix before `/rest/api`. Cloud uses `/wiki`. Data Center typically uses `""` (empty). |
+| `cloud_id` | `null` | Atlassian Cloud ID for the API gateway. Auto-detected for Cloud URLs when needed (scoped tokens / service accounts). |
 
 ## Tools
 

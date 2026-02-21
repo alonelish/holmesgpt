@@ -1,5 +1,6 @@
 import logging
 import os
+import re
 from abc import ABC
 from typing import Any, ClassVar, Dict, Literal, Optional, Tuple, Type, cast
 
@@ -21,6 +22,10 @@ from holmes.plugins.toolsets.utils import toolset_name_for_one_liner
 from holmes.utils.pydantic_utils import ToolsetConfig
 
 logger = logging.getLogger(__name__)
+
+ATLASSIAN_CLOUD_PATTERN = re.compile(r"https?://[^/]+\.atlassian\.net")
+ATLASSIAN_GATEWAY_BASE = "https://api.atlassian.com/ex/confluence"
+NOT_PERMITTED_MSG = "not permitted to use Confluence"
 
 
 class ConfluenceConfig(ToolsetConfig):
@@ -78,6 +83,15 @@ class ConfluenceConfig(ToolsetConfig):
         description="Path prefix before /rest/api. Cloud uses '/wiki' (default). Data Center typically uses '' (empty string). Set to match your instance's context path.",
         examples=["/wiki", "", "/confluence"],
     )
+    cloud_id: Optional[str] = Field(
+        default=None,
+        title="Cloud ID",
+        description=(
+            "Atlassian Cloud ID for routing through the API gateway (api.atlassian.com). "
+            "Required for scoped API tokens and service accounts on Confluence Cloud. "
+            "If not set, it will be auto-detected when needed."
+        ),
+    )
 
     @model_validator(mode="after")
     def handle_deprecated_fields(self) -> "ConfluenceConfig":
@@ -123,25 +137,63 @@ class ConfluenceToolset(Toolset):
             ],
             tags=[ToolsetTag.CORE],
         )
-
+        self._gateway_base_url: Optional[str] = None
         self._load_llm_instructions_from_file(os.path.dirname(__file__), "instructions.jinja2")
 
     def prerequisites_callable(self, config: dict[str, Any]) -> Tuple[bool, str]:
         try:
             self.config = ConfluenceConfig(**config)
+            self._gateway_base_url: Optional[str] = None
             return self._perform_health_check()
         except Exception as e:
             return False, f"Failed to validate Confluence configuration: {e}"
 
-    def _perform_health_check(self) -> Tuple[bool, str]:
+    def _is_cloud_url(self) -> bool:
+        return bool(ATLASSIAN_CLOUD_PATTERN.match(self.confluence_config.api_url))
+
+    def _resolve_cloud_id(self) -> Optional[str]:
+        """Fetch the Cloud ID from the Atlassian tenant info endpoint."""
+        if self.confluence_config.cloud_id:
+            return self.confluence_config.cloud_id
         try:
-            data = self.make_request("/rest/api/space", query_params={"limit": "1"})
+            base = self.confluence_config.api_url.rstrip("/")
+            resp = requests.get(f"{base}/_edge/tenant_info", timeout=10)
+            resp.raise_for_status()
+            cloud_id = resp.json().get("cloudId")
+            if cloud_id:
+                logger.info("Resolved Atlassian Cloud ID: %s", cloud_id)
+            return cloud_id
+        except Exception as e:
+            logger.debug("Failed to resolve Cloud ID from tenant_info: %s", e)
+            return None
+
+    def _activate_gateway(self, cloud_id: str) -> None:
+        """Switch all future requests to route through the Atlassian API gateway."""
+        self._gateway_base_url = f"{ATLASSIAN_GATEWAY_BASE}/{cloud_id}"
+        logger.info(
+            "Using Atlassian API gateway: %s (scoped token detected)",
+            self._gateway_base_url,
+        )
+
+    def _perform_health_check(self) -> Tuple[bool, str]:
+        # If cloud_id is explicitly configured, activate gateway immediately
+        if self.confluence_config.cloud_id and self._is_cloud_url():
+            self._activate_gateway(self.confluence_config.cloud_id)
+
+        try:
+            self.make_request("/rest/api/space", query_params={"limit": "1"})
             return True, "Confluence API is accessible."
         except requests.exceptions.HTTPError as e:
             status = e.response.status_code
             if status == 401:
                 return False, f"Confluence authentication failed. Check user/api_key. HTTP {status}: {e.response.text}"
             if status == 403:
+                # Scoped tokens on Cloud return 403 "not permitted" on direct URLs.
+                # Try the api.atlassian.com gateway automatically.
+                if self._is_cloud_url() and not self._gateway_base_url:
+                    gateway_ok, gateway_msg = self._try_gateway_fallback()
+                    if gateway_ok:
+                        return True, gateway_msg
                 return False, f"Confluence access denied. Check permissions. HTTP {status}: {e.response.text}"
             return False, f"Confluence API error: HTTP {status}: {e.response.text}"
         except requests.exceptions.ConnectionError as e:
@@ -151,12 +203,34 @@ class ConfluenceToolset(Toolset):
         except Exception as e:
             return False, f"Confluence health check failed: {e}"
 
+    def _try_gateway_fallback(self) -> Tuple[bool, str]:
+        """Attempt to use the Atlassian API gateway for scoped tokens."""
+        cloud_id = self._resolve_cloud_id()
+        if not cloud_id:
+            return False, "Could not resolve Cloud ID for gateway fallback."
+
+        self._activate_gateway(cloud_id)
+        try:
+            self.make_request("/rest/api/space", query_params={"limit": "1"})
+            return True, "Confluence API is accessible via Atlassian API gateway (scoped token)."
+        except requests.exceptions.HTTPError as e:
+            # Gateway also failed — revert
+            self._gateway_base_url = None
+            status = e.response.status_code
+            return False, f"Confluence API gateway also failed. HTTP {status}: {e.response.text}"
+        except Exception as e:
+            self._gateway_base_url = None
+            return False, f"Confluence API gateway fallback failed: {e}"
+
     @property
     def confluence_config(self) -> ConfluenceConfig:
         return cast(ConfluenceConfig, self.config)
 
     def _build_url(self, path: str, params: Optional[Dict[str, str]] = None) -> str:
-        base = self.confluence_config.api_url.rstrip("/")
+        if self._gateway_base_url:
+            base = self._gateway_base_url.rstrip("/")
+        else:
+            base = self.confluence_config.api_url.rstrip("/")
         prefix = self.confluence_config.api_path_prefix.rstrip("/")
         url = f"{base}{prefix}{path}"
         if params:
