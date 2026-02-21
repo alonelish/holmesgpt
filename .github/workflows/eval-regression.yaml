@@ -791,7 +791,7 @@ jobs:
           ELASTICSEARCH_API_KEY: ${{ secrets.ELASTICSEARCH_API_KEY }}
           CONFLUENCE_BASE_URL: ${{ secrets.CONFLUENCE_BASE_URL }}
           CONFLUENCE_API_KEY: ${{ secrets.CONFLUENCE_API_KEY }}
-          CONFLUENCE_USER_NAME: ${{ secrets.CONFLUENCE_USER_NAME }}
+          CONFLUENCE_USER: ${{ secrets.CONFLUENCE_USER_NAME }}
           CORALOGIX_API_KEY: ${{ secrets.CORALOGIX_API_KEY }}
           CORALOGIX_SEND_API_KEY: ${{ secrets.CORALOGIX_SEND_API_KEY }}
           DATADOG_API_KEY: ${{ secrets.DATADOG_API_KEY }}
