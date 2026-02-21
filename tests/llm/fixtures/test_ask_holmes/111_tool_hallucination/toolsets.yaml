@@ -9,8 +9,6 @@ toolsets:
     enabled: False
   bash:
     enabled: False
-  argocd/core:
-    enabled: False
   aks/node-health:
     enabled: False
   confluence:
@@ -26,8 +24,6 @@ toolsets:
   kubernetes/kube-prometheus-stack:
     enabled: False
   kubernetes/krew-extras:
-    enabled: False
-  helm/core:
     enabled: False
   internet:
     enabled: False

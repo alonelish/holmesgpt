@@ -3,8 +3,6 @@ toolsets:
     enabled: true
   kubernetes/core:
     enabled: true
-  helm/core:
-    enabled: true
   internet:
     enabled: true
   kafka/admin:

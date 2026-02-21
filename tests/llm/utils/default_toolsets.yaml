@@ -4,11 +4,7 @@ toolsets:
     enabled: true
   kubernetes/logs:
     enabled: true
-  
-  # Helm toolset
-  helm/core:
-    enabled: true
-  
+
   # Core investigation and utility toolsets
   core_investigation:
     enabled: true

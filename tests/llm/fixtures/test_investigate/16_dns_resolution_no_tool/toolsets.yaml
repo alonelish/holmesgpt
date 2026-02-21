@@ -9,8 +9,6 @@ toolsets:
     enabled: false
   bash:
     enabled: false
-  helm/core:
-    enabled: false
   kafka/admin:
     enabled: false
   aks/core:

@@ -1,8 +1,10 @@
 # requires 2 env vars and/or `argocd login`:
 # ARGOCD_AUTH_TOKEN="..."
 # ARGOCD_OPTS="--port-forward --port-forward-namespace argocd --grpc-web"
+# NOTE: argocd commands are now handled via the bash toolset's allowlist.
+# Mock files need to be regenerated with --generate-mocks against a live argocd setup.
 toolsets:
-  argocd/core:
-    enabled: true
   kubernetes/core:
+    enabled: true
+  bash:
     enabled: true

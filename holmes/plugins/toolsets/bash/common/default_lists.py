@@ -53,6 +53,23 @@ CORE_ALLOW_LIST: List[str] = [
     "date",
     "which",
     "type",
+    # Helm read-only commands (API-level, RBAC-limited)
+    "helm list",
+    "helm get",
+    "helm status",
+    "helm history",
+    # ArgoCD read-only commands (API-level, token-gated)
+    "argocd app list",
+    "argocd app get",
+    "argocd app diff",
+    "argocd app manifests",
+    "argocd app resources",
+    "argocd app manifest-source",
+    "argocd app history",
+    "argocd repo list",
+    "argocd proj list",
+    "argocd proj get",
+    "argocd cluster list",
 ]
 
 # Extended allow list - adds filesystem access commands

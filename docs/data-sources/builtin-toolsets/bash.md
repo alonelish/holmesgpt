@@ -62,6 +62,8 @@ The `builtin_allowlist` field controls which commands are pre-approved:
 | JSON | `jq` |
 | Text processing | `grep`, `head`, `tail`, `sort`, `uniq`, `wc`, `cut`, `tr` |
 | System info | `id`, `whoami`, `hostname`, `uname`, `date`, `which`, `type` |
+| Helm | `helm list`, `helm get`, `helm status`, `helm history` |
+| ArgoCD | `argocd app list`, `argocd app get`, `argocd app diff`, `argocd app manifests`, `argocd app resources`, `argocd app manifest-source`, `argocd app history`, `argocd repo list`, `argocd proj list`, `argocd proj get`, `argocd cluster list` |
 
 **`extended`** (Helm default) - adds these on top of `core`:
 

@@ -33,5 +33,3 @@ toolsets:
     enabled: false
   kubernetes/logs:
     enabled: false
-  helm/core:
-    enabled: false

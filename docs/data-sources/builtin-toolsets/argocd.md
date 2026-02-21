@@ -1,13 +1,13 @@
 # ArgoCD
 
-By enabling this toolset, HolmesGPT will be able to fetch the status, deployment history, and configuration of ArgoCD applications.
+ArgoCD read-only commands are included in the [bash toolset's](bash.md) core allowlist. Once the `argocd` CLI is configured with authentication, HolmesGPT can fetch the status, deployment history, and configuration of ArgoCD applications.
 
 ![Holmes ArgoCD Demo](../../assets/Holmes_ArgoCD_demo.gif)
 
 ## Prerequisites
 
 ### Generating an ArgoCD token
-This toolset requires an `ARGOCD_AUTH_TOKEN` environment variable. Generate an auth token by following [these steps](https://argo-cd.readthedocs.io/en/stable/user-guide/commands/argocd_account_generate-token/).
+This integration requires an `ARGOCD_AUTH_TOKEN` environment variable. Generate an auth token by following [these steps](https://argo-cd.readthedocs.io/en/stable/user-guide/commands/argocd_account_generate-token/).
 
 ### Adding a Read-only Policy to ArgoCD
 HolmesGPT requires specific permissions to access ArgoCD data. Add the permissions below to your ArgoCD RBAC configuration.
@@ -43,8 +43,6 @@ In addition to setting permissions and generating an auth token, you will need t
 
 This is the recommended approach if your ArgoCD is inside your Kubernetes cluster.
 
-HolmesGPT needs permission to establish a port-forward to ArgoCD. The configuration below includes that authorization.
-
 === "Holmes CLI"
 
     Set the following environment variables:
@@ -52,14 +50,6 @@ HolmesGPT needs permission to establish a port-forward to ArgoCD. The configurat
     ```bash
     export ARGOCD_AUTH_TOKEN="<your-argocd-token>"
     export ARGOCD_OPTS="--port-forward --port-forward-namespace <your_argocd_namespace> --server <your_server_address> --grpc-web"
-    ```
-
-    Then add the following to **~/.holmes/config.yaml**:
-
-    ```yaml
-    toolsets:
-        argocd/core:
-            enabled: true
     ```
 
     --8<-- "snippets/toolset_refresh_warning.md"
@@ -77,9 +67,6 @@ HolmesGPT needs permission to establish a port-forward to ArgoCD. The configurat
               value: "<your-argocd-token>"
             - name: ARGOCD_OPTS
               value: "--port-forward --port-forward-namespace <your_argocd_namespace> --server <your_server_address> --grpc-web"
-        toolsets:
-            argocd/core:
-                enabled: true
     ```
 
     --8<-- "snippets/helm_upgrade_command.md"
@@ -105,16 +92,6 @@ This is the recommended approach if your ArgoCD is reachable through a public DN
     export ARGOCD_SERVER="argocd.example.com"
     ```
 
-    Then add the following to **~/.holmes/config.yaml**:
-
-    ```yaml
-    toolsets:
-        argocd/core:
-            enabled: true
-    ```
-
-    --8<-- "snippets/toolset_refresh_warning.md"
-
     To test, run:
 
     ```bash
@@ -130,9 +107,6 @@ This is the recommended approach if your ArgoCD is reachable through a public DN
               value: "<your-argocd-token>"
             - name: ARGOCD_SERVER
               value: "argocd.example.com"
-        toolsets:
-            argocd/core:
-                enabled: true
     ```
 
     --8<-- "snippets/helm_upgrade_command.md"
@@ -141,19 +115,16 @@ This is the recommended approach if your ArgoCD is reachable through a public DN
 
     In production, always use a Kubernetes secret instead of hardcoding the token value in your Helm values.
 
-## Capabilities
+## Common Use Cases
 
---8<-- "snippets/toolset_capabilities_intro.md"
+```bash
+holmes ask "Which ArgoCD applications are failing and why?"
+```
 
-| Tool Name | Description |
-|-----------|-------------|
-| argocd_app_list | List the applications in ArgoCD |
-| argocd_app_get | Retrieve information about an existing application, such as its status and configuration |
-| argocd_app_manifests | Retrieve manifests for an application |
-| argocd_app_resources | List resources of an application |
-| argocd_app_diff | Display the differences between the current state of an application and the desired state specified in its Git repository |
-| argocd_app_history | List the deployment history of an application in ArgoCD |
-| argocd_repo_list | List all the Git repositories that ArgoCD is currently managing |
-| argocd_proj_list | List all available projects |
-| argocd_proj_get | Retrieve information about an existing project, such as its applications and policies |
-| argocd_cluster_list | List all known clusters |
+```bash
+holmes ask "Is the demo-app out of sync? Show me the diff."
+```
+
+```bash
+holmes ask "List all ArgoCD projects and their applications"
+```
