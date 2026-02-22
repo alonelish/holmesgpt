@@ -9,7 +9,6 @@ nav:
   - Bash: bash.md
   - Cilium: cilium.md
   - ClickHouse: database-clickhouse.md
-  - CockroachDB: database-cockroachdb.md
   - Confluence: confluence.md
   - Connectivity Check: connectivity-check.md
   - Coralogix: coralogix-logs.md

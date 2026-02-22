@@ -153,7 +153,7 @@ class DatabaseToolset(Toolset):
         description = kwargs.pop("description", None)
         if not description:
             if name == "database/sql":
-                description = "Query SQL databases (PostgreSQL, MySQL, MariaDB, CockroachDB, ClickHouse, SQL Server, SQLite)"
+                description = "Query SQL databases (PostgreSQL, MySQL, MariaDB, ClickHouse, SQL Server, SQLite)"
             else:
                 description = f"Query {name} database"
 
@@ -227,9 +227,10 @@ class DatabaseToolset(Toolset):
         connect_args = {}
 
         if not self.database_config.verify_ssl:
-            # Note: PostgreSQL/CockroachDB sslmode should be in URL (?sslmode=disable)
-            # pg8000 doesn't support sslmode in connect_args
-            if "mysql" in url or "pymysql" in url:
+            if "postgresql" in url:
+                # pg8000 uses ssl_context parameter
+                connect_args["ssl_context"] = None
+            elif "mysql" in url or "pymysql" in url:
                 connect_args["ssl_disabled"] = True
             elif "clickhouse" in url:
                 connect_args["verify"] = False

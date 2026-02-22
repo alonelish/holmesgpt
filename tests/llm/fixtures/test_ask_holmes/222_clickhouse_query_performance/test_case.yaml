@@ -24,7 +24,7 @@ port_forwards:
   - namespace: app-222
     service: clickhouse
     local_port: 10222
-    remote_port: 9000
+    remote_port: 8123
 
 before_test: |
   set -e

@@ -85,9 +85,9 @@ before_test: |
 
   "
 
-  # Insert sample data using bulk inserts (100 batches of 100 rows each)
-  echo "⏳ Inserting 10K rows in bulk..."
-  for batch in {1..100}; do
+  # Insert sample data using bulk inserts (10 batches of 100 rows each)
+  echo "⏳ Inserting 1K rows in bulk..."
+  for batch in {1..10}; do
     SQL="INSERT INTO orders (customer_id, order_date, total_amount, status) VALUES "
     for i in {1..100}; do
       customer_id=$((1 + RANDOM % 1000))
