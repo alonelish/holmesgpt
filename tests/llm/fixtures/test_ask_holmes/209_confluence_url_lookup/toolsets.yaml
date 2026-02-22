@@ -1,4 +1,5 @@
-# Toolset configuration for Confluence URL lookup test
+# Toolset configuration for Confluence URL lookup test (API key variant)
+# This test explicitly uses personal API key credentials (not service account)
 toolsets:
   confluence:
     enabled: true

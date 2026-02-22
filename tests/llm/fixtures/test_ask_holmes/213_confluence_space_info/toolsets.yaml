@@ -10,8 +10,8 @@ toolsets:
           methods: ["GET"]
           auth:
             type: basic
-            username: "{{ env.CONFLUENCE_USER }}"
-            password: "{{ env.CONFLUENCE_API_KEY }}"
+            username: "{{ env.CONFLUENCE_SA_USER }}"
+            password: "{{ env.CONFLUENCE_SA_API_KEY }}"
       verify_ssl: true
       timeout_seconds: 30
     llm_instructions: |
