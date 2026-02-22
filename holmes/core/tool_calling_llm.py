@@ -452,9 +452,12 @@ class ToolCallingLLM:
         while i < max_steps:
             i += 1
             logging.debug(f"running iteration {i}")
-            # on the last step we don't allow tools - we want to force a reply, not a request to run another tool
-            tools = None if i == max_steps else tools
-            tool_choice = "auto" if tools else None
+            # on the last step we force a text reply by setting tool_choice="none"
+            # instead of clearing tools entirely, which preserves the cached prefix
+            if i == max_steps and tools:
+                tool_choice = "none"
+            else:
+                tool_choice = "auto" if tools else None
 
             limit_result = limit_input_context_window(
                 llm=self.llm, messages=messages, tools=tools
