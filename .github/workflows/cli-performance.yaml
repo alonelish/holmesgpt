@@ -1,10 +1,11 @@
 name: CLI Performance Benchmark
 
 # Measures CLI performance to catch import/init regressions.
+# Runs on push to master, comparing the new commit against its parent.
 # Uses separate jobs for true cold start isolation.
 
 on:
-  pull_request:
+  push:
     branches: [master]
     paths:
       - 'holmes/**'
@@ -14,8 +15,8 @@ on:
       - '.github/workflows/cli-performance.yaml'
 
 jobs:
-  benchmark-pr:
-    name: "Benchmark PR"
+  benchmark-current:
+    name: "Benchmark Current"
     runs-on: ubuntu-latest
     timeout-minutes: 15
     outputs:
@@ -23,7 +24,7 @@ jobs:
       llm_json: ${{ steps.benchmark.outputs.llm_json }}
 
     steps:
-      - name: Checkout PR branch
+      - name: Checkout current commit
         uses: actions/checkout@v4
 
       - name: Setup Python
@@ -46,7 +47,7 @@ jobs:
         env:
           OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
         run: |
-          echo "=== Benchmarking PR branch ==="
+          echo "=== Benchmarking current commit ==="
 
           python scripts/cli_performance_benchmark.py \
             --startup-only \
@@ -65,7 +66,7 @@ jobs:
           echo "startup_json=$(cat startup.json | jq -c)" >> "$GITHUB_OUTPUT"
 
   benchmark-master:
-    name: "Benchmark Master"
+    name: "Benchmark Previous Master"
     runs-on: ubuntu-latest
     timeout-minutes: 15
     outputs:
@@ -73,19 +74,16 @@ jobs:
       llm_json: ${{ steps.benchmark.outputs.llm_json }}
 
     steps:
-      - name: Checkout master branch
+      - name: Checkout previous master commit
         uses: actions/checkout@v4
         with:
-          ref: master
+          fetch-depth: 2
 
-      - name: Checkout benchmark script from PR
-        uses: actions/checkout@v4
-        with:
-          path: pr-scripts
-          sparse-checkout: scripts/cli_performance_benchmark.py
-
-      - name: Copy benchmark script
-        run: cp pr-scripts/scripts/cli_performance_benchmark.py scripts/
+      - name: Save benchmark script and checkout parent commit
+        run: |
+          cp scripts/cli_performance_benchmark.py /tmp/cli_performance_benchmark.py
+          git checkout HEAD~1
+          cp /tmp/cli_performance_benchmark.py scripts/cli_performance_benchmark.py
 
       - name: Setup Python
         uses: actions/setup-python@v5
@@ -107,7 +105,7 @@ jobs:
         env:
           OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
         run: |
-          echo "=== Benchmarking master branch ==="
+          echo "=== Benchmarking previous commit ==="
 
           python scripts/cli_performance_benchmark.py \
             --startup-only \
@@ -128,9 +126,7 @@ jobs:
   compare:
     name: "Compare & Report"
     runs-on: ubuntu-latest
-    needs: [benchmark-pr, benchmark-master]
-    permissions:
-      pull-requests: write
+    needs: [benchmark-current, benchmark-master]
 
     steps:
       - name: Generate comparison report
@@ -160,8 +156,8 @@ jobs:
                   f"### {status_emoji} {name}",
                   f"_{description}_",
                   "",
-                  "| Metric | PR | Master | Change |",
-                  "|--------|-----|--------|--------|",
+                  "| Metric | Current | Previous | Change |",
+                  "|--------|---------|----------|--------|",
                   f"| Cold Start | {pr['cold_start_seconds']:.2f}s | {master['cold_start_seconds']:.2f}s | {cold_diff:+.1f}% |",
                   f"| Warm Mean | {pr['warm_mean_seconds']:.2f}s | {master['warm_mean_seconds']:.2f}s | {warm_diff:+.1f}% |",
                   f"| Warm Min | {pr['warm_min_seconds']:.2f}s | {master['warm_min_seconds']:.2f}s | |",
@@ -200,7 +196,7 @@ jobs:
           report_lines.extend([
               "",
               "---",
-              f"**PR**: `{pr_startup['git_sha']}` | **Master**: `{master_startup['git_sha']}` | **Iterations**: {pr_startup['iterations']}",
+              f"**Current**: `{pr_startup['git_sha']}` | **Previous**: `{master_startup['git_sha']}` | **Iterations**: {pr_startup['iterations']}",
           ])
 
           status = 'regression' if startup_diff > 20 else ('improved' if startup_diff < -10 else 'neutral')
@@ -214,41 +210,13 @@ jobs:
 
           python3 compare.py
         env:
-          PR_STARTUP: ${{ needs.benchmark-pr.outputs.startup_json }}
+          PR_STARTUP: ${{ needs.benchmark-current.outputs.startup_json }}
           MASTER_STARTUP: ${{ needs.benchmark-master.outputs.startup_json }}
-          PR_LLM: ${{ needs.benchmark-pr.outputs.llm_json }}
+          PR_LLM: ${{ needs.benchmark-current.outputs.llm_json }}
           MASTER_LLM: ${{ needs.benchmark-master.outputs.llm_json }}
 
-      - name: Post PR comment
-        uses: actions/github-script@v7
-        with:
-          script: |
-            const fs = require('fs');
-            const report = fs.readFileSync('comparison_report.md', 'utf8');
-            const { data: comments } = await github.rest.issues.listComments({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              issue_number: context.issue.number,
-            });
-            const botComment = comments.find(c =>
-              c.user.login === 'github-actions[bot]' &&
-              (c.body.includes('CLI Performance Benchmark') || c.body.includes('CLI Startup Benchmark'))
-            );
-            if (botComment) {
-              await github.rest.issues.updateComment({
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                comment_id: botComment.id,
-                body: report,
-              });
-            } else {
-              await github.rest.issues.createComment({
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                issue_number: context.issue.number,
-                body: report,
-              });
-            }
+      - name: Write step summary
+        run: cat comparison_report.md >> "$GITHUB_STEP_SUMMARY"
 
       - name: Check for regression
         run: |

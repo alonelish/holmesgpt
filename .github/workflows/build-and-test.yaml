@@ -1,9 +1,12 @@
-# This runs on every PR to test that we are properly building binaries that work.
+# On PRs: tests Python 3.11 only (fast feedback).
+# On push to master: tests Python 3.10, 3.11, 3.12 (full compatibility check).
 # Branch protection should require the "build-and-test-gate" job.
 name: Build and test HolmesGPT
 
 on:
   pull_request:
+  push:
+    branches: [master]
   workflow_dispatch:
 
 jobs:
@@ -31,7 +34,7 @@ jobs:
             "docs/reference/http-api.md"   # contains curl tests validated by tests/test_http_docs.py
           )
 
-          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ] || [ "${{ github.event_name }}" = "push" ]; then
             echo "should_test=true" >> $GITHUB_OUTPUT
             exit 0
           fi
@@ -71,7 +74,7 @@ jobs:
     if: needs.check-changes.outputs.should_test == 'true'
     strategy:
       matrix:
-        python-version: ["3.10", "3.11", "3.12"]
+        python-version: ${{ (github.event_name == 'push' || github.event_name == 'workflow_dispatch') && fromJSON('["3.10", "3.11", "3.12"]') || fromJSON('["3.11"]') }}
 
     runs-on: ubuntu-latest
 
