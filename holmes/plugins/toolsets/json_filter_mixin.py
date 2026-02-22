@@ -100,7 +100,7 @@ class JsonFilterMixin:
                 if len(preview_str) > max_preview_chars:
                     preview_str = preview_str[:max_preview_chars] + "…(truncated)"
                 return {
-                    "jq_error": f"{error}. Use null-safe patterns like (.key // [])[] instead of .key[] to handle missing/null fields.",
+                    "jq_error": str(error),
                     "jq_expression": params["jq"],
                     "raw_response_preview": preview_str,
                 }, None
