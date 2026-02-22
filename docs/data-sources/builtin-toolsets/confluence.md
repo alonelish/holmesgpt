@@ -144,8 +144,11 @@ Works with both **Confluence Cloud** and **Confluence Data Center / Server**.
 
 | Tool Name | Description |
 |-----------|-------------|
-| confluence_get_page | Fetch a Confluence page by content ID. Body is automatically converted to markdown. |
+| confluence_get_page | Fetch a Confluence page by content ID or by title + space key. Body is automatically converted to markdown. |
 | confluence_search | Search pages using CQL (Confluence Query Language). Supports expanding results with full body content. |
+| confluence_list_spaces | List Confluence spaces with optional filtering by type, status, or label. |
+| confluence_get_child_pages | Get child pages of a Confluence page. Use after `confluence_get_page` shows child pages exist. |
+| confluence_get_comments | Get comments on a Confluence page. Use after `confluence_get_page` shows comments exist. |
 
 ## Common Use Cases
 
