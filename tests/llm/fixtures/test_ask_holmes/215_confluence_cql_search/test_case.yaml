@@ -21,7 +21,7 @@ before_test: |
   echo "Creating Confluence space ${SPACE_KEY}..."
   RESPONSE=$(curl -L -s -w "\n%{http_code}" -X POST \
     "${CONFLUENCE_SA_BASE_URL}/wiki/rest/api/space" \
-    -u "${CONFLUENCE_SA_USER}:${CONFLUENCE_SA_API_KEY}" \
+    -H "Authorization: Bearer ${CONFLUENCE_SA_API_KEY}" \
     -H "Content-Type: application/json" \
     -d "{
       \"key\": \"${SPACE_KEY}\",
@@ -50,7 +50,7 @@ before_test: |
   echo "Creating page with secret text..."
   PAGE_RESPONSE=$(curl -L -s -w "\n%{http_code}" -X POST \
     "${CONFLUENCE_SA_BASE_URL}/wiki/rest/api/content" \
-    -u "${CONFLUENCE_SA_USER}:${CONFLUENCE_SA_API_KEY}" \
+    -H "Authorization: Bearer ${CONFLUENCE_SA_API_KEY}" \
     -H "Content-Type: application/json" \
     -d "{
       \"type\": \"page\",
@@ -84,7 +84,7 @@ before_test: |
   for i in $(seq 1 12); do
     SEARCH_RESULT=$(curl -L -s \
       "${CONFLUENCE_SA_BASE_URL}/wiki/rest/api/content/search?cql=text~\"${SECRET_TEXT}\"" \
-      -u "${CONFLUENCE_SA_USER}:${CONFLUENCE_SA_API_KEY}")
+      -H "Authorization: Bearer ${CONFLUENCE_SA_API_KEY}")
 
     if echo "$SEARCH_RESULT" | grep -q "${PAGE_TITLE}"; then
       echo "Page is searchable (attempt ${i})"
@@ -106,7 +106,7 @@ after_test: |
   echo "Deleting space ${SPACE_KEY}..."
   HTTP_CODE=$(curl -L -s -w "%{http_code}" -o /dev/null -X DELETE \
     "${CONFLUENCE_SA_BASE_URL}/wiki/rest/api/space/${SPACE_KEY}" \
-    -u "${CONFLUENCE_SA_USER}:${CONFLUENCE_SA_API_KEY}")
+    -H "Authorization: Bearer ${CONFLUENCE_SA_API_KEY}")
 
   if [ "$HTTP_CODE" -eq 204 ] || [ "$HTTP_CODE" -eq 200 ] || [ "$HTTP_CODE" -eq 404 ]; then
     echo "Cleanup complete"
