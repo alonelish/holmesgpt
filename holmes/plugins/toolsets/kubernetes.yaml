@@ -90,7 +90,8 @@ toolsets:
         user_description: "Query Kubernetes Resources (JSON): kubectl get {{kind}} --all-namespaces -o json | jq {{jq_expr}}"
         description: >
           Use kubectl to get json for all resources of a specific kind and filter with jq.
-          Returns results as a JSON array.
+          Returns a JSON object with keys: "total_items_processed" (number of resources examined),
+          "matches_found" (number of results), and "results" (array of matching resources).
           IMPORTANT: The 'kind' parameter must be the plural form of the resource type
           (e.g., use "pods" not "pod", "services" not "service", "jobs" not "job").
           Do not worry about escaping the jq_expr - it will be done by the system.
