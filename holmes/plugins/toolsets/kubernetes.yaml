@@ -207,15 +207,18 @@ toolsets:
             fi
           done
 
-          # Output all matches as a JSON array
+          # Output results as a JSON object with metadata
           if [ -n "$ALL_MATCHES" ]; then
-            echo "$ALL_MATCHES" | jq -s '.'
+            RESULTS=$(echo "$ALL_MATCHES" | jq -s '.')
           else
-            echo "[]"
+            RESULTS="[]"
           fi
 
-          echo "---" >&2
-          echo "Total items processed: $PROCESSED, matches found: $TOTAL_MATCHES" >&2
+          jq -n \
+            --argjson results "$RESULTS" \
+            --argjson total_items_processed "$PROCESSED" \
+            --argjson matches_found "$TOTAL_MATCHES" \
+            '{total_items_processed: $total_items_processed, matches_found: $matches_found, results: $results}'
         transformers:
           - name: llm_summarize
             config:
