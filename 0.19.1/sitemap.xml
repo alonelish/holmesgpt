@@ -9,10 +9,6 @@
          <lastmod>2026-02-22</lastmod>
     </url>
     <url>
-         <loc>https://holmesgpt.dev/0.19.1/adr/operator-initial-architecture/</loc>
-         <lastmod>2026-02-22</lastmod>
-    </url>
-    <url>
          <loc>https://holmesgpt.dev/0.19.1/ai-providers/</loc>
          <lastmod>2026-02-22</lastmod>
     </url>
@@ -30,10 +26,6 @@
     </url>
     <url>
          <loc>https://holmesgpt.dev/0.19.1/ai-providers/gemini/</loc>
-         <lastmod>2026-02-22</lastmod>
-    </url>
-    <url>
-         <loc>https://holmesgpt.dev/0.19.1/ai-providers/github/</loc>
          <lastmod>2026-02-22</lastmod>
     </url>
     <url>
@@ -70,10 +62,6 @@
     </url>
     <url>
          <loc>https://holmesgpt.dev/0.19.1/data-sources/</loc>
-         <lastmod>2026-02-22</lastmod>
-    </url>
-    <url>
-         <loc>https://holmesgpt.dev/0.19.1/data-sources/api-toolsets/</loc>
          <lastmod>2026-02-22</lastmod>
     </url>
     <url>
@@ -157,10 +145,6 @@
          <lastmod>2026-02-22</lastmod>
     </url>
     <url>
-         <loc>https://holmesgpt.dev/0.19.1/data-sources/builtin-toolsets/grafana-mcp/</loc>
-         <lastmod>2026-02-22</lastmod>
-    </url>
-    <url>
          <loc>https://holmesgpt.dev/0.19.1/data-sources/builtin-toolsets/grafanadashboards/</loc>
          <lastmod>2026-02-22</lastmod>
     </url>
@@ -177,10 +161,6 @@
          <lastmod>2026-02-22</lastmod>
     </url>
     <url>
-         <loc>https://holmesgpt.dev/0.19.1/data-sources/builtin-toolsets/inspektor-gadget/</loc>
-         <lastmod>2026-02-22</lastmod>
-    </url>
-    <url>
          <loc>https://holmesgpt.dev/0.19.1/data-sources/builtin-toolsets/internet/</loc>
          <lastmod>2026-02-22</lastmod>
     </url>
@@ -194,10 +174,6 @@
     </url>
     <url>
          <loc>https://holmesgpt.dev/0.19.1/data-sources/builtin-toolsets/kubernetes/</loc>
-         <lastmod>2026-02-22</lastmod>
-    </url>
-    <url>
-         <loc>https://holmesgpt.dev/0.19.1/data-sources/builtin-toolsets/kubevela/</loc>
          <lastmod>2026-02-22</lastmod>
     </url>
     <url>
@@ -238,10 +214,6 @@
     </url>
     <url>
          <loc>https://holmesgpt.dev/0.19.1/data-sources/builtin-toolsets/slab/</loc>
-         <lastmod>2026-02-22</lastmod>
-    </url>
-    <url>
-         <loc>https://holmesgpt.dev/0.19.1/data-sources/builtin-toolsets/splunk-mcp/</loc>
          <lastmod>2026-02-22</lastmod>
     </url>
     <url>
@@ -325,14 +297,6 @@
          <lastmod>2026-02-22</lastmod>
     </url>
     <url>
-         <loc>https://holmesgpt.dev/0.19.1/development/evaluations/history/results_20260127_161120/</loc>
-         <lastmod>2026-02-22</lastmod>
-    </url>
-    <url>
-         <loc>https://holmesgpt.dev/0.19.1/development/evaluations/history/results_20260129_094857/</loc>
-         <lastmod>2026-02-22</lastmod>
-    </url>
-    <url>
          <loc>https://holmesgpt.dev/0.19.1/installation/backstage-integration/</loc>
          <lastmod>2026-02-22</lastmod>
     </url>
@@ -357,35 +321,7 @@
          <lastmod>2026-02-22</lastmod>
     </url>
     <url>
-         <loc>https://holmesgpt.dev/0.19.1/installation/teams-installation/</loc>
-         <lastmod>2026-02-22</lastmod>
-    </url>
-    <url>
          <loc>https://holmesgpt.dev/0.19.1/installation/ui-installation/</loc>
-         <lastmod>2026-02-22</lastmod>
-    </url>
-    <url>
-         <loc>https://holmesgpt.dev/0.19.1/operator/</loc>
-         <lastmod>2026-02-22</lastmod>
-    </url>
-    <url>
-         <loc>https://holmesgpt.dev/0.19.1/operator/configuration/</loc>
-         <lastmod>2026-02-22</lastmod>
-    </url>
-    <url>
-         <loc>https://holmesgpt.dev/0.19.1/operator/destinations/</loc>
-         <lastmod>2026-02-22</lastmod>
-    </url>
-    <url>
-         <loc>https://holmesgpt.dev/0.19.1/operator/development/</loc>
-         <lastmod>2026-02-22</lastmod>
-    </url>
-    <url>
-         <loc>https://holmesgpt.dev/0.19.1/operator/health-checks/</loc>
-         <lastmod>2026-02-22</lastmod>
-    </url>
-    <url>
-         <loc>https://holmesgpt.dev/0.19.1/operator/scheduled-health-checks/</loc>
          <lastmod>2026-02-22</lastmod>
     </url>
     <url>
@@ -406,10 +342,6 @@
     </url>
     <url>
          <loc>https://holmesgpt.dev/0.19.1/reference/slash-commands/</loc>
-         <lastmod>2026-02-22</lastmod>
-    </url>
-    <url>
-         <loc>https://holmesgpt.dev/0.19.1/reference/teams-permissions/</loc>
          <lastmod>2026-02-22</lastmod>
     </url>
     <url>
