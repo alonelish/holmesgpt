@@ -34,11 +34,11 @@ class TestKubernetesLogsMetadata:
         # Setup datetime mock
         mock_datetime_module.now.return_value = self.mock_datetime
 
-        # Create 1000 logs, 100 with "error", 10 without "INFO"
+        # Create 100 logs, 10 with "error", 90 without "INFO"
         logs = []
-        for i in range(900):
+        for i in range(90):
             logs.append(f"2024-01-15T10:30:{i%60:02d}Z INFO: Normal operation {i}")
-        for i in range(100):
+        for i in range(10):
             logs.append(f"2024-01-15T10:31:{i%60:02d}Z ERROR: Something went wrong {i}")
 
         mock_run.return_value = Mock(stdout="\n".join(logs), stderr="", returncode=0)
@@ -48,7 +48,7 @@ class TestKubernetesLogsMetadata:
             pod_name="my-app-abc123",
             filter="error",
             exclude_filter="INFO",
-            limit=50,
+            limit=5,
         )
 
         result = self.toolset.fetch_pod_logs(params)
@@ -61,11 +61,11 @@ class TestKubernetesLogsMetadata:
         assert "LOG QUERY METADATA" in result.data
         assert "Query executed at: 2024-01-15T12:45:00Z (UTC)" in result.data
         assert "Log source: Current and previous container logs" in result.data
-        assert "Total logs found before filtering: 2,000" in result.data
+        assert "Total logs found before filtering: 200" in result.data
         assert "Include filter: 'error'" in result.data
-        assert "Matched: 200 logs (10.0% of total)" in result.data
+        assert "Matched: 20 logs (10.0% of total)" in result.data
         assert (
-            "Display: Showing latest 50 of 200 filtered logs (150 omitted)"
+            "Display: Showing latest 5 of 20 filtered logs (15 omitted)"
             in result.data
         )
 
@@ -75,9 +75,9 @@ class TestKubernetesLogsMetadata:
         """Test: When hitting the display limit"""
         mock_datetime_module.now.return_value = self.mock_datetime
 
-        # Create 5000 error logs
+        # Create 500 error logs
         logs = []
-        for i in range(5000):
+        for i in range(500):
             logs.append(
                 f"2024-01-15T10:{i//100:02d}:{i%60:02d}Z ERROR: Database connection failed {i}"
             )
@@ -99,7 +99,7 @@ class TestKubernetesLogsMetadata:
 
         # Verify display limit warnings
         assert (
-            "Display: Showing latest 100 of 10,000 filtered logs (9,900 omitted)"
+            "Display: Showing latest 100 of 1,000 filtered logs (900 omitted)"
             in result.data
         )
         assert "⚠️  Hit display limit! Suggestions:" in result.data
@@ -112,9 +112,9 @@ class TestKubernetesLogsMetadata:
         """Test: When no logs match the filters but logs exist"""
         mock_datetime_module.now.return_value = self.mock_datetime
 
-        # Create 500 INFO logs, no errors
+        # Create 50 INFO logs, no errors
         logs = []
-        for i in range(500):
+        for i in range(50):
             logs.append(f"2024-01-15T10:30:{i%60:02d}Z INFO: Health check passed {i}")
 
         mock_run.return_value = Mock(stdout="\n".join(logs), stderr="", returncode=0)
@@ -133,10 +133,10 @@ class TestKubernetesLogsMetadata:
 
         # Verify no match suggestions
         assert "Result: No logs matched your filters" in result.data
-        assert "Total logs found before filtering: 1,000" in result.data
+        assert "Total logs found before filtering: 100" in result.data
         assert "Matched: 0 logs (0.0% of total)" in result.data
         assert "Try a broader filter pattern" in result.data
-        assert "Remove the filter to see all 1,000 available logs" in result.data
+        assert "Remove the filter to see all 100 available logs" in result.data
         assert "Your filter may be too specific for the log format used" in result.data
 
     @patch("subprocess.run")
@@ -272,11 +272,11 @@ class TestKubernetesLogsMetadata:
         """Test: When exclude filter removes most logs"""
         mock_datetime_module.now.return_value = self.mock_datetime
 
-        # Create 10000 logs, mostly health checks
+        # Create 1000 logs, mostly health checks
         logs = []
-        for i in range(9900):
+        for i in range(990):
             logs.append(f"2024-01-15T10:{i//100:02d}:{i%60:02d}Z GET /health 200 OK")
-        for i in range(100):
+        for i in range(10):
             logs.append(f"2024-01-15T10:59:{i%60:02d}Z ERROR: Connection timeout")
 
         mock_run.return_value = Mock(stdout="\n".join(logs), stderr="", returncode=0)
@@ -294,10 +294,10 @@ class TestKubernetesLogsMetadata:
         print(result.data)
 
         # Verify exclude filter stats
-        assert "Total logs found before filtering: 20,000" in result.data
+        assert "Total logs found before filtering: 2,000" in result.data
         assert "Exclude filter: 'health|200'" in result.data
-        assert "Excluded: 19,800 logs" in result.data
-        assert "Remaining: 200 logs" in result.data
+        assert "Excluded: 1,980 logs" in result.data
+        assert "Remaining: 20 logs" in result.data
 
 
 if __name__ == "__main__":

@@ -46,6 +46,7 @@ class ScheduledPromptsExecutor:
         self.chat_function = chat_function
         self.running = False
         self.thread: Optional[threading.Thread] = None
+        self._stop_event = threading.Event()
         # this is pod name in kubernetes
         self.holmes_id = os.environ.get("HOSTNAME") or str(os.getpid())
         # Dynamic polling interval based on whether account has scheduled prompts
@@ -63,12 +64,14 @@ class ScheduledPromptsExecutor:
             return
 
         self.running = True
+        self._stop_event.clear()
         self.thread = threading.Thread(target=self._run_loop, daemon=True)
         self.thread.start()
         logging.info("ScheduledPromptsExecutor started")
 
     def stop(self):
         self.running = False
+        self._stop_event.set()
         if self.thread:
             self.thread.join(timeout=5)
         logging.info("ScheduledPromptsExecutor stopped")
@@ -80,7 +83,7 @@ class ScheduledPromptsExecutor:
                 if not had_payload:
                     # Update polling interval based on current state (may change if prompt deffinition added/removed)
                     self._update_poll_interval()
-                    time.sleep(self.poll_interval_seconds)
+                    self._stop_event.wait(timeout=self.poll_interval_seconds)
             except Exception as exc:
                 logging.exception(
                     "Error in ScheduledPromptsExecutor loop: %s", exc, exc_info=True
