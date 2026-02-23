@@ -99,10 +99,6 @@ toolsets:
         script: |
           #!/bin/bash
 
-          echo "Executing paginated query for {{ kind }} resources..." >&2
-          echo "Expression: {{ jq_expr }}" >&2
-          echo "---" >&2
-
           # Get the API path for the resource kind using kubectl
           API_INFO=$(kubectl api-resources --no-headers | grep "^{{ kind }} " | head -1)
 
@@ -198,7 +194,6 @@ toolsets:
 
               PROCESSED=$((PROCESSED + ITEMS_COUNT))
 
-              echo "Processed $PROCESSED items, found $TOTAL_MATCHES matches so far..." >&2
             fi
 
             CONTINUE=$(echo "$OUTPUT" | jq -r '.metadata.continue // empty')
