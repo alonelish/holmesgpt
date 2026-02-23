@@ -1144,6 +1144,10 @@ def _wait_for_completion_or_escape(
                         continue
                     # Standalone Escape key pressed
                     cancel_event.set()
+                    # Immediate feedback while waiting for the AI thread to finish
+                    termios.tcsetattr(fd, termios.TCSADRAIN, old_settings)
+                    sys.stdout.write("Interrupting...\n")
+                    sys.stdout.flush()
                     thread.join(timeout=2.0)
                     return True
         return False

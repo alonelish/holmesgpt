@@ -71,6 +71,45 @@ class LLMInterruptedError(Exception):
     pass
 
 
+def _run_completion_with_cancel(
+    llm: LLM,
+    cancel_event: Optional[threading.Event],
+    **kwargs: Any,
+) -> Any:
+    """Run LLM completion with cooperative cancellation support.
+
+    Wraps the blocking completion call in a daemon thread so that
+    cancel_event is checked every 100 ms.  When the event is set
+    (e.g. by the Escape-key listener) the function raises
+    LLMInterruptedError immediately instead of waiting for the
+    HTTP round-trip to finish.  The underlying HTTP request continues
+    in the daemon thread but its result is discarded.
+    """
+    if cancel_event is None:
+        return llm.completion(**kwargs)
+
+    result: List[Any] = [None]
+    error: List[Optional[BaseException]] = [None]
+
+    def _do_completion() -> None:
+        try:
+            result[0] = llm.completion(**kwargs)
+        except BaseException as exc:  # noqa: BLE001
+            error[0] = exc
+
+    t = threading.Thread(target=_do_completion, daemon=True)
+    t.start()
+
+    while t.is_alive():
+        if cancel_event.is_set():
+            raise LLMInterruptedError()
+        t.join(timeout=0.1)
+
+    if error[0] is not None:
+        raise error[0]
+    return result[0]
+
+
 # Create a named logger for cost tracking
 cost_logger = logging.getLogger("holmes.costs")
 
@@ -482,7 +521,9 @@ class ToolCallingLLM:
             logging.debug(f"sending messages={messages}\n\ntools={tools}")
 
             try:
-                full_response = self.llm.completion(
+                full_response = _run_completion_with_cancel(
+                    self.llm,
+                    cancel_event,
                     messages=parse_messages_tags(messages),
                     tools=tools,
                     tool_choice=tool_choice,
