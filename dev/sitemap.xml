@@ -137,6 +137,30 @@
          <lastmod>2026-02-23</lastmod>
     </url>
     <url>
+         <loc>https://holmesgpt.dev/dev/data-sources/builtin-toolsets/database-clickhouse/</loc>
+         <lastmod>2026-02-23</lastmod>
+    </url>
+    <url>
+         <loc>https://holmesgpt.dev/dev/data-sources/builtin-toolsets/database-mariadb/</loc>
+         <lastmod>2026-02-23</lastmod>
+    </url>
+    <url>
+         <loc>https://holmesgpt.dev/dev/data-sources/builtin-toolsets/database-mysql/</loc>
+         <lastmod>2026-02-23</lastmod>
+    </url>
+    <url>
+         <loc>https://holmesgpt.dev/dev/data-sources/builtin-toolsets/database-postgresql/</loc>
+         <lastmod>2026-02-23</lastmod>
+    </url>
+    <url>
+         <loc>https://holmesgpt.dev/dev/data-sources/builtin-toolsets/database-sqlite/</loc>
+         <lastmod>2026-02-23</lastmod>
+    </url>
+    <url>
+         <loc>https://holmesgpt.dev/dev/data-sources/builtin-toolsets/database-sqlserver/</loc>
+         <lastmod>2026-02-23</lastmod>
+    </url>
+    <url>
          <loc>https://holmesgpt.dev/dev/data-sources/builtin-toolsets/datadog/</loc>
          <lastmod>2026-02-23</lastmod>
     </url>
