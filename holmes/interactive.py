@@ -9,7 +9,7 @@ import time
 from collections import defaultdict
 from enum import Enum
 from pathlib import Path
-from typing import DefaultDict, Dict, List, Optional
+from typing import Callable, DefaultDict, Dict, List, Optional
 
 try:
     import select as select_module
@@ -37,8 +37,10 @@ from prompt_toolkit.styles import Style
 from prompt_toolkit.widgets import TextArea
 from pygments.lexers import guess_lexer
 from rich.console import Console
+from rich.live import Live
 from rich.markdown import Markdown, Panel
 from rich.markup import escape
+from rich.text import Text
 
 from holmes.core.config import config_path_dir
 from holmes.core.feedback import (
@@ -1104,6 +1106,7 @@ def _wait_for_completion_or_escape(
     cancel_event: threading.Event,
     approval_active: threading.Event,
     terminal_restored: threading.Event,
+    on_escape: Optional[Callable[[], None]] = None,
     poll_interval: float = 0.1,
 ) -> bool:
     """Monitor stdin for Escape while thread runs. Returns True if interrupted."""
@@ -1143,6 +1146,8 @@ def _wait_for_completion_or_escape(
                         sys.stdin.read(1)
                         continue
                     # Standalone Escape key pressed
+                    if on_escape:
+                        on_escape()
                     cancel_event.set()
                     thread.join(timeout=2.0)
                     return True
@@ -1442,14 +1447,21 @@ def run_interactive_loop(
             else:
                 messages.append({"role": "user", "content": user_input})
 
-            escape_hint = (
-                " [dim](press escape to interrupt)[/dim]"
-                if _HAS_TERMINAL_CONTROL and sys.stdin.isatty()
-                else ""
-            )
-            console.print(
-                f"\n[bold {AI_COLOR}]Thinking...[/bold {AI_COLOR}]{escape_hint}\n"
-            )
+            show_escape_hint = _HAS_TERMINAL_CONTROL and sys.stdin.isatty()
+            live_display: Optional[Live] = None
+
+            if show_escape_hint:
+                thinking_text = Text.from_markup(
+                    f"[bold {AI_COLOR}]Thinking...[/bold {AI_COLOR}]"
+                    f" [dim](press escape to interrupt)[/dim]"
+                )
+                live_display = Live(thinking_text, console=console)
+                console.print()
+                live_display.start()
+            else:
+                console.print(
+                    f"\n[bold {AI_COLOR}]Thinking...[/bold {AI_COLOR}]\n"
+                )
 
             # Snapshot messages before the call so we can rollback on interrupt
             messages_snapshot = list(messages)
@@ -1508,12 +1520,24 @@ def run_interactive_loop(
                 ai_thread = threading.Thread(target=_run_ai_call, daemon=True)
                 ai_thread.start()
 
+                def _on_escape() -> None:
+                    if live_display is not None:
+                        live_display.update(
+                            Text.from_markup(
+                                f"[bold {AI_COLOR}]Thinking...[/bold {AI_COLOR}]"
+                                f" [bold {STATUS_COLOR}]Interrupting...[/bold {STATUS_COLOR}]"
+                            )
+                        )
+
                 try:
                     interrupted = _wait_for_completion_or_escape(
                         ai_thread, cancel_event, approval_active,
                         terminal_restored,
+                        on_escape=_on_escape,
                     )
                 finally:
+                    if live_display is not None:
+                        live_display.stop()
                     # Restore original approval callback even if the escape
                     # listener raises (e.g. termios.error), so ai doesn't
                     # keep a _wrapped_approval referencing a stale event.
