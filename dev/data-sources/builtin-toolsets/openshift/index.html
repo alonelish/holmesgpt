@@ -1599,6 +1599,34 @@
                 
   
   
+  
+  
+    <li class="md-nav__item">
+      <a href="../../recommended-setup/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Recommended Setup
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
     
   
   
@@ -1704,7 +1732,7 @@
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_7_2" checked>
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_7_3" checked>
         
           
           <div class="md-nav__link md-nav__container">
@@ -1726,14 +1754,14 @@
             </a>
             
               
-              <label class="md-nav__link " for="__nav_7_2" id="__nav_7_2_label" tabindex="0">
+              <label class="md-nav__link " for="__nav_7_3" id="__nav_7_3_label" tabindex="0">
                 <span class="md-nav__icon md-icon"></span>
               </label>
             
           </div>
         
-        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_7_2_label" aria-expanded="true">
-          <label class="md-nav__title" for="__nav_7_2">
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_7_3_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_7_3">
             <span class="md-nav__icon md-icon"></span>
             
   
@@ -3211,34 +3239,6 @@
   
   
     <li class="md-nav__item">
-      <a href="../../custom-toolsets/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Custom Toolsets
-  
-
-    
-  </span>
-  
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
       <a href="../../api-toolsets/" class="md-nav__link">
         
   
@@ -3267,14 +3267,14 @@
   
   
     <li class="md-nav__item">
-      <a href="../../remote-mcp-servers/" class="md-nav__link">
+      <a href="../../custom-toolsets/" class="md-nav__link">
         
   
   
   <span class="md-ellipsis">
     
   
-    MCP Servers
+    Custom Toolsets
   
 
     
@@ -3295,14 +3295,14 @@
   
   
     <li class="md-nav__item">
-      <a href="../../permissions/" class="md-nav__link">
+      <a href="../../remote-mcp-servers/" class="md-nav__link">
         
   
   
   <span class="md-ellipsis">
     
   
-    Adding Permissions for Additional Resources
+    MCP Servers
   
 
     
@@ -4770,10 +4770,9 @@
 <p>This toolset is enabled by default. You do not need to configure it.</p>
 </div>
 <p>By enabling this toolset, HolmesGPT will be able to read OpenShift pod logs using the <code>oc</code> command.</p>
-<details class="warning">
-<summary>Important: Disable Default Logging Toolset</summary>
-<p>Only one logging toolset should be enabled at a time. If you enable this toolset, disable the default <code>kubernetes/logs</code> toolset.</p>
-<p><strong>Available Log Sources:</strong></p>
+<details class="info">
+<summary>Available Log Sources</summary>
+<p>Multiple logging toolsets can be enabled simultaneously. HolmesGPT will use the most appropriate source for each investigation.</p>
 <ul>
 <li><strong><a href="../kubernetes/">Kubernetes logs</a></strong> - Direct pod log access (enabled by default)</li>
 <li><strong><a href="../grafanaloki/">Loki</a></strong> - Centralized logs via Loki</li>
@@ -4781,7 +4780,6 @@
 <li><strong><a href="../coralogix-logs/">Coralogix</a></strong> - Logs via Coralogix platform</li>
 <li><strong><a href="../datadog/">DataDog</a></strong> - Logs from DataDog</li>
 </ul>
-<p>💡 <strong>Choose one</strong>: Only enable one logging toolset at a time for best performance.</p>
 </details>
 <h3 id="prerequisites_1">Prerequisites<a class="headerlink" href="#prerequisites_1" title="Permanent link">&para;</a></h3>
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a>oc<span class="w"> </span>version<span class="w"> </span>--client
