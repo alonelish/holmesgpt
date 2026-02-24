@@ -48,6 +48,22 @@ affinity: {}
 nodeSelector: ~
 tolerations: []
 
+podSecurityContext: {}
+# Example for Pod Security Standards restricted mode:
+#   runAsNonRoot: true
+#   seccompProfile:
+#     type: RuntimeDefault
+
+securityContext:
+  readOnlyRootFilesystem: true
+# Example for Pod Security Standards restricted mode:
+#   readOnlyRootFilesystem: true
+#   runAsNonRoot: true
+#   allowPrivilegeEscalation: false
+#   capabilities:
+#     drop:
+#       - ALL
+
 serviceAccount:
   imagePullSecrets: []
   annotations: {}
