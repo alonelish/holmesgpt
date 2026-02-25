@@ -4,11 +4,12 @@ import os
 import threading
 from abc import abstractmethod
 from math import floor
-from typing import TYPE_CHECKING, Any, Dict, List, Optional, Type, Union
+from typing import TYPE_CHECKING, Any, Dict, List, Optional, Tuple, Type, Union
 
 import litellm
 import sentry_sdk
 from litellm.litellm_core_utils.streaming_handler import CustomStreamWrapper
+from litellm.litellm_core_utils.token_counter import get_image_dimensions
 from litellm.types.utils import ModelResponse, TextCompletionResponse
 from pydantic import BaseModel, ConfigDict, SecretStr
 from typing_extensions import Self
@@ -86,6 +87,98 @@ class ModelEntry(BaseModel):
     @classmethod
     def load_from_dict(cls, data: dict) -> Self:
         return cls.model_validate(data)
+
+
+_ANTHROPIC_MODEL_IDENTIFIERS = ("claude", "opus", "sonnet", "haiku")
+
+
+def is_anthropic_model(model_name: str) -> bool:
+    """Check if a model name refers to an Anthropic model.
+
+    Returns True if 'anthropic' is in the name, or if it's a Robusta model
+    (prefixed with 'Robusta/') containing a known Anthropic model family name.
+    """
+    name_lower = model_name.lower()
+    if "anthropic" in name_lower:
+        return True
+    if name_lower.startswith("robusta/"):
+        return any(ident in name_lower for ident in _ANTHROPIC_MODEL_IDENTIFIERS)
+    return False
+
+
+def _get_image_dimensions(url: str) -> Tuple[int, int]:
+    """Get image dimensions from a URL or base64 data URI.
+
+    Delegates to litellm's get_image_dimensions which handles URLs (via HTTP),
+    base64 data URIs, and all major formats (PNG, JPEG, GIF, WebP).
+    Falls back to (768, 768) on any failure.
+    """
+    try:
+        return get_image_dimensions(data=url)
+    except Exception:
+        return 768, 768
+
+
+def _anthropic_image_token_count(width: int, height: int) -> int:
+    """Calculate image tokens using Anthropic's formula.
+
+    Anthropic resizes images to fit within a 1568x1568 bounding box, then
+    charges (width * height) / 750 tokens.
+    See: https://platform.claude.com/docs/en/build-with-claude/vision#calculate-image-costs
+    """
+    max_dim = 1568
+    if width > max_dim or height > max_dim:
+        scale = max_dim / max(width, height)
+        width = int(width * scale)
+        height = int(height * scale)
+    return max(1, (width * height) // 750)
+
+
+def _is_image_block(block: Any) -> bool:
+    """Check if a content block is an image (URL or base64 data URI).
+
+    OpenAI's vision format uses type "image_url" for all image blocks,
+    including base64 data URIs.
+    """
+    return isinstance(block, dict) and block.get("type") == "image_url"
+
+
+def _has_images(message: dict) -> bool:
+    """Check if a message contains any image content blocks."""
+    content = message.get("content")
+    return isinstance(content, list) and any(_is_image_block(b) for b in content)
+
+
+def _strip_images(message: dict) -> dict:
+    """Return a shallow copy of the message with image blocks removed."""
+    content = message.get("content")
+    if not isinstance(content, list):
+        return message
+    filtered = [b for b in content if not _is_image_block(b)]
+    new_msg = dict(message)
+    new_msg["content"] = filtered if filtered else ""
+    return new_msg
+
+
+def _count_anthropic_image_tokens(message: dict) -> int:
+    """Count image tokens in a message using Anthropic's formula."""
+    content = message.get("content")
+    if not isinstance(content, list):
+        return 0
+    image_tokens = 0
+    for block in content:
+        if not _is_image_block(block):
+            continue
+        image_url = block.get("image_url", {})
+        url = (
+            image_url.get("url", "") if isinstance(image_url, dict) else str(image_url)
+        )
+        if url:
+            w, h = _get_image_dimensions(url)
+            image_tokens += _anthropic_image_token_count(w, h)
+        else:
+            image_tokens += 1600  # conservative fallback
+    return image_tokens
 
 
 class LLM:
@@ -293,6 +386,9 @@ class DefaultLLM(LLM):
         )
         return FALLBACK_CONTEXT_WINDOW_SIZE
 
+    def _is_anthropic_model(self) -> bool:
+        return is_anthropic_model(self.model)
+
     @sentry_sdk.trace
     def count_tokens(
         self, messages: list[dict], tools: Optional[list[dict[str, Any]]] = None
@@ -300,19 +396,31 @@ class DefaultLLM(LLM):
         # TODO: Add a recount:bool flag to save time. When the flag is false, reuse 'message["token_count"]' for individual messages.
         # It's only necessary to recount message tokens at the beginning of a session because the LLM model may have changed.
         # Changing the model requires recounting tokens because the tokenizer may be different
-        total_tokens = 0
+
+        # For Anthropic/Claude models, litellm's token counter severely underestimates
+        # image tokens (uses OpenAI's 85 tokens/image instead of Anthropic's (w*h)/750).
+        # We strip images before litellm counts text, then add correct image tokens.
+        is_anthropic = self._is_anthropic_model()
+
         tools_tokens = 0
         system_tokens = 0
         assistant_tokens = 0
         user_tokens = 0
         other_tokens = 0
-        tools_to_call_tokens = 0
+
         for message in messages:
-            # count message tokens individually because it gives us fine grain information about each tool call/message etc.
-            # However be aware that the sum of individual message tokens is not equal to the overall messages token
-            token_count = litellm.token_counter(  # type: ignore
-                model=self.model, messages=[message]
-            )
+            # Count message tokens individually for fine-grained info about each tool call/message.
+            if is_anthropic and _has_images(message):
+                stripped = _strip_images(message)
+                token_count = litellm.token_counter(  # type: ignore
+                    model=self.model, messages=[stripped]
+                )
+                token_count += _count_anthropic_image_tokens(message)
+            else:
+                token_count = litellm.token_counter(  # type: ignore
+                    model=self.model, messages=[message]
+                )
+
             message["token_count"] = token_count
             role = message.get("role")
             if role == "system":
@@ -324,21 +432,29 @@ class DefaultLLM(LLM):
             elif role == "assistant":
                 assistant_tokens += token_count
             else:
-                # although this should not be needed,
-                # it is defensive code so that all tokens are accounted for
-                # and can potentially make debugging easier
                 other_tokens += token_count
 
+        # Compute total tokens including tools schema. Image miscounting from litellm
+        # cancels out in the subtraction, so we can use original messages here.
         messages_token_count_without_tools = litellm.token_counter(  # type: ignore
             model=self.model, messages=messages
         )
-
         total_tokens = litellm.token_counter(  # type: ignore
             model=self.model,
             messages=messages,
             tools=tools,  # type: ignore
         )
         tools_to_call_tokens = max(0, total_tokens - messages_token_count_without_tools)
+
+        # Use the sum of corrected per-message counts for total_tokens
+        total_tokens = (
+            system_tokens
+            + user_tokens
+            + tools_tokens
+            + assistant_tokens
+            + other_tokens
+            + tools_to_call_tokens
+        )
 
         return TokenCountMetadata(
             total_tokens=total_tokens,
