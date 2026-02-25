@@ -408,9 +408,10 @@ class DefaultLLM(LLM):
         assistant_tokens = 0
         user_tokens = 0
         other_tokens = 0
-
+        tools_to_call_tokens = 0
         for message in messages:
-            # Count message tokens individually for fine-grained info about each tool call/message.
+            # count message tokens individually because it gives us fine grain information about each tool call/message etc.
+            # However be aware that the sum of individual message tokens is not equal to the overall messages token
             if is_anthropic and _has_images(message):
                 stripped = _strip_images(message)
                 token_count = litellm.token_counter(  # type: ignore
@@ -421,9 +422,7 @@ class DefaultLLM(LLM):
                 token_count = litellm.token_counter(  # type: ignore
                     model=self.model, messages=[message]
                 )
-
             message["token_count"] = token_count
-            total_tokens += token_count
             role = message.get("role")
             if role == "system":
                 system_tokens += token_count
@@ -434,17 +433,21 @@ class DefaultLLM(LLM):
             elif role == "assistant":
                 assistant_tokens += token_count
             else:
+                # although this should not be needed,
+                # it is defensive code so that all tokens are accounted for
+                # and can potentially make debugging easier
                 other_tokens += token_count
 
-        # tools_to_call_tokens: image miscounting cancels out in the subtraction
-        messages_without_tools = litellm.token_counter(  # type: ignore
+        messages_token_count_without_tools = litellm.token_counter(  # type: ignore
             model=self.model, messages=messages
         )
-        messages_with_tools = litellm.token_counter(  # type: ignore
-            model=self.model, messages=messages, tools=tools  # type: ignore
+
+        total_tokens = litellm.token_counter(  # type: ignore
+            model=self.model,
+            messages=messages,
+            tools=tools,  # type: ignore
         )
-        tools_to_call_tokens = max(0, messages_with_tools - messages_without_tools)
-        total_tokens += tools_to_call_tokens
+        tools_to_call_tokens = max(0, total_tokens - messages_token_count_without_tools)
 
         return TokenCountMetadata(
             total_tokens=total_tokens,
