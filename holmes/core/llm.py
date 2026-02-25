@@ -381,6 +381,11 @@ class DefaultLLM(LLM):
         if tools and len(tools) > 0 and tool_choice == "auto":
             tools_args["tools"] = tools
             tools_args["tool_choice"] = tool_choice  # type: ignore
+            # Add cache_control to the last tool definition so Anthropic can cache
+            # the tools prefix independently of system/messages. Without this, different
+            # prompts sharing the same toolset (e.g. scheduled reports) get no cache hits
+            # for the tool definitions. Anthropic's cache hierarchy: tools → system → messages.
+            tools[-1] = {**tools[-1], "cache_control": {"type": "ephemeral"}}
 
         if THINKING:
             self.args.setdefault("thinking", json.loads(THINKING))
@@ -425,8 +430,12 @@ class DefaultLLM(LLM):
             cache_control_injection_points=[
                 {
                     "location": "message",
-                    "index": -1,  # -1 targets the last message.
-                }
+                    "role": "system",  # Cache tools + system prompt prefix independently.
+                },
+                {
+                    "location": "message",
+                    "index": -1,  # Cache the full prefix up to the last message.
+                },
             ],
         )
 
