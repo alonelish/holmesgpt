@@ -24,7 +24,6 @@ from typing import (
     Union,
 )
 
-from holmes.utils.pydantic_utils import build_config_example
 from jinja2 import Template
 from pydantic import (
     BaseModel,
@@ -47,6 +46,7 @@ from holmes.core.transformers import (
 from holmes.plugins.prompts import load_and_render_prompt
 from holmes.utils.config_utils import merge_transformers
 from holmes.utils.memory_limit import check_oom_and_append_hint, get_ulimit_prefix
+from holmes.utils.pydantic_utils import build_config_example
 
 if TYPE_CHECKING:
     from holmes.core.transformers import BaseTransformer
@@ -93,22 +93,36 @@ class StructuredToolResult(BaseModel):
     icon_url: Optional[str] = None
     images: Optional[List[Dict[str, Any]]] = None
 
-    def get_stringified_data(self) -> str:
+    def stringify_data(self, compact: bool = True) -> Tuple[str, bool]:
+        """Serialize the data field to a string.
+
+        Args:
+            compact: If True, produce minified JSON (saves tokens).
+                     If False, produce pretty-printed JSON (readable for grep/head/tail).
+
+        Returns:
+            A tuple of (stringified_data, is_json).
+        """
         if self.data is None:
-            return ""
+            return "", False
 
         if isinstance(self.data, str):
-            return self.data
-        else:
-            try:
-                if isinstance(self.data, BaseModel):
-                    return self.data.model_dump_json()
+            return self.data, False
+
+        try:
+            if isinstance(self.data, BaseModel):
+                return self.data.model_dump_json(indent=None if compact else 2), True
+            else:
+                if compact:
+                    return json.dumps(self.data, separators=(",", ":"), ensure_ascii=False), True
                 else:
-                    return json.dumps(
-                        self.data, separators=(",", ":"), ensure_ascii=False
-                    )
-            except Exception:
-                return str(self.data)
+                    return json.dumps(self.data, indent=2, ensure_ascii=False), True
+        except Exception:
+            return str(self.data), False
+
+    def get_stringified_data(self) -> str:
+        text, _ = self.stringify_data(compact=True)
+        return text
 
 
 class ApprovalRequirement(BaseModel):
@@ -148,11 +162,15 @@ class ToolsetType(str, Enum):
     BUILTIN = "built-in"
     CUSTOMIZED = "custom"
     MCP = "mcp"
+    HTTP = "http"
+    DATABASE = "database"
 
 
 class ToolParameter(BaseModel):
     description: Optional[str] = None
-    type: str = "string"
+    # JSON Schema allows type to be a string or array of strings for union types
+    # e.g., "string" or ["string", "null"] for nullable types
+    type: Union[str, List[str]] = "string"
     required: bool = True
     properties: Optional[Dict[str, "ToolParameter"]] = None  # For object types
     items: Optional["ToolParameter"] = None  # For array item schemas
@@ -271,8 +289,8 @@ class Tool(ABC, BaseModel):
                 logger.info(
                     f"  [yellow]Tool '{self.name}' requires approval: {approval_check.reason}[/yellow]"
                 )
-                # Override suggested_prefixes with filtered list (for bash toolset)
-                if approval_check.prefixes_to_save:
+                # Bash toolset: override suggested_prefixes with filtered list
+                if approval_check.prefixes_to_save is not None:
                     params["suggested_prefixes"] = approval_check.prefixes_to_save
                 return StructuredToolResult(
                     status=StructuredToolResultStatus.APPROVAL_REQUIRED,
@@ -802,6 +820,7 @@ class Toolset(BaseModel):
                     if error_message:
                         self.error = f"{error_message}"
                 except Exception as e:
+                    logger.exception(f"Toolset {self.name} prerequisite check failed")
                     self.status = ToolsetStatusEnum.FAILED
                     self.error = f"Prerequisite call failed unexpectedly: {str(e)}"
 

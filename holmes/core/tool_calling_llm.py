@@ -3,6 +3,8 @@ import json
 import logging
 import re
 import textwrap
+import threading
+from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional, Type, Union
 
 import sentry_sdk
@@ -62,6 +64,12 @@ from holmes.utils.stream import (
     build_stream_event_token_count,
 )
 from holmes.utils.tags import parse_messages_tags
+
+class LLMInterruptedError(Exception):
+    """Raised when the user interrupts an in-progress LLM call (e.g. via Escape key)."""
+
+    pass
+
 
 # Create a named logger for cost tracking
 cost_logger = logging.getLogger("holmes.costs")
@@ -238,12 +246,18 @@ class ToolCallingLLM:
     llm: LLM
 
     def __init__(
-        self, tool_executor: ToolExecutor, max_steps: int, llm: LLM, tracer=None
+        self,
+        tool_executor: ToolExecutor,
+        max_steps: int,
+        llm: LLM,
+        tool_results_dir: Optional[Path],
+        tracer=None,
     ):
         self.tool_executor = tool_executor
         self.max_steps = max_steps
         self.tracer = tracer
         self.llm = llm
+        self.tool_results_dir = tool_results_dir
         self.approval_callback: Optional[
             Callable[[StructuredToolResult], tuple[bool, Optional[str]]]
         ] = None
@@ -255,6 +269,16 @@ class ToolCallingLLM:
         For interactive loop, reset runbooks in use
         """
         self._runbook_in_use = False
+
+    def _has_bash_for_file_access(self) -> bool:
+        """Check if bash toolset is available for reading saved tool result files."""
+        for toolset in self.tool_executor.enabled_toolsets:
+            if toolset.name == "bash":
+                config = toolset.config
+                if config and hasattr(config, "include_default_allow_deny_list"):
+                    return config.include_default_allow_deny_list
+                return False
+        return False
 
     def process_tool_decisions(
         self,
@@ -422,6 +446,7 @@ class ToolCallingLLM:
         trace_span=DummySpan(),
         tool_number_offset: int = 0,
         request_context: Optional[Dict[str, Any]] = None,
+        cancel_event: Optional[threading.Event] = None,
     ) -> LLMResult:
         tool_calls: list[
             dict
@@ -433,6 +458,9 @@ class ToolCallingLLM:
         i = 0
         metadata: Dict[Any, Any] = {}
         while i < max_steps:
+            if cancel_event and cancel_event.is_set():
+                raise LLMInterruptedError()
+
             i += 1
             logging.debug(f"running iteration {i}")
             # on the last step we don't allow tools - we want to force a reply, not a request to run another tool
@@ -476,7 +504,21 @@ class ToolCallingLLM:
                         "The Azure model you chose is not supported. Model version 1106 and higher required."
                     )
                 else:
+                    logging.error(
+                        f"LLM BadRequestError on model={self.llm.model} (iteration {i}): {e}",
+                        exc_info=True,
+                    )
                     raise
+            except Exception as e:
+                logging.error(
+                    f"LLM call failed on model={self.llm.model} (iteration {i}): "
+                    f"{type(e).__name__}: {e}",
+                    exc_info=True,
+                )
+                raise
+
+            if cancel_event and cancel_event.is_set():
+                raise LLMInterruptedError()
 
             response = full_response.choices[0]  # type: ignore
 
@@ -562,6 +604,13 @@ class ToolCallingLLM:
                     futures.append(future)
 
                 for future in concurrent.futures.as_completed(futures):
+                    # Best-effort cancellation: in-flight tool calls run to completion
+                    # since f.cancel() only prevents queued (not running) tasks.
+                    if cancel_event and cancel_event.is_set():
+                        for f in futures:
+                            f.cancel()
+                        raise LLMInterruptedError()
+
                     tool_call_result: ToolCallResult = future.result()
 
                     tool_number = (
@@ -805,7 +854,11 @@ class ToolCallingLLM:
                 )
 
             original_token_count = prevent_overly_big_tool_response(
-                tool_call_result=tool_call_result, llm=self.llm
+                tool_call_result=tool_call_result,
+                llm=self.llm,
+                tool_results_dir=self.tool_results_dir
+                if self.tool_results_dir and self._has_bash_for_file_access()
+                else None,
             )
 
             ToolCallingLLM._log_tool_call_result(
@@ -826,9 +879,7 @@ class ToolCallingLLM:
             tool_name=tool_call_result.tool_name,
             tool_call_id=tool_call_result.tool_call_id,
         )
-        approval = tool.requires_approval(
-            tool_call_result.result.params or {}, context
-        )
+        approval = tool.requires_approval(tool_call_result.result.params or {}, context)
         return not approval or not approval.needs_approval
 
     def _handle_tool_call_approval(
@@ -856,9 +907,7 @@ class ToolCallingLLM:
 
         # Re-check if approval is still needed (prefix may have been approved by another tool call)
         if self._is_tool_call_already_approved(tool_call_result):
-            logging.info(
-                f"Approval no longer needed for {tool_call_result.tool_name}"
-            )
+            logging.info(f"Approval no longer needed for {tool_call_result.tool_name}")
             with trace_span.start_span(type="tool") as tool_span:
                 tool_call_result.result = self._directly_invoke_tool_call(
                     tool_name=tool_call_result.tool_name,
@@ -984,7 +1033,18 @@ class ToolCallingLLM:
                         "The Azure model you chose is not supported. Model version 1106 and higher required."
                     ) from e
                 else:
+                    logging.error(
+                        f"LLM BadRequestError on model={self.llm.model} (streaming iteration {i}): {e}",
+                        exc_info=True,
+                    )
                     raise
+            except Exception as e:
+                logging.error(
+                    f"LLM call failed on model={self.llm.model} (streaming iteration {i}): "
+                    f"{type(e).__name__}: {e}",
+                    exc_info=True,
+                )
+                raise
 
             response_message = full_response.choices[0].message  # type: ignore
             if response_message and response_format:
@@ -1186,9 +1246,10 @@ class IssueInvestigator(ToolCallingLLM):
         tool_executor: ToolExecutor,
         max_steps: int,
         llm: LLM,
+        tool_results_dir: Optional[Path],
         cluster_name: Optional[str],
     ):
-        super().__init__(tool_executor, max_steps, llm)
+        super().__init__(tool_executor, max_steps, llm, tool_results_dir)
         self.cluster_name = cluster_name
 
     def investigate(
