@@ -18,6 +18,7 @@ from holmes.plugins.toolsets.azure_sql.azure_sql_toolset import AzureSQLToolset
 from holmes.plugins.toolsets.bash.bash_toolset import BashExecutorToolset
 from holmes.plugins.toolsets.connectivity_check import ConnectivityCheckToolset
 from holmes.plugins.toolsets.coralogix.toolset_coralogix import CoralogixToolset
+from holmes.plugins.toolsets.database.database import DatabaseToolset
 from holmes.plugins.toolsets.datadog.toolset_datadog_general import (
     DatadogGeneralToolset,
 )
@@ -38,6 +39,7 @@ from holmes.plugins.toolsets.elasticsearch.opensearch_query_assist import (
 from holmes.plugins.toolsets.grafana.loki.toolset_grafana_loki import GrafanaLokiToolset
 from holmes.plugins.toolsets.grafana.toolset_grafana import GrafanaToolset
 from holmes.plugins.toolsets.grafana.toolset_grafana_tempo import GrafanaTempoToolset
+from holmes.plugins.toolsets.http.http_toolset import HttpToolset
 from holmes.plugins.toolsets.internet.internet import InternetToolset
 from holmes.plugins.toolsets.internet.notion import NotionToolset
 from holmes.plugins.toolsets.investigator.core_investigation import (
@@ -72,6 +74,13 @@ def load_toolsets_from_file(
                 f"Failed to load toolsets from {toolsets_path}: file is empty or invalid YAML."
             )
         toolsets_dict = parsed_yaml.get("toolsets", {})
+        mcp_config = parsed_yaml.get("mcp_servers", {})
+
+        for server_config in mcp_config.values():
+            server_config["type"] = ToolsetType.MCP.value
+            server_config.setdefault("enabled", True)
+
+        toolsets_dict.update(mcp_config)
 
         toolsets.extend(load_toolsets_from_config(toolsets_dict, strict_check))
 
@@ -108,6 +117,7 @@ def load_python_toolsets(
         AzureSQLToolset(),
         ServiceNowTablesToolset(),
         CodingAgentToolset(),
+        DatabaseToolset(),
         ElasticsearchDataToolset(),
         ElasticsearchClusterToolset(),
     ]
@@ -198,6 +208,10 @@ def load_toolsets_from_config(
             # MCP server is not a built-in toolset, so we need to set the type explicitly
             if toolset_type == ToolsetType.MCP.value:
                 validated_toolset = RemoteMCPToolset(**config, name=name)
+            elif toolset_type == ToolsetType.HTTP.value:
+                validated_toolset = HttpToolset(name=name, **config)
+            elif toolset_type == ToolsetType.DATABASE.value:
+                validated_toolset = DatabaseToolset(name=name, **config)
             elif strict_check:
                 validated_toolset = YAMLToolset(**config, name=name)  # type: ignore
             else:
