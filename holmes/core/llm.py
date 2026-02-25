@@ -402,6 +402,7 @@ class DefaultLLM(LLM):
         # We strip images before litellm counts text, then add correct image tokens.
         is_anthropic = self._is_anthropic_model()
 
+        total_tokens = 0
         tools_tokens = 0
         system_tokens = 0
         assistant_tokens = 0
@@ -422,6 +423,7 @@ class DefaultLLM(LLM):
                 )
 
             message["token_count"] = token_count
+            total_tokens += token_count
             role = message.get("role")
             if role == "system":
                 system_tokens += token_count
@@ -434,27 +436,15 @@ class DefaultLLM(LLM):
             else:
                 other_tokens += token_count
 
-        # Compute total tokens including tools schema. Image miscounting from litellm
-        # cancels out in the subtraction, so we can use original messages here.
-        messages_token_count_without_tools = litellm.token_counter(  # type: ignore
+        # tools_to_call_tokens: image miscounting cancels out in the subtraction
+        messages_without_tools = litellm.token_counter(  # type: ignore
             model=self.model, messages=messages
         )
-        total_tokens = litellm.token_counter(  # type: ignore
-            model=self.model,
-            messages=messages,
-            tools=tools,  # type: ignore
+        messages_with_tools = litellm.token_counter(  # type: ignore
+            model=self.model, messages=messages, tools=tools  # type: ignore
         )
-        tools_to_call_tokens = max(0, total_tokens - messages_token_count_without_tools)
-
-        # Use the sum of corrected per-message counts for total_tokens
-        total_tokens = (
-            system_tokens
-            + user_tokens
-            + tools_tokens
-            + assistant_tokens
-            + other_tokens
-            + tools_to_call_tokens
-        )
+        tools_to_call_tokens = max(0, messages_with_tools - messages_without_tools)
+        total_tokens += tools_to_call_tokens
 
         return TokenCountMetadata(
             total_tokens=total_tokens,
