@@ -152,6 +152,67 @@ Configure HolmesGPT to use AWS Bedrock foundation models.
         model: "bedrock-claude-sonnet-4"  # This refers to the key name in modelList above
     ```
 
+### Using Bearer Token Authentication
+
+If you prefer to use a bearer token instead of AWS access key/secret key pairs, you can configure `AWS_BEARER_TOKEN_BEDROCK`:
+
+=== "Holmes CLI"
+
+    ```bash
+    export AWS_REGION_NAME="us-east-1"
+    export AWS_BEARER_TOKEN_BEDROCK="your-bearer-token"
+
+    holmes ask "what pods are failing?" --model="bedrock/<your-bedrock-model>"
+    ```
+
+=== "Holmes Helm Chart"
+
+    ```yaml
+    # values.yaml
+    additionalEnvVars:
+      - name: AWS_BEARER_TOKEN_BEDROCK
+        valueFrom:
+          secretKeyRef:
+            name: holmes-secrets
+            key: aws-bearer-token
+
+    modelList:
+      bedrock-claude-sonnet-4:
+        aws_region_name: us-east-1
+        model: bedrock/eu.anthropic.claude-sonnet-4-20250514-v1:0
+    ```
+
+=== "Robusta Helm Chart"
+
+    ```yaml
+    # values.yaml
+    holmes:
+      additionalEnvVars:
+        - name: AWS_BEARER_TOKEN_BEDROCK
+          valueFrom:
+            secretKeyRef:
+              name: robusta-holmes-secret
+              key: aws-bearer-token
+
+      modelList:
+        bedrock-claude-sonnet-4:
+          aws_region_name: us-east-1
+          model: bedrock/eu.anthropic.claude-sonnet-4-20250514-v1:0
+    ```
+
+You can also set `aws_bearer_token_bedrock` directly in the `modelList` configuration:
+
+```yaml
+modelList:
+  bedrock-claude-sonnet-4:
+    aws_bearer_token_bedrock: "your-bearer-token"
+    aws_region_name: us-east-1
+    model: bedrock/eu.anthropic.claude-sonnet-4-20250514-v1:0
+```
+
+!!! note
+    When `aws_bearer_token_bedrock` is set in `modelList`, HolmesGPT automatically converts it to the `AWS_BEARER_TOKEN_BEDROCK` environment variable that the underlying LiteLLM library expects.
+
 ### Using Claude Sonnet with 1M Context Window
 
 The `bedrock-claude-sonnet-4-1M-context` example above demonstrates how to enable the extended 1 million token context window for Claude Sonnet. This requires two configuration parameters:

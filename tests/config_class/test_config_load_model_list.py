@@ -1,3 +1,4 @@
+import os
 from contextlib import contextmanager
 from unittest.mock import MagicMock, patch
 
@@ -18,6 +19,12 @@ SONNET_MODEL_CONFIG = {
         "budget_tokens": 10000,
         "type": "enabled",
     },
+}
+
+BEDROCK_BEARER_TOKEN_MODEL_CONFIG = {
+    "aws_bearer_token_bedrock": "test-bearer-token",
+    "aws_region_name": "us-east-1",
+    "model": "bedrock/us.anthropic.claude-sonnet-4-5-20250929-v1:0",
 }
 
 AZURE_MODEL_CONFIG = {
@@ -179,3 +186,48 @@ def test_create_console_toolcalling_llm_with_model_from_list(
             _assert_model_config_matches_call_kwargs(
                 call_kwargs, model_config, model_name
             )
+
+
+def test_bedrock_bearer_token_set_as_env_var(monkeypatch, tmp_path):
+    """Test that aws_bearer_token_bedrock in model_list is popped from args and set as env var."""
+    data = {"bedrock-bearer": BEDROCK_BEARER_TOKEN_MODEL_CONFIG}
+    with _setup_model_list_file(monkeypatch, tmp_path, data=data):
+        config = Config()
+
+        with patch("holmes.config.DefaultLLM") as mock_default_llm:
+            mock_default_llm.return_value = _get_mock_llm()
+            config._get_llm("bedrock-bearer")
+
+            call_kwargs = mock_default_llm.call_args[1]
+            # aws_bearer_token_bedrock should still be in args at this point
+            # (it gets popped inside DefaultLLM.__init__, not in _get_llm)
+            assert call_kwargs["args"].get("aws_bearer_token_bedrock") == "test-bearer-token"
+
+
+def test_bedrock_bearer_token_popped_from_args_and_set_env(monkeypatch):
+    """Test that DefaultLLM.__init__ pops aws_bearer_token_bedrock and sets the env var."""
+    from holmes.core.llm import DefaultLLM
+
+    # Clean up env var if set
+    monkeypatch.delenv("AWS_BEARER_TOKEN_BEDROCK", raising=False)
+
+    args = {
+        "aws_bearer_token_bedrock": "test-bearer-token-123",
+        "aws_region_name": "us-east-1",
+    }
+
+    with patch.object(DefaultLLM, "check_llm"):
+        llm = DefaultLLM(
+            model="bedrock/us.anthropic.claude-sonnet-4-5-20250929-v1:0",
+            args=args,
+        )
+
+        # Bearer token should be removed from args
+        assert "aws_bearer_token_bedrock" not in llm.args
+        # Bearer token should be set as env var
+        assert os.environ.get("AWS_BEARER_TOKEN_BEDROCK") == "test-bearer-token-123"
+        # Other args should remain
+        assert llm.args.get("aws_region_name") == "us-east-1"
+
+    # Cleanup
+    monkeypatch.delenv("AWS_BEARER_TOKEN_BEDROCK", raising=False)

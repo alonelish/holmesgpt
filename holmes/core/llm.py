@@ -162,6 +162,7 @@ class DefaultLLM(LLM):
         self.name = name
         self.is_robusta_model = is_robusta_model
         self.update_custom_args()
+        self._setup_bedrock_env_vars()
         self.check_llm(
             self.model, self.api_key, self.api_base, self.api_version, self.args
         )
@@ -169,6 +170,18 @@ class DefaultLLM(LLM):
     def update_custom_args(self):
         self.max_context_size = self.args.get("custom_args", {}).get("max_context_size")
         self.args.pop("custom_args", None)
+
+    def _setup_bedrock_env_vars(self):
+        """
+        Set up Bedrock-specific env vars from model params.
+
+        LiteLLM reads aws_bearer_token_bedrock from the AWS_BEARER_TOKEN_BEDROCK
+        environment variable, not as a completion() kwarg. If users configure it
+        in model_list.yaml, we need to pop it from args and set the env var.
+        """
+        bearer_token = self.args.pop("aws_bearer_token_bedrock", None)
+        if bearer_token:
+            os.environ["AWS_BEARER_TOKEN_BEDROCK"] = bearer_token
 
     def check_llm(
         self,
