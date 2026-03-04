@@ -26,35 +26,113 @@ The `extra_headers` field accepts a dictionary of header names mapped to [Jinja2
 
 ### MCP Servers
 
-```yaml
-mcp_servers:
-  customer_data:
-    description: "Customer data API"
-    config:
-      url: "http://customer-api:8000/mcp"
-      mode: streamable-http
-      extra_headers:
-        X-Tenant-Id: "{{ request_context.headers['X-Tenant-Id'] }}"
-        X-Auth-Token: "{{ request_context.headers['X-Auth-Token'] }}"
-```
+=== "Holmes CLI"
+
+    Add to `~/.holmes/config.yaml`:
+
+    ```yaml
+    mcp_servers:
+      customer_data:
+        description: "Customer data API"
+        config:
+          url: "http://customer-api:8000/mcp"
+          mode: streamable-http
+          extra_headers:
+            X-Tenant-Id: "{{ request_context.headers['X-Tenant-Id'] }}"
+            X-Auth-Token: "{{ request_context.headers['X-Auth-Token'] }}"
+    ```
+
+=== "Holmes Helm Chart"
+
+    Add to your Holmes Helm values:
+
+    ```yaml
+    mcp_servers:
+      customer_data:
+        description: "Customer data API"
+        config:
+          url: "http://customer-api:8000/mcp"
+          mode: streamable-http
+          extra_headers:
+            X-Tenant-Id: "{{ request_context.headers['X-Tenant-Id'] }}"
+            X-Auth-Token: "{{ request_context.headers['X-Auth-Token'] }}"
+    ```
+
+=== "Robusta Helm Chart"
+
+    Add to your `generated_values.yaml`:
+
+    ```yaml
+    holmes:
+      mcp_servers:
+        customer_data:
+          description: "Customer data API"
+          config:
+            url: "http://customer-api:8000/mcp"
+            mode: streamable-http
+            extra_headers:
+              X-Tenant-Id: "{{ request_context.headers['X-Tenant-Id'] }}"
+              X-Auth-Token: "{{ request_context.headers['X-Auth-Token'] }}"
+    ```
 
 See [MCP Servers -- Dynamic Headers](remote-mcp-servers.md#advanced-configuration) for the full MCP configuration reference.
 
 ### HTTP Connectors
 
-```yaml
-toolsets:
-  internal-api:
-    type: http
-    enabled: true
-    config:
-      extra_headers:
-        X-Request-Id: "{{ request_context.headers['X-Request-Id'] }}"
-        X-Api-Key: "{{ env.INTERNAL_API_KEY }}"
-      endpoints:
-        - hosts: ["internal-api.corp.net"]
-          methods: ["GET"]
-```
+=== "Holmes CLI"
+
+    Add to `~/.holmes/config.yaml`:
+
+    ```yaml
+    toolsets:
+      internal-api:
+        type: http
+        enabled: true
+        config:
+          extra_headers:
+            X-Request-Id: "{{ request_context.headers['X-Request-Id'] }}"
+            X-Api-Key: "{{ env.INTERNAL_API_KEY }}"
+          endpoints:
+            - hosts: ["internal-api.corp.net"]
+              methods: ["GET"]
+    ```
+
+=== "Holmes Helm Chart"
+
+    Add to your Holmes Helm values:
+
+    ```yaml
+    toolsets:
+      internal-api:
+        type: http
+        enabled: true
+        config:
+          extra_headers:
+            X-Request-Id: "{{ request_context.headers['X-Request-Id'] }}"
+            X-Api-Key: "{{ env.INTERNAL_API_KEY }}"
+          endpoints:
+            - hosts: ["internal-api.corp.net"]
+              methods: ["GET"]
+    ```
+
+=== "Robusta Helm Chart"
+
+    Add to your `generated_values.yaml`:
+
+    ```yaml
+    holmes:
+      toolsets:
+        internal-api:
+          type: http
+          enabled: true
+          config:
+            extra_headers:
+              X-Request-Id: "{{ request_context.headers['X-Request-Id'] }}"
+              X-Api-Key: "{{ env.INTERNAL_API_KEY }}"
+            endpoints:
+              - hosts: ["internal-api.corp.net"]
+                methods: ["GET"]
+    ```
 
 The rendered headers are merged into every outgoing request after the endpoint's own authentication headers, so they can override defaults when needed.
 
@@ -64,18 +142,44 @@ See [HTTP Connectors](api-toolsets.md) for the full HTTP connector configuration
 
 YAML toolset commands run as bash subprocesses, so rendered `extra_headers` are exposed as **environment variables** prefixed with `HOLMES_HEADER_` rather than being injected into the command template directly (this avoids shell injection from untrusted header values). Header names are uppercased and non-alphanumeric characters become underscores.
 
-```yaml
-custom_toolsets:
-  my_toolset:
-    name: "internal-api"
-    config:
-      extra_headers:
-        X-Auth-Token: "{{ request_context.headers['X-Auth-Token'] }}"
-    tools:
-      - name: "fetch_data"
-        description: "Fetch data from internal API"
-        command: 'curl -s -H "X-Auth-Token: $HOLMES_HEADER_X_AUTH_TOKEN" https://internal-api.corp.net/data'
-```
+=== "Holmes CLI"
+
+    **Configuration File (`toolsets.yaml`):**
+
+    ```yaml
+    toolsets:
+      internal-api:
+        name: "internal-api"
+        config:
+          extra_headers:
+            X-Auth-Token: "{{ request_context.headers['X-Auth-Token'] }}"
+        tools:
+          - name: "fetch_data"
+            description: "Fetch data from internal API"
+            command: 'curl -s -H "X-Auth-Token: $HOLMES_HEADER_X_AUTH_TOKEN" https://internal-api.corp.net/data'
+    ```
+
+    ```bash
+    holmes ask "fetch data from the internal API" --custom-toolsets=toolsets.yaml
+    ```
+
+=== "Robusta Helm Chart"
+
+    Add to your `generated_values.yaml`:
+
+    ```yaml
+    holmes:
+      customToolsets:
+        internal-api:
+          name: "internal-api"
+          config:
+            extra_headers:
+              X-Auth-Token: "{{ request_context.headers['X-Auth-Token'] }}"
+          tools:
+            - name: "fetch_data"
+              description: "Fetch data from internal API"
+              command: 'curl -s -H "X-Auth-Token: $HOLMES_HEADER_X_AUTH_TOKEN" https://internal-api.corp.net/data'
+    ```
 
 **Examples** of how header names are transformed into environment variable names:
 
@@ -96,15 +200,62 @@ Each built-in Python toolset decides individually whether to support `extra_head
 
 The following example shows how ServiceNow Tables, one toolset that supports header propagation, is configured:
 
-```yaml
-toolsets:
-  servicenow/tables:
-    config:
-      extra_headers:
-        X-Correlation-Id: "{{ request_context.headers['X-Correlation-Id'] }}"
-      api_key: "{{ env.SERVICENOW_API_KEY }}"
-      api_url: "https://instance.service-now.com"
-```
+=== "Holmes CLI"
+
+    Add to `~/.holmes/config.yaml`:
+
+    ```yaml
+    toolsets:
+      servicenow/tables:
+        config:
+          extra_headers:
+            X-Correlation-Id: "{{ request_context.headers['X-Correlation-Id'] }}"
+          api_key: "{{ env.SERVICENOW_API_KEY }}"
+          api_url: "https://instance.service-now.com"
+    ```
+
+=== "Holmes Helm Chart"
+
+    Add to your Holmes Helm values:
+
+    ```yaml
+    additionalEnvVars:
+      - name: SERVICENOW_API_KEY
+        valueFrom:
+          secretKeyRef:
+            name: servicenow-credentials
+            key: api-key
+
+    toolsets:
+      servicenow/tables:
+        config:
+          extra_headers:
+            X-Correlation-Id: "{{ request_context.headers['X-Correlation-Id'] }}"
+          api_key: "{{ env.SERVICENOW_API_KEY }}"
+          api_url: "https://instance.service-now.com"
+    ```
+
+=== "Robusta Helm Chart"
+
+    Add to your `generated_values.yaml`:
+
+    ```yaml
+    holmes:
+      additionalEnvVars:
+        - name: SERVICENOW_API_KEY
+          valueFrom:
+            secretKeyRef:
+              name: servicenow-credentials
+              key: api-key
+
+      toolsets:
+        servicenow/tables:
+          config:
+            extra_headers:
+              X-Correlation-Id: "{{ request_context.headers['X-Correlation-Id'] }}"
+            api_key: "{{ env.SERVICENOW_API_KEY }}"
+            api_url: "https://instance.service-now.com"
+    ```
 
 For a reference implementation showing how to add `extra_headers` support to a Python toolset, see [`servicenow_tables.py`](https://github.com/HolmesGPT/holmesgpt/blob/master/holmes/plugins/toolsets/servicenow_tables/servicenow_tables.py).
 
