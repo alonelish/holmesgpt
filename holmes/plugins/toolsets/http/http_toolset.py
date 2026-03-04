@@ -84,6 +84,7 @@ class HttpToolsetConfig(BaseModel):
     verify_ssl: bool = True
     timeout_seconds: int = 30
     default_headers: Dict[str, str] = Field(default_factory=dict)
+    extra_headers: Optional[Dict[str, str]] = None
 
 
 class HttpToolset(Toolset):

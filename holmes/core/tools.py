@@ -665,16 +665,6 @@ class Toolset(BaseModel):
     llm_instructions: Optional[str] = None
     transformers: Optional[List[Transformer]] = None
 
-    extra_headers: Optional[Dict[str, str]] = Field(
-        default=None,
-        description=(
-            "Jinja2 template headers rendered with request context and environment variables. "
-            "These headers are merged into outgoing HTTP requests made by this toolset. "
-            "Templates can reference {{ request_context.headers['Header-Name'] }} for "
-            "pass-through headers from the incoming request, {{ env.ENV_VAR }} for "
-            "environment variables, or plain strings for static values."
-        ),
-    )
     restricted_tools: List[str] = Field(
         default_factory=list,
         description="Tool names/patterns that require runbook authorization (use '*' for all tools)",
@@ -804,14 +794,24 @@ class Toolset(BaseModel):
     def render_extra_headers(
         self, request_context: Optional[Dict[str, Any]] = None
     ) -> Dict[str, str]:
-        """Render extra_headers templates with request context and environment variables.
+        """Render extra_headers templates from config with request context and env vars.
+
+        Reads ``extra_headers`` from ``self.config``.  Handles both Pydantic model
+        configs (attribute access) and plain dict configs (key access).
 
         Returns an empty dict if no extra_headers are configured.
         """
-        if not self.extra_headers:
+        extra_headers: Optional[Dict[str, str]] = None
+        if self.config is not None:
+            if isinstance(self.config, dict):
+                extra_headers = self.config.get("extra_headers")
+            else:
+                extra_headers = getattr(self.config, "extra_headers", None)
+
+        if not extra_headers:
             return {}
         return render_template_headers(
-            extra_headers=self.extra_headers,
+            extra_headers=extra_headers,
             request_context=request_context,
             source_name=self.name,
         )

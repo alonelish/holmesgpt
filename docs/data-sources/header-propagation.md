@@ -12,11 +12,11 @@ Header propagation is supported across all toolset types: [MCP servers](remote-m
 1. A client sends an HTTP request to the Holmes server (e.g., `/api/investigate`)
 2. Holmes extracts non-sensitive headers from the request (blocking `Authorization`, `Cookie`, and `Set-Cookie` by default)
 3. The extracted headers are available as `request_context` during tool execution
-4. Toolsets configured with `extra_headers` templates render those templates using the request context and forward the resulting headers to their backend APIs
+4. Toolsets configured with `extra_headers` in their `config` section render those templates using the request context and forward the resulting headers to their backend APIs
 
 ## Configuring `extra_headers`
 
-The `extra_headers` field accepts a dictionary of header names mapped to [Jinja2](https://jinja.palletsprojects.com/) template strings. Templates can reference:
+The `extra_headers` field is placed inside the `config` section of a toolset. It accepts a dictionary of header names mapped to [Jinja2](https://jinja.palletsprojects.com/) template strings. Templates can reference:
 
 - **`{{ request_context.headers['Header-Name'] }}`** -- a header from the incoming HTTP request (case-insensitive lookup)
 - **`{{ env.ENV_VAR }}`** -- an environment variable
@@ -26,18 +26,15 @@ The `extra_headers` field accepts a dictionary of header names mapped to [Jinja2
 
 ### MCP Servers
 
-`extra_headers` can be placed in either the MCP `config` section (existing behaviour) or at the toolset level. Config-level headers take precedence when both are set.
-
 ```yaml
 mcp_servers:
   customer_data:
     description: "Customer data API"
-    extra_headers:                                        # toolset-level
-      X-Tenant-Id: "{{ request_context.headers['X-Tenant-Id'] }}"
     config:
       url: "http://customer-api:8000/mcp"
       mode: streamable-http
-      extra_headers:                                      # config-level (takes precedence)
+      extra_headers:
+        X-Tenant-Id: "{{ request_context.headers['X-Tenant-Id'] }}"
         X-Auth-Token: "{{ request_context.headers['X-Auth-Token'] }}"
 ```
 
@@ -50,10 +47,10 @@ toolsets:
   internal-api:
     type: http
     enabled: true
-    extra_headers:
-      X-Request-Id: "{{ request_context.headers['X-Request-Id'] }}"
-      X-Api-Key: "{{ env.INTERNAL_API_KEY }}"
     config:
+      extra_headers:
+        X-Request-Id: "{{ request_context.headers['X-Request-Id'] }}"
+        X-Api-Key: "{{ env.INTERNAL_API_KEY }}"
       endpoints:
         - hosts: ["internal-api.corp.net"]
           methods: ["GET"]
@@ -76,8 +73,9 @@ YAML toolsets execute bash commands, so headers cannot be injected into HTTP cal
 ```yaml
 toolsets:
   my-api-tools:
-    extra_headers:
-      X-Auth-Token: "{{ request_context.headers['X-Auth-Token'] }}"
+    config:
+      extra_headers:
+        X-Auth-Token: "{{ request_context.headers['X-Auth-Token'] }}"
     tools:
       - name: query_api
         description: "Query the internal API"
@@ -95,9 +93,9 @@ Built-in Python toolsets that make HTTP calls can also receive propagated header
 ```yaml
 toolsets:
   servicenow/tables:
-    extra_headers:
-      X-Correlation-Id: "{{ request_context.headers['X-Correlation-Id'] }}"
     config:
+      extra_headers:
+        X-Correlation-Id: "{{ request_context.headers['X-Correlation-Id'] }}"
       api_key: "{{ env.SERVICENOW_API_KEY }}"
       api_url: "https://instance.service-now.com"
 ```
@@ -139,6 +137,5 @@ export HOLMES_PASSTHROUGH_BLOCKED_HEADERS="authorization,cookie,set-cookie,x-int
 When multiple header sources exist, later layers override earlier ones:
 
 1. Toolset's own authentication headers (e.g., API key, bearer token)
-2. Toolset-level `extra_headers` (on the `Toolset` base)
-3. Config-level `extra_headers` (MCP only, inside the `config` section)
-4. LLM-provided headers (HTTP connector only, via the `headers` tool parameter)
+2. `extra_headers` (rendered templates from the `config` section)
+3. LLM-provided headers (HTTP connector only, via the `headers` tool parameter)

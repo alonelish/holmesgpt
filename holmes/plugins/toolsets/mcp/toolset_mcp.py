@@ -339,9 +339,8 @@ class RemoteMCPToolset(Toolset):
 
         Process:
         1. Start with 'headers' field (backward compatibility, passed as-is)
-        2. Render toolset-level 'extra_headers' templates (from Toolset base class)
-        3. Render config-level 'extra_headers' templates (from MCPConfig)
-        4. Merge them (later layers take precedence)
+        2. Render config-level 'extra_headers' templates (from MCPConfig)
+        3. Merge them (later layers take precedence)
 
         Template sources for extra_headers:
         - {{ request_context.headers['foo'] }}: Pass-through from client request
@@ -354,8 +353,6 @@ class RemoteMCPToolset(Toolset):
         Example of mcp_config:
             mcp_servers:
                 my_mcp_server:
-                    extra_headers:
-                        Header-From-Toolset: "{{ request_context.headers['bar'] }}"
                     config:
                         ...
                         headers:
@@ -373,12 +370,7 @@ class RemoteMCPToolset(Toolset):
         if self._mcp_config.headers:
             final_headers.update(self._mcp_config.headers)
 
-        # Render and merge toolset-level extra_headers (from Toolset base class)
-        toolset_extra = self.render_extra_headers(request_context)
-        if toolset_extra:
-            final_headers.update(toolset_extra)
-
-        # Render and merge config-level extra_headers (MCPConfig-specific, takes precedence)
+        # Render and merge config-level extra_headers
         if self._mcp_config.extra_headers:
             config_extra = render_template_headers(
                 extra_headers=self._mcp_config.extra_headers,

@@ -1,12 +1,12 @@
 """Tests for HTTP header propagation across toolset types.
 
-Verifies that extra_headers configured on toolsets are rendered with
-request_context and propagated to:
+Verifies that extra_headers configured in toolset config sections are rendered
+with request_context and propagated to:
 1. Shared header rendering utility
-2. Toolset base class (render_extra_headers)
+2. Toolset base class (render_extra_headers reads from config)
 3. HTTP toolset (merged into outgoing requests)
 4. YAML toolset (exposed as environment variables)
-5. MCP toolset (merged with config-level headers)
+5. MCP toolset (merged with static headers)
 6. ToolInvokeContext (pre-rendered headers)
 """
 
@@ -111,11 +111,11 @@ class TestRenderTemplateHeaders:
 
 
 # ---------------------------------------------------------------------------
-# Toolset base class tests
+# Toolset base class tests (extra_headers in config)
 # ---------------------------------------------------------------------------
 
 class TestToolsetExtraHeaders:
-    def test_render_extra_headers_returns_empty_when_none(self):
+    def test_render_extra_headers_returns_empty_when_no_config(self):
         ts = YAMLToolset(
             name="test",
             description="test",
@@ -123,12 +123,21 @@ class TestToolsetExtraHeaders:
         )
         assert ts.render_extra_headers() == {}
 
-    def test_render_extra_headers_static(self):
+    def test_render_extra_headers_returns_empty_when_config_has_no_extra_headers(self):
         ts = YAMLToolset(
             name="test",
             description="test",
             tools=[],
-            extra_headers={"X-Custom": "static-value"},
+            config={"some_other_key": "val"},
+        )
+        assert ts.render_extra_headers() == {}
+
+    def test_render_extra_headers_static_from_dict_config(self):
+        ts = YAMLToolset(
+            name="test",
+            description="test",
+            tools=[],
+            config={"extra_headers": {"X-Custom": "static-value"}},
         )
         assert ts.render_extra_headers() == {"X-Custom": "static-value"}
 
@@ -137,8 +146,10 @@ class TestToolsetExtraHeaders:
             name="test",
             description="test",
             tools=[],
-            extra_headers={
-                "X-Tenant": "{{ request_context.headers['X-Tenant-Id'] }}"
+            config={
+                "extra_headers": {
+                    "X-Tenant": "{{ request_context.headers['X-Tenant-Id'] }}"
+                }
             },
         )
         ctx = {"headers": {"X-Tenant-Id": "tenant-abc"}}
@@ -151,10 +162,25 @@ class TestToolsetExtraHeaders:
             name="test",
             description="test",
             tools=[],
-            extra_headers={"Authorization": "Bearer {{ env.MY_TOKEN }}"},
+            config={
+                "extra_headers": {"Authorization": "Bearer {{ env.MY_TOKEN }}"}
+            },
         )
         result = ts.render_extra_headers()
         assert result == {"Authorization": "Bearer tok-123"}
+
+    def test_render_extra_headers_from_pydantic_config(self):
+        """Verify render_extra_headers works with a Pydantic model config (attribute access)."""
+        from holmes.utils.pydantic_utils import ToolsetConfig
+
+        config = ToolsetConfig(extra_headers={"X-From-Model": "pydantic-value"})
+        ts = YAMLToolset(
+            name="test",
+            description="test",
+            tools=[],
+            config=config,
+        )
+        assert ts.render_extra_headers() == {"X-From-Model": "pydantic-value"}
 
 
 # ---------------------------------------------------------------------------
@@ -291,26 +317,25 @@ class TestYAMLToolHeaderEnvVars:
 class TestHttpToolsetHeaderPropagation:
     @patch("holmes.plugins.toolsets.http.http_toolset.requests.request")
     def test_extra_headers_merged_into_request(self, mock_request):
-        """Verify that toolset-level extra_headers are merged into HTTP requests."""
+        """Verify that config-level extra_headers are merged into HTTP requests."""
         from holmes.plugins.toolsets.http.http_toolset import HttpRequest, HttpToolset
 
-        # Create an HTTP toolset with extra_headers
+        # Create an HTTP toolset with extra_headers in config
         toolset = HttpToolset(
             name="test_http",
             enabled=True,
-            extra_headers={
-                "X-Custom": "static-val",
-            },
             config={
                 "endpoints": [
                     {"hosts": ["api.example.com"], "methods": ["GET"]}
-                ]
+                ],
+                "extra_headers": {"X-Custom": "static-val"},
             },
         )
         ok, _ = toolset.prerequisites_callable({
             "endpoints": [
                 {"hosts": ["api.example.com"], "methods": ["GET"]}
-            ]
+            ],
+            "extra_headers": {"X-Custom": "static-val"},
         })
         assert ok
 
@@ -379,18 +404,17 @@ class TestHttpToolsetHeaderPropagation:
 
 
 # ---------------------------------------------------------------------------
-# MCP toolset-level extra_headers merge tests
+# MCP config-level extra_headers tests
 # ---------------------------------------------------------------------------
 
-class TestMCPToolsetLevelExtraHeaders:
-    def test_toolset_level_extra_headers_merged(self):
-        """Verify that toolset-level extra_headers are merged with MCP config-level ones."""
+class TestMCPConfigExtraHeaders:
+    def test_config_level_extra_headers_rendered(self):
+        """Verify that config-level extra_headers are rendered in MCP headers."""
         from holmes.plugins.toolsets.mcp.toolset_mcp import RemoteMCPToolset
 
         mcp_toolset = RemoteMCPToolset(
             name="test_mcp",
             description="Test toolset",
-            extra_headers={"X-Toolset-Level": "from-toolset"},
             config={
                 "url": "http://localhost:1234",
                 "extra_headers": {"X-Config-Level": "from-config"},
@@ -400,40 +424,20 @@ class TestMCPToolsetLevelExtraHeaders:
         rendered = mcp_toolset._render_headers(None)
 
         assert rendered is not None
-        assert rendered["X-Toolset-Level"] == "from-toolset"
         assert rendered["X-Config-Level"] == "from-config"
 
-    def test_config_level_overrides_toolset_level(self):
-        """Config-level extra_headers should take precedence over toolset-level."""
+    def test_extra_headers_with_request_context(self):
+        """Config-level extra_headers should render with request_context."""
         from holmes.plugins.toolsets.mcp.toolset_mcp import RemoteMCPToolset
 
         mcp_toolset = RemoteMCPToolset(
             name="test_mcp",
             description="Test toolset",
-            extra_headers={"X-Shared": "toolset-value"},
             config={
                 "url": "http://localhost:1234",
-                "extra_headers": {"X-Shared": "config-value"},
-            },
-        )
-        mcp_toolset.prerequisites_callable(config=mcp_toolset.config)
-        rendered = mcp_toolset._render_headers(None)
-
-        assert rendered is not None
-        assert rendered["X-Shared"] == "config-value"
-
-    def test_toolset_level_extra_headers_with_request_context(self):
-        """Toolset-level extra_headers should render with request_context."""
-        from holmes.plugins.toolsets.mcp.toolset_mcp import RemoteMCPToolset
-
-        mcp_toolset = RemoteMCPToolset(
-            name="test_mcp",
-            description="Test toolset",
-            extra_headers={
-                "X-Tenant": "{{ request_context.headers['X-Tenant-Id'] }}"
-            },
-            config={
-                "url": "http://localhost:1234",
+                "extra_headers": {
+                    "X-Tenant": "{{ request_context.headers['X-Tenant-Id'] }}"
+                },
             },
         )
         mcp_toolset.prerequisites_callable(config=mcp_toolset.config)
@@ -442,3 +446,42 @@ class TestMCPToolsetLevelExtraHeaders:
 
         assert rendered is not None
         assert rendered["X-Tenant"] == "tenant-from-request"
+
+    def test_static_headers_and_extra_headers_merged(self):
+        """Static 'headers' and template 'extra_headers' should be merged."""
+        from holmes.plugins.toolsets.mcp.toolset_mcp import RemoteMCPToolset
+
+        mcp_toolset = RemoteMCPToolset(
+            name="test_mcp",
+            description="Test toolset",
+            config={
+                "url": "http://localhost:1234",
+                "headers": {"X-Static": "static-value"},
+                "extra_headers": {"X-Dynamic": "dynamic-value"},
+            },
+        )
+        mcp_toolset.prerequisites_callable(config=mcp_toolset.config)
+        rendered = mcp_toolset._render_headers(None)
+
+        assert rendered is not None
+        assert rendered["X-Static"] == "static-value"
+        assert rendered["X-Dynamic"] == "dynamic-value"
+
+    def test_extra_headers_override_static_headers(self):
+        """extra_headers should take precedence over static headers."""
+        from holmes.plugins.toolsets.mcp.toolset_mcp import RemoteMCPToolset
+
+        mcp_toolset = RemoteMCPToolset(
+            name="test_mcp",
+            description="Test toolset",
+            config={
+                "url": "http://localhost:1234",
+                "headers": {"X-Shared": "from-static"},
+                "extra_headers": {"X-Shared": "from-extra"},
+            },
+        )
+        mcp_toolset.prerequisites_callable(config=mcp_toolset.config)
+        rendered = mcp_toolset._render_headers(None)
+
+        assert rendered is not None
+        assert rendered["X-Shared"] == "from-extra"
