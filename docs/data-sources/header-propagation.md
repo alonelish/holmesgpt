@@ -12,7 +12,7 @@ Header propagation is supported across all toolset types: [MCP servers](remote-m
 1. A client sends an HTTP request to the Holmes server (e.g., `/api/investigate`)
 2. Holmes extracts non-sensitive headers from the request (blocking `Authorization`, `Cookie`, and `Set-Cookie` by default)
 3. The extracted headers are available as `request_context` during tool execution
-4. Toolsets configured with `extra_headers` in their `config` section render those templates using the request context. How the rendered headers reach backend APIs depends on the toolset type (HTTP headers, environment variables, etc.) — see [Toolset Examples](#toolset-examples) below
+4. Toolsets configured with `extra_headers` in their `config` section render those templates using the request context and make the results available to each tool at invocation time
 
 ## Configuring `extra_headers`
 
