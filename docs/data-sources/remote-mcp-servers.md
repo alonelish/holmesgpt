@@ -350,20 +350,40 @@ The URL should end with `/sse`. If it doesn't, HolmesGPT will automatically appe
 
 **Dynamic Headers with Request Context**
 
-MCP servers can forward HTTP headers from the incoming request to the MCP backend. Use `extra_headers` with Jinja2 templates referencing `request_context.headers`:
+MCP servers can forward HTTP headers from the incoming request to the MCP backend. Use `extra_headers` with Jinja2 templates referencing `request_context.headers`. Header lookups are case-insensitive. You can also use environment variables (`{{ env.MY_VAR }}`) or combine them (`Bearer {{ request_context.headers['token'] }}`).
 
-```yaml
-mcp_servers:
-  customer_data:
-    description: "Customer data API (requires per-request auth)"
-    config:
-      url: "http://customer-api:8000/mcp"
-      mode: streamable-http
-      extra_headers:
-        X-Auth-Token: "{{ request_context.headers['X-Auth-Token'] }}"
-```
+=== "Holmes CLI"
 
-Header lookups are case-insensitive. You can also use environment variables (`{{ env.MY_VAR }}`) or combine them (`Bearer {{ request_context.headers['token'] }}`).
+    Not applicable — request context is only available when running Holmes as a server.
+
+=== "Holmes Helm Chart"
+
+    ```yaml
+    mcp_servers:
+      customer_data:
+        description: "Customer data API (requires per-request auth)"
+        config:
+          url: "http://customer-api:8000/mcp"
+          mode: streamable-http
+          extra_headers:
+            X-Auth-Token: "{{ request_context.headers['X-Auth-Token'] }}"
+        llm_instructions: "Query customer account details and subscription status. Use when investigating user-reported issues."
+    ```
+
+=== "Robusta Helm Chart"
+
+    ```yaml
+    holmes:
+      mcp_servers:
+        customer_data:
+          description: "Customer data API (requires per-request auth)"
+          config:
+            url: "http://customer-api:8000/mcp"
+            mode: streamable-http
+            extra_headers:
+              X-Auth-Token: "{{ request_context.headers['X-Auth-Token'] }}"
+          llm_instructions: "Query customer account details and subscription status. Use when investigating user-reported issues."
+    ```
 
 For full details on template syntax, blocked headers, precedence rules, and examples for other toolset types, see [HTTP Header Propagation](header-propagation.md).
 

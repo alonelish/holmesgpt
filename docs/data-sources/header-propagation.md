@@ -64,6 +64,19 @@ See [HTTP Connectors](api-toolsets.md) for the full HTTP connector configuration
 
 YAML toolset commands run as bash subprocesses, so rendered `extra_headers` are exposed as **environment variables** prefixed with `HOLMES_HEADER_` rather than being injected into the command template directly (this avoids shell injection from untrusted header values). Header names are uppercased and non-alphanumeric characters become underscores.
 
+```yaml
+custom_toolsets:
+  my_toolset:
+    name: "internal-api"
+    config:
+      extra_headers:
+        X-Auth-Token: "{{ request_context.headers['X-Auth-Token'] }}"
+    tools:
+      - name: "fetch_data"
+        description: "Fetch data from internal API"
+        command: 'curl -s -H "X-Auth-Token: $HOLMES_HEADER_X_AUTH_TOKEN" https://internal-api.corp.net/data'
+```
+
 **Examples** of how header names are transformed into environment variable names:
 
 | extra_headers key | Environment variable |
@@ -79,7 +92,9 @@ See [Custom Toolsets](custom-toolsets.md) for the full YAML toolset reference.
 
 ### Built-in Python Toolsets
 
-Built-in Python toolsets that make HTTP calls can also receive propagated headers. The rendered headers are available via `context.rendered_extra_headers` inside each tool's `_invoke()` method.
+Each built-in Python toolset decides individually whether to support `extra_headers`. Not all toolsets support it — only those whose `_invoke()` method reads `context.rendered_extra_headers` and merges them into outgoing HTTP calls.
+
+The following example shows how ServiceNow Tables, one toolset that supports header propagation, is configured:
 
 ```yaml
 toolsets:
@@ -91,7 +106,7 @@ toolsets:
       api_url: "https://instance.service-now.com"
 ```
 
-Not all built-in toolsets consume `extra_headers` yet. For a reference implementation showing how to add support to a Python toolset, see [`servicenow_tables.py`](https://github.com/HolmesGPT/holmesgpt/blob/master/holmes/plugins/toolsets/servicenow_tables/servicenow_tables.py).
+For a reference implementation showing how to add `extra_headers` support to a Python toolset, see [`servicenow_tables.py`](https://github.com/HolmesGPT/holmesgpt/blob/master/holmes/plugins/toolsets/servicenow_tables/servicenow_tables.py).
 
 ## Sending Headers to Holmes
 
