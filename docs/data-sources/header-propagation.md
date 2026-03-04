@@ -64,6 +64,8 @@ See [HTTP Connectors](api-toolsets.md) for the full HTTP connector configuration
 
 YAML toolsets execute bash commands, so headers cannot be injected into HTTP calls directly. Instead, rendered `extra_headers` are exposed as **environment variables** prefixed with `HOLMES_HEADER_`. Header names are uppercased and non-alphanumeric characters become underscores.
 
+**Examples** of how header names are transformed into environment variable names:
+
 | extra_headers key | Environment variable |
 |---|---|
 | `X-Auth-Token` | `$HOLMES_HEADER_X_AUTH_TOKEN` |
