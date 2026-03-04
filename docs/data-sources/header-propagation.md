@@ -16,7 +16,7 @@ Header propagation is supported across all toolset types: [MCP servers](remote-m
 
 ## Configuring `extra_headers`
 
-The `extra_headers` field is placed inside the `config` section of a toolset. It accepts a dictionary of header names mapped to [Jinja2](https://jinja.palletsprojects.com/) template strings. Templates can reference:
+The `extra_headers` field accepts a dictionary of header names mapped to [Jinja2](https://jinja.palletsprojects.com/) template strings. It is placed inside the `config` section of each toolset type (`toolsets: > name: > config:` for HTTP/YAML/Python toolsets, `mcp_servers: > name: > config:` for MCP servers — see the [examples below](#toolset-examples)). Templates can reference:
 
 - **`{{ request_context.headers['Header-Name'] }}`** -- a header from the incoming HTTP request (case-insensitive lookup)
 - **`{{ env.ENV_VAR }}`** -- an environment variable
@@ -86,7 +86,7 @@ custom_toolsets:
 | `X-Tenant-Id` | `$HOLMES_HEADER_X_TENANT_ID` |
 
 !!! tip
-    If your toolset calls HTTP APIs, consider using an [HTTP connector](api-toolsets.md) or a [Python toolset](../contributing/python-toolsets.md) instead. Both merge `extra_headers` into outgoing requests automatically, without env var wiring.
+    If your toolset calls HTTP APIs, consider using an [HTTP connector](api-toolsets.md) instead. HTTP connectors and Python toolsets merge `extra_headers` into outgoing requests automatically, without env var wiring.
 
 See [Custom Toolsets](custom-toolsets.md) for the full YAML toolset reference.
 
@@ -143,5 +143,5 @@ export HOLMES_PASSTHROUGH_BLOCKED_HEADERS="authorization,cookie,set-cookie,x-int
 When multiple header sources exist, later layers override earlier ones:
 
 1. Toolset's own authentication headers (e.g., API key, bearer token)
-2. `extra_headers` (rendered templates from the `config` section)
-3. LLM-provided headers (HTTP connector only, via the `headers` tool parameter)
+2. LLM-provided headers (HTTP connector only, via the `headers` tool parameter)
+3. `extra_headers` (rendered templates from the `config` section)

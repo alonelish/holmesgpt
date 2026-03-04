@@ -381,6 +381,13 @@ class RemoteMCPToolset(Toolset):
 
         return final_headers if final_headers else None
 
+    def render_extra_headers(
+        self, request_context: Optional[Dict[str, Any]] = None
+    ) -> Dict[str, str]:
+        """MCP toolsets handle header rendering at connection time via _render_headers(),
+        not per-tool-call.  Return empty to avoid duplicate rendering in tool_calling_llm."""
+        return {}
+
     def model_post_init(self, __context: Any) -> None:
         self.prerequisites = [
             CallablePrerequisite(callable=self.prerequisites_callable)

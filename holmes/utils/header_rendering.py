@@ -16,12 +16,30 @@ logger = logging.getLogger(__name__)
 class CaseInsensitiveDict(dict):
     """Dictionary with case-insensitive key lookup for HTTP headers."""
 
-    def __getitem__(self, key: str) -> Any:
+    def _find_key(self, key: str) -> Optional[str]:
         if isinstance(key, str):
-            for k, v in self.items():
-                if k.lower() == key.lower():
-                    return v
+            key_lower = key.lower()
+            for k in dict.keys(self):
+                if k.lower() == key_lower:
+                    return k
+        return None
+
+    def __getitem__(self, key: str) -> Any:
+        found = self._find_key(key)
+        if found is not None:
+            return dict.__getitem__(self, found)
         raise KeyError(key)
+
+    def __contains__(self, key: object) -> bool:
+        if isinstance(key, str):
+            return self._find_key(key) is not None
+        return False
+
+    def get(self, key: str, default: Any = None) -> Any:
+        found = self._find_key(key)
+        if found is not None:
+            return dict.__getitem__(self, found)
+        return default
 
 
 def render_template_headers(
@@ -49,7 +67,7 @@ def render_template_headers(
     for header_name, header_template in extra_headers.items():
         try:
             rendered[header_name] = _render_single_template(
-                header_template, request_context, source_name
+                header_template, request_context
             )
         except Exception as e:  # noqa: BLE001
             logger.warning(
@@ -62,7 +80,6 @@ def render_template_headers(
 def _render_single_template(
     template_str: str,
     request_context: Optional[Dict[str, Any]] = None,
-    source_name: str = "unknown",
 ) -> str:
     """Render a single Jinja2 template string.
 
@@ -70,6 +87,8 @@ def _render_single_template(
     - {{ request_context.headers['Header-Name'] }} - case-insensitive header lookup
     - {{ env.ENV_VAR }} - environment variables
     - Plain strings (no template syntax) - returned as-is
+
+    Raises on failure so the caller can decide whether to skip or propagate.
     """
     context: Dict[str, Any] = {
         "env": os.environ,
@@ -85,11 +104,5 @@ def _render_single_template(
     else:
         context["request_context"] = {"headers": CaseInsensitiveDict()}
 
-    try:
-        template = Template(template_str)
-        return template.render(context)
-    except Exception as e:
-        logger.warning(
-            f"'{source_name}': Failed to render template '{template_str}': {e}"
-        )
-        return template_str
+    template = Template(template_str)
+    return template.render(context)

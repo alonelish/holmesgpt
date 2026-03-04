@@ -199,10 +199,13 @@ class ToolInvokeContext(BaseModel):
         """Override to exclude sensitive context from serialization"""
         data = super().model_dump(**kwargs)
         if data.get("request_context"):
-            # Sanitize: show keys but not values
-            data["request_context"] = {
-                k: "***REDACTED***" for k in data["request_context"].keys()
-            }
+            # Sanitize: show header names but redact values
+            ctx = data["request_context"]
+            if isinstance(ctx.get("headers"), dict):
+                ctx["headers"] = {
+                    k: "***REDACTED***" for k in ctx["headers"].keys()
+                }
+            data["request_context"] = ctx
         if data.get("rendered_extra_headers"):
             data["rendered_extra_headers"] = {
                 k: "***REDACTED***" for k in data["rendered_extra_headers"].keys()

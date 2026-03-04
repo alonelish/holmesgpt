@@ -48,6 +48,19 @@ class TestCaseInsensitiveDict:
         with pytest.raises(KeyError):
             _ = d["Missing"]
 
+    def test_contains_case_insensitive(self):
+        d = CaseInsensitiveDict({"X-Tenant-Id": "abc"})
+        assert "x-tenant-id" in d
+        assert "X-TENANT-ID" in d
+        assert "missing" not in d
+
+    def test_get_case_insensitive(self):
+        d = CaseInsensitiveDict({"X-Tenant-Id": "abc"})
+        assert d.get("x-tenant-id") == "abc"
+        assert d.get("X-TENANT-ID") == "abc"
+        assert d.get("missing") is None
+        assert d.get("missing", "default") == "default"
+
 
 class TestRenderTemplateHeaders:
     def test_static_value(self):
@@ -83,9 +96,9 @@ class TestRenderTemplateHeaders:
             {"X-Missing": "{{ request_context.headers['X-Nope'] }}"},
             request_context=ctx,
         )
-        # Jinja2 KeyError on CaseInsensitiveDict - should be handled gracefully
-        # The header is skipped with a warning
-        assert "X-Missing" not in result or result["X-Missing"] == ""
+        # Jinja2 catches KeyError from CaseInsensitiveDict and renders as
+        # empty string (Undefined).  The header is included but empty.
+        assert result["X-Missing"] == ""
 
     def test_no_request_context(self):
         result = render_template_headers(
@@ -224,7 +237,8 @@ class TestToolInvokeContextHeaders:
         )
         dumped = ctx.model_dump()
         assert dumped["rendered_extra_headers"]["X-Secret"] == "***REDACTED***"
-        assert dumped["request_context"]["headers"] == "***REDACTED***"
+        # request_context header values are redacted but names preserved
+        assert dumped["request_context"]["headers"]["H1"] == "***REDACTED***"
 
 
 # ---------------------------------------------------------------------------
@@ -466,6 +480,22 @@ class TestMCPConfigExtraHeaders:
         assert rendered is not None
         assert rendered["X-Static"] == "static-value"
         assert rendered["X-Dynamic"] == "dynamic-value"
+
+    def test_render_extra_headers_returns_empty(self):
+        """MCP toolsets handle headers at connection time, not per-tool-call.
+        The base render_extra_headers() should return empty to avoid duplicate rendering."""
+        from holmes.plugins.toolsets.mcp.toolset_mcp import RemoteMCPToolset
+
+        mcp_toolset = RemoteMCPToolset(
+            name="test_mcp",
+            description="Test toolset",
+            config={
+                "url": "http://localhost:1234",
+                "extra_headers": {"X-Should-Not-Render": "value"},
+            },
+        )
+        # Base class method should return empty for MCP
+        assert mcp_toolset.render_extra_headers({"headers": {"X-Foo": "bar"}}) == {}
 
     def test_extra_headers_override_static_headers(self):
         """extra_headers should take precedence over static headers."""
