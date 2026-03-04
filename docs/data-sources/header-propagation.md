@@ -62,7 +62,7 @@ See [HTTP Connectors](api-toolsets.md) for the full HTTP connector configuration
 
 ### Custom (YAML) Toolsets
 
-YAML toolsets execute bash commands, so headers cannot be injected into HTTP calls directly. Instead, rendered `extra_headers` are exposed as **environment variables** prefixed with `HOLMES_HEADER_`. Header names are uppercased and non-alphanumeric characters become underscores.
+YAML toolset commands run as bash subprocesses, so rendered `extra_headers` are exposed as **environment variables** prefixed with `HOLMES_HEADER_` rather than being injected into the command template directly (this avoids shell injection from untrusted header values). Header names are uppercased and non-alphanumeric characters become underscores.
 
 **Examples** of how header names are transformed into environment variable names:
 
@@ -72,19 +72,8 @@ YAML toolsets execute bash commands, so headers cannot be injected into HTTP cal
 | `Authorization` | `$HOLMES_HEADER_AUTHORIZATION` |
 | `X-Tenant-Id` | `$HOLMES_HEADER_X_TENANT_ID` |
 
-```yaml
-toolsets:
-  my-api-tools:
-    config:
-      extra_headers:
-        X-Auth-Token: "{{ request_context.headers['X-Auth-Token'] }}"
-    tools:
-      - name: query_api
-        description: "Query the internal API"
-        command: |
-          curl -s -H "X-Auth-Token: $HOLMES_HEADER_X_AUTH_TOKEN" \
-            "https://internal-api.corp.net/v1/status"
-```
+!!! tip
+    For APIs that require per-request authentication headers, consider using an [HTTP connector](api-toolsets.md) instead of a YAML toolset. HTTP connectors merge `extra_headers` into outgoing requests automatically — no env var wiring needed.
 
 See [Custom Toolsets](custom-toolsets.md) for the full YAML toolset reference.
 
