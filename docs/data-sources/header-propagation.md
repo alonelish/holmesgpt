@@ -73,7 +73,7 @@ YAML toolset commands run as bash subprocesses, so rendered `extra_headers` are 
 | `X-Tenant-Id` | `$HOLMES_HEADER_X_TENANT_ID` |
 
 !!! tip
-    For APIs that require per-request authentication headers, consider using an [HTTP connector](api-toolsets.md) instead of a YAML toolset. HTTP connectors merge `extra_headers` into outgoing requests automatically — no env var wiring needed.
+    If your toolset calls HTTP APIs, consider using an [HTTP connector](api-toolsets.md) or a [Python toolset](../contributing/python-toolsets.md) instead. Both merge `extra_headers` into outgoing requests automatically, without env var wiring.
 
 See [Custom Toolsets](custom-toolsets.md) for the full YAML toolset reference.
 
