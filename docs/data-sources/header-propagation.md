@@ -12,11 +12,16 @@ Header propagation is supported across all toolset types: [MCP servers](remote-m
 1. A client sends an HTTP request to the Holmes server (e.g., `/api/investigate`)
 2. Holmes extracts non-sensitive headers from the request (blocking `Authorization`, `Cookie`, and `Set-Cookie` by default)
 3. The extracted headers are available as `request_context` during tool execution
-4. Toolsets that have `extra_headers` in their `config` section render those templates using the request context and forward the resulting headers to their tools at invocation time. Toolsets without `extra_headers` are unaffected.
+4. Toolsets that opt in render those templates using the request context and forward the resulting values to their tools at invocation time. Toolsets without the config key are unaffected.
 
-## Configuring `extra_headers`
+## Configuration
 
-The `extra_headers` field accepts a dictionary of header names mapped to [Jinja2](https://jinja.palletsprojects.com/) template strings. It is placed inside the `config` section of each toolset type (`toolsets: > name: > config:` for HTTP/YAML/Python toolsets, `mcp_servers: > name: > config:` for MCP servers — see the [examples below](#toolset-examples)). Templates can reference:
+The config key is placed inside the `config` section of each toolset and accepts a dictionary of names mapped to [Jinja2](https://jinja.palletsprojects.com/) template strings:
+
+- **`extra_headers`** -- for MCP servers, HTTP connectors, and Python toolsets (values become HTTP headers)
+- **`extra_env_vars`** -- for custom (YAML) toolsets (values become `HOLMES_HEADER_*` environment variables)
+
+Templates can reference:
 
 - **`{{ request_context.headers['Header-Name'] }}`** -- a header from the incoming HTTP request (case-insensitive lookup)
 - **`{{ env.ENV_VAR }}`** -- an environment variable
@@ -140,7 +145,7 @@ See [HTTP Connectors](api-toolsets.md) for the full HTTP connector configuration
 
 ### Custom (YAML) Toolsets
 
-YAML toolsets use the same `extra_headers` config key as other toolset types, but the delivery mechanism is different. Because YAML tools run as bash subprocesses, Holmes cannot inject HTTP headers directly. Instead, each rendered header value is exposed as an **environment variable** prefixed with `HOLMES_HEADER_`. Your command then references these env vars to pass the values wherever they're needed (e.g., as `curl -H` flags). Header names are uppercased and non-alphanumeric characters become underscores.
+YAML tools run as bash subprocesses, so Holmes cannot inject HTTP headers directly. Instead, YAML toolsets use **`extra_env_vars`** (not `extra_headers`). Each rendered value is exposed as an environment variable prefixed with `HOLMES_HEADER_`. Your command then references these env vars to pass the values wherever they're needed (e.g., as `curl -H` flags). Header names are uppercased and non-alphanumeric characters become underscores.
 
 === "Holmes CLI"
 
@@ -151,7 +156,7 @@ YAML toolsets use the same `extra_headers` config key as other toolset types, bu
       internal-api:
         name: "internal-api"
         config:
-          extra_headers:
+          extra_env_vars:
             X-Auth-Token: "{{ request_context.headers['X-Auth-Token'] }}"
         tools:
           - name: "fetch_data"
@@ -173,7 +178,7 @@ YAML toolsets use the same `extra_headers` config key as other toolset types, bu
         internal-api:
           name: "internal-api"
           config:
-            extra_headers:
+            extra_env_vars:
               X-Auth-Token: "{{ request_context.headers['X-Auth-Token'] }}"
           tools:
             - name: "fetch_data"
@@ -181,9 +186,9 @@ YAML toolsets use the same `extra_headers` config key as other toolset types, bu
               command: 'curl -s -H "X-Auth-Token: $HOLMES_HEADER_X_AUTH_TOKEN" https://internal-api.corp.net/data'
     ```
 
-**Examples** of how header names are transformed into environment variable names:
+**Examples** of how `extra_env_vars` keys are transformed into environment variable names:
 
-| extra_headers key | Environment variable |
+| extra_env_vars key | Environment variable |
 |---|---|
 | `X-Auth-Token` | `$HOLMES_HEADER_X_AUTH_TOKEN` |
 | `Authorization` | `$HOLMES_HEADER_AUTHORIZATION` |

@@ -124,11 +124,11 @@ class TestRenderTemplateHeaders:
 
 
 # ---------------------------------------------------------------------------
-# Toolset base class tests (extra_headers in config)
+# YAML toolset uses extra_env_vars (not extra_headers)
 # ---------------------------------------------------------------------------
 
-class TestToolsetExtraHeaders:
-    def test_render_extra_headers_returns_empty_when_no_config(self):
+class TestYAMLToolsetExtraEnvVars:
+    def test_render_returns_empty_when_no_config(self):
         ts = YAMLToolset(
             name="test",
             description="test",
@@ -136,7 +136,7 @@ class TestToolsetExtraHeaders:
         )
         assert ts.render_extra_headers() == {}
 
-    def test_render_extra_headers_returns_empty_when_config_has_no_extra_headers(self):
+    def test_render_returns_empty_when_config_has_no_extra_env_vars(self):
         ts = YAMLToolset(
             name="test",
             description="test",
@@ -145,22 +145,32 @@ class TestToolsetExtraHeaders:
         )
         assert ts.render_extra_headers() == {}
 
-    def test_render_extra_headers_static_from_dict_config(self):
+    def test_ignores_extra_headers_key(self):
+        """YAML toolsets should NOT read extra_headers — only extra_env_vars."""
         ts = YAMLToolset(
             name="test",
             description="test",
             tools=[],
-            config={"extra_headers": {"X-Custom": "static-value"}},
+            config={"extra_headers": {"X-Custom": "should-be-ignored"}},
+        )
+        assert ts.render_extra_headers() == {}
+
+    def test_render_static_from_dict_config(self):
+        ts = YAMLToolset(
+            name="test",
+            description="test",
+            tools=[],
+            config={"extra_env_vars": {"X-Custom": "static-value"}},
         )
         assert ts.render_extra_headers() == {"X-Custom": "static-value"}
 
-    def test_render_extra_headers_with_request_context(self):
+    def test_render_with_request_context(self):
         ts = YAMLToolset(
             name="test",
             description="test",
             tools=[],
             config={
-                "extra_headers": {
+                "extra_env_vars": {
                     "X-Tenant": "{{ request_context.headers['X-Tenant-Id'] }}"
                 }
             },
@@ -169,28 +179,36 @@ class TestToolsetExtraHeaders:
         result = ts.render_extra_headers(ctx)
         assert result == {"X-Tenant": "tenant-abc"}
 
-    def test_render_extra_headers_with_env(self, monkeypatch):
+    def test_render_with_env(self, monkeypatch):
         monkeypatch.setenv("MY_TOKEN", "tok-123")
         ts = YAMLToolset(
             name="test",
             description="test",
             tools=[],
             config={
-                "extra_headers": {"Authorization": "Bearer {{ env.MY_TOKEN }}"}
+                "extra_env_vars": {"Authorization": "Bearer {{ env.MY_TOKEN }}"}
             },
         )
         result = ts.render_extra_headers()
         assert result == {"Authorization": "Bearer tok-123"}
 
+
+# ---------------------------------------------------------------------------
+# Base Toolset extra_headers (used by HTTP/Python toolsets, NOT YAML)
+# ---------------------------------------------------------------------------
+
+class TestToolsetExtraHeaders:
     def test_render_extra_headers_from_pydantic_config(self):
         """Verify render_extra_headers works with a Pydantic model config (attribute access)."""
         from holmes.utils.pydantic_utils import ToolsetConfig
 
         config = ToolsetConfig(extra_headers={"X-From-Model": "pydantic-value"})
-        ts = YAMLToolset(
+        # Use a non-YAML toolset subclass — ToolsetYamlFromConfig extends Toolset
+        # but does not override render_extra_headers, so it uses the base class.
+        from holmes.core.tools import ToolsetYamlFromConfig
+
+        ts = ToolsetYamlFromConfig(
             name="test",
-            description="test",
-            tools=[],
             config=config,
         )
         assert ts.render_extra_headers() == {"X-From-Model": "pydantic-value"}

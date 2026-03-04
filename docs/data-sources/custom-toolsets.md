@@ -331,7 +331,7 @@ HolmesGPT supports two types of variables in commands:
 
 - **`{{ variable }}`**: Dynamic variables inferred by the LLM based on context
 - **`${VARIABLE}`**: Environment variables (not visible to the LLM)
-- **`$HOLMES_HEADER_*`**: Headers propagated from the incoming HTTP request via `extra_headers` (see [HTTP Header Propagation](header-propagation.md))
+- **`$HOLMES_HEADER_*`**: Values propagated from the incoming HTTP request via `extra_env_vars` (see [HTTP Header Propagation](header-propagation.md))
 
 ### Tags
 

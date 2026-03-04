@@ -1027,6 +1027,30 @@ class YAMLToolset(Toolset):
         if self.llm_instructions:
             self._load_llm_instructions(self.llm_instructions)
 
+    def render_extra_headers(
+        self, request_context: Optional[Dict[str, Any]] = None
+    ) -> Dict[str, str]:
+        """YAML toolsets use ``extra_env_vars`` instead of ``extra_headers``.
+
+        The values are ultimately injected as ``HOLMES_HEADER_*`` environment
+        variables into the bash subprocess, so ``extra_env_vars`` is a more
+        accurate name for this config key.
+        """
+        extra_env_vars: Optional[Dict[str, str]] = None
+        if self.config is not None:
+            if isinstance(self.config, dict):
+                extra_env_vars = self.config.get("extra_env_vars")
+            else:
+                extra_env_vars = getattr(self.config, "extra_env_vars", None)
+
+        if not extra_env_vars:
+            return {}
+        return render_template_headers(
+            extra_headers=extra_env_vars,
+            request_context=request_context,
+            source_name=self.name,
+        )
+
 
 class ToolsetYamlFromConfig(Toolset):
     """
