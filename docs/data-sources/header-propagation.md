@@ -140,7 +140,7 @@ See [HTTP Connectors](api-toolsets.md) for the full HTTP connector configuration
 
 ### Custom (YAML) Toolsets
 
-YAML toolset commands run as bash subprocesses, so rendered `extra_headers` are exposed as **environment variables** prefixed with `HOLMES_HEADER_` rather than being injected into the command template directly (this avoids shell injection from untrusted header values). Header names are uppercased and non-alphanumeric characters become underscores.
+YAML toolsets use the same `extra_headers` config key as other toolset types, but the delivery mechanism is different. Because YAML tools run as bash subprocesses, Holmes cannot inject HTTP headers directly. Instead, each rendered header value is exposed as an **environment variable** prefixed with `HOLMES_HEADER_`. Your command then references these env vars to pass the values wherever they're needed (e.g., as `curl -H` flags). Header names are uppercased and non-alphanumeric characters become underscores.
 
 === "Holmes CLI"
 
