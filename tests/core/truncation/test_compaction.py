@@ -65,9 +65,10 @@ def test_conversation_history_compaction_system_prompt_untouched():
 
         conversation_history.insert(0, system_prompt)
 
-        compacted_history = compact_conversation_history(
+        compaction_result = compact_conversation_history(
             original_conversation_history=conversation_history, llm=llm
         )
+        compacted_history = compaction_result.messages_after_compaction
         assert compacted_history
         assert (
             len(compacted_history) == 4
@@ -89,9 +90,10 @@ def test_conversation_history_compaction():
     with open(CONVERSATION_HISTORY_FILE_PATH) as file:
         conversation_history = json.load(file)
 
-        compacted_history = compact_conversation_history(
+        compaction_result = compact_conversation_history(
             original_conversation_history=conversation_history, llm=llm
         )
+        compacted_history = compaction_result.messages_after_compaction
         assert compacted_history
         assert (
             len(compacted_history) == 3

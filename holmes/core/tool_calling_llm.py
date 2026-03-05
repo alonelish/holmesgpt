@@ -3,6 +3,8 @@ import json
 import logging
 import re
 import textwrap
+import threading
+from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional, Type, Union
 
 import sentry_sdk
@@ -27,6 +29,7 @@ from holmes.core.investigation_structured_output import (
 )
 from holmes.core.issue import Issue
 from holmes.core.llm import LLM
+from holmes.core.llm_usage import extract_usage_from_response
 from holmes.core.models import (
     PendingToolApproval,
     ToolApprovalDecision,
@@ -63,6 +66,12 @@ from holmes.utils.stream import (
     build_stream_event_token_count,
 )
 from holmes.utils.tags import parse_messages_tags
+
+class LLMInterruptedError(Exception):
+    """Raised when the user interrupts an in-progress LLM call (e.g. via Escape key)."""
+
+    pass
+
 
 # Create a named logger for cost tracking
 cost_logger = logging.getLogger("holmes.costs")
@@ -148,6 +157,7 @@ class LLMCosts(BaseModel):
     total_tokens: int = 0
     prompt_tokens: int = 0
     completion_tokens: int = 0
+    num_compactions: int = 0
 
 
 def _extract_cost_from_response(full_response) -> float:
@@ -159,16 +169,7 @@ def _extract_cost_from_response(full_response) -> float:
     Returns:
         The cost as a float, or 0.0 if not available
     """
-    try:
-        cost_value = (
-            full_response._hidden_params.get("response_cost", 0)
-            if hasattr(full_response, "_hidden_params")
-            else 0
-        )
-        # Ensure cost is a float
-        return float(cost_value) if cost_value is not None else 0.0
-    except Exception:
-        return 0.0
+    return extract_usage_from_response(full_response).cost
 
 
 def _process_cost_info(
@@ -184,31 +185,29 @@ def _process_cost_info(
         log_prefix: Prefix for logging messages (e.g., "LLM call", "Post-processing")
     """
     try:
-        cost = _extract_cost_from_response(full_response)
-        usage = getattr(full_response, "usage", {})
+        raw = extract_usage_from_response(full_response)
 
-        if usage:
-            if LOG_LLM_USAGE_RESPONSE:  # shows stats on token cache usage
+        if LOG_LLM_USAGE_RESPONSE:
+            usage = getattr(full_response, "usage", None)
+            if usage:
                 logging.info(f"LLM usage response:\n{usage}\n")
-            prompt_toks = usage.get("prompt_tokens", 0)
-            completion_toks = usage.get("completion_tokens", 0)
-            total_toks = usage.get("total_tokens", 0)
+
+        if raw.total_tokens > 0:
             cost_logger.debug(
-                f"{log_prefix} cost: ${cost:.6f} | Tokens: {prompt_toks} prompt + {completion_toks} completion = {total_toks} total"
-            )
-            # Accumulate costs and tokens if costs object provided
-            if costs:
-                costs.total_cost += cost
-                costs.prompt_tokens += prompt_toks
-                costs.completion_tokens += completion_toks
-                costs.total_tokens += total_toks
-        elif cost > 0:
-            cost_logger.debug(
-                f"{log_prefix} cost: ${cost:.6f} | Token usage not available"
+                f"{log_prefix} cost: ${raw.cost:.6f} | Tokens: {raw.prompt_tokens} prompt + {raw.completion_tokens} completion = {raw.total_tokens} total"
             )
             if costs:
-                costs.total_cost += cost
-    except Exception as e:
+                costs.total_cost += raw.cost
+                costs.prompt_tokens += raw.prompt_tokens
+                costs.completion_tokens += raw.completion_tokens
+                costs.total_tokens += raw.total_tokens
+        elif raw.cost > 0:
+            cost_logger.debug(
+                f"{log_prefix} cost: ${raw.cost:.6f} | Token usage not available"
+            )
+            if costs:
+                costs.total_cost += raw.cost
+    except (AttributeError, TypeError, KeyError) as e:
         logging.debug(f"Could not extract cost information: {e}")
 
 
@@ -239,12 +238,18 @@ class ToolCallingLLM:
     llm: LLM
 
     def __init__(
-        self, tool_executor: ToolExecutor, max_steps: int, llm: LLM, tracer=None
+        self,
+        tool_executor: ToolExecutor,
+        max_steps: int,
+        llm: LLM,
+        tool_results_dir: Optional[Path],
+        tracer=None,
     ):
         self.tool_executor = tool_executor
         self.max_steps = max_steps
         self.tracer = tracer
         self.llm = llm
+        self.tool_results_dir = tool_results_dir
         self.approval_callback: Optional[
             Callable[[StructuredToolResult], tuple[bool, Optional[str]]]
         ] = None
@@ -256,6 +261,16 @@ class ToolCallingLLM:
         For interactive loop, reset runbooks in use
         """
         self._runbook_in_use = False
+
+    def _has_bash_for_file_access(self) -> bool:
+        """Check if bash toolset is available for reading saved tool result files."""
+        for toolset in self.tool_executor.enabled_toolsets:
+            if toolset.name == "bash":
+                config = toolset.config
+                if config and hasattr(config, "include_default_allow_deny_list"):
+                    return config.include_default_allow_deny_list
+                return False
+        return False
 
     def process_tool_decisions(
         self,
@@ -423,6 +438,7 @@ class ToolCallingLLM:
         trace_span=DummySpan(),
         tool_number_offset: int = 0,
         request_context: Optional[Dict[str, Any]] = None,
+        cancel_event: Optional[threading.Event] = None,
     ) -> LLMResult:
         tool_calls: list[
             dict
@@ -434,6 +450,9 @@ class ToolCallingLLM:
         i = 0
         metadata: Dict[Any, Any] = {}
         while i < max_steps:
+            if cancel_event and cancel_event.is_set():
+                raise LLMInterruptedError()
+
             i += 1
             logging.debug(f"running iteration {i}")
             # on the last step we don't allow tools - we want to force a reply, not a request to run another tool
@@ -456,6 +475,16 @@ class ToolCallingLLM:
 
             messages = limit_result.messages
             metadata = metadata | limit_result.metadata
+
+            # Always accumulate compaction tokens/cost when a compaction LLM call
+            # was attempted, even if it didn't reduce token count
+            compaction = limit_result.compaction_usage
+            if compaction.total_tokens > 0:
+                costs.num_compactions += 1
+                costs.total_tokens += compaction.total_tokens
+                costs.prompt_tokens += compaction.prompt_tokens
+                costs.completion_tokens += compaction.completion_tokens
+                costs.total_cost += compaction.cost
 
             if (
                 limit_result.conversation_history_compacted
@@ -488,7 +517,21 @@ class ToolCallingLLM:
                         "The Azure model you chose is not supported. Model version 1106 and higher required."
                     )
                 else:
+                    logging.error(
+                        f"LLM BadRequestError on model={self.llm.model} (iteration {i}): {e}",
+                        exc_info=True,
+                    )
                     raise
+            except Exception as e:
+                logging.error(
+                    f"LLM call failed on model={self.llm.model} (iteration {i}): "
+                    f"{type(e).__name__}: {e}",
+                    exc_info=True,
+                )
+                raise
+
+            if cancel_event and cancel_event.is_set():
+                raise LLMInterruptedError()
 
             response = full_response.choices[0]  # type: ignore
 
@@ -574,6 +617,13 @@ class ToolCallingLLM:
                     futures.append(future)
 
                 for future in concurrent.futures.as_completed(futures):
+                    # Best-effort cancellation: in-flight tool calls run to completion
+                    # since f.cancel() only prevents queued (not running) tasks.
+                    if cancel_event and cancel_event.is_set():
+                        for f in futures:
+                            f.cancel()
+                        raise LLMInterruptedError()
+
                     tool_call_result: ToolCallResult = future.result()
 
                     tool_number = (
@@ -629,6 +679,15 @@ class ToolCallingLLM:
         session_approved_prefixes: Optional[List[str]] = None,
         request_context: Optional[Dict[str, Any]] = None,
     ) -> StructuredToolResult:
+        # Ensure the toolset is initialized (lazy initialization on first use)
+        init_error = self.tool_executor.ensure_toolset_initialized(tool_name)
+        if isinstance(init_error, str):
+            return StructuredToolResult(
+                status=StructuredToolResultStatus.ERROR,
+                error=init_error,
+                params=tool_params,
+            )
+
         tool = self.tool_executor.get_tool_by_name(tool_name)
         if not tool:
             logging.warning(
@@ -817,7 +876,11 @@ class ToolCallingLLM:
                 )
 
             original_token_count = prevent_overly_big_tool_response(
-                tool_call_result=tool_call_result, llm=self.llm
+                tool_call_result=tool_call_result,
+                llm=self.llm,
+                tool_results_dir=self.tool_results_dir
+                if self.tool_results_dir and self._has_bash_for_file_access()
+                else None,
             )
 
             ToolCallingLLM._log_tool_call_result(
@@ -838,9 +901,7 @@ class ToolCallingLLM:
             tool_name=tool_call_result.tool_name,
             tool_call_id=tool_call_result.tool_call_id,
         )
-        approval = tool.requires_approval(
-            tool_call_result.result.params or {}, context
-        )
+        approval = tool.requires_approval(tool_call_result.result.params or {}, context)
         return not approval or not approval.needs_approval
 
     def _handle_tool_call_approval(
@@ -868,9 +929,7 @@ class ToolCallingLLM:
 
         # Re-check if approval is still needed (prefix may have been approved by another tool call)
         if self._is_tool_call_already_approved(tool_call_result):
-            logging.info(
-                f"Approval no longer needed for {tool_call_result.tool_name}"
-            )
+            logging.info(f"Approval no longer needed for {tool_call_result.tool_name}")
             with trace_span.start_span(type="tool") as tool_span:
                 tool_call_result.result = self._directly_invoke_tool_call(
                     tool_name=tool_call_result.tool_name,
@@ -948,6 +1007,7 @@ class ToolCallingLLM:
         tools: Optional[list] = self._get_tools()
         max_steps = self.max_steps
         metadata: Dict[Any, Any] = {}
+        costs = LLMCosts()
         i = 0
         tool_number_offset = 0
 
@@ -978,6 +1038,19 @@ class ToolCallingLLM:
             messages = limit_result.messages
             metadata = metadata | limit_result.metadata
 
+            # Accumulate compaction costs (mirrors call() logic)
+            compaction = limit_result.compaction_usage
+            if compaction.total_tokens > 0:
+                costs.num_compactions += 1
+                costs.total_tokens += compaction.total_tokens
+                costs.prompt_tokens += compaction.prompt_tokens
+                costs.completion_tokens += compaction.completion_tokens
+                costs.total_cost += compaction.cost
+                cost_logger.debug(
+                    f"Compaction cost (streaming): ${compaction.cost:.6f} | "
+                    f"Tokens: {compaction.prompt_tokens} prompt + {compaction.completion_tokens} completion = {compaction.total_tokens} total"
+                )
+
             if (
                 limit_result.conversation_history_compacted
                 and RESET_REPEATED_TOOL_CALL_CHECK_AFTER_COMPACTION
@@ -997,8 +1070,8 @@ class ToolCallingLLM:
                     drop_params=True,
                 )
 
-                # Log cost information for this iteration (no accumulation in streaming)
-                _process_cost_info(full_response, log_prefix="LLM iteration")
+                # Accumulate cost information for this iteration
+                _process_cost_info(full_response, costs, log_prefix="LLM iteration")
 
             # catch a known error that occurs with Azure and replace the error message with something more obvious to the user
             except BadRequestError as e:
@@ -1009,7 +1082,18 @@ class ToolCallingLLM:
                         "The Azure model you chose is not supported. Model version 1106 and higher required."
                     ) from e
                 else:
+                    logging.error(
+                        f"LLM BadRequestError on model={self.llm.model} (streaming iteration {i}): {e}",
+                        exc_info=True,
+                    )
                     raise
+            except Exception as e:
+                logging.error(
+                    f"LLM call failed on model={self.llm.model} (streaming iteration {i}): "
+                    f"{type(e).__name__}: {e}",
+                    exc_info=True,
+                )
+                raise
 
             response_message = full_response.choices[0].message  # type: ignore
             if response_message and response_format:
@@ -1043,6 +1127,7 @@ class ToolCallingLLM:
                 maximum_output_token=limit_result.maximum_output_token,
                 metadata=metadata,
             )
+            metadata["costs"] = costs.model_dump()
             yield build_stream_event_token_count(metadata=metadata)
 
             tools_to_call = getattr(response_message, "tool_calls", None)
@@ -1211,9 +1296,10 @@ class IssueInvestigator(ToolCallingLLM):
         tool_executor: ToolExecutor,
         max_steps: int,
         llm: LLM,
+        tool_results_dir: Optional[Path],
         cluster_name: Optional[str],
     ):
-        super().__init__(tool_executor, max_steps, llm)
+        super().__init__(tool_executor, max_steps, llm, tool_results_dir)
         self.cluster_name = cluster_name
 
     def investigate(

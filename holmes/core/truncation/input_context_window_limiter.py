@@ -13,7 +13,7 @@ from holmes.core.llm import (
     TokenCountMetadata,
     get_context_window_compaction_threshold_pct,
 )
-from holmes.core.truncation.compaction import compact_conversation_history
+from holmes.core.truncation.compaction import CompactionUsage, compact_conversation_history
 from holmes.utils.stream import StreamEvents, StreamMessage
 
 
@@ -49,6 +49,7 @@ class ContextWindowLimiterOutput(BaseModel):
     maximum_output_token: int
     tokens: TokenCountMetadata
     conversation_history_compacted: bool
+    compaction_usage: CompactionUsage = CompactionUsage()
 
 
 @sentry_sdk.trace
@@ -63,20 +64,22 @@ def limit_input_context_window(
     reserved_for_output = min(maximum_output_token, MAX_OUTPUT_TOKEN_RESERVATION)
     available_for_input = max_context_size - reserved_for_output
     conversation_history_compacted = False
+    compaction_usage = CompactionUsage()
 
     compaction_threshold = max_context_size * get_context_window_compaction_threshold_pct() / 100
 
     if ENABLE_CONVERSATION_HISTORY_COMPACTION and (
         initial_tokens.total_tokens + maximum_output_token
     ) > compaction_threshold:
-        compacted_messages = compact_conversation_history(
+        compaction_result = compact_conversation_history(
             original_conversation_history=messages, llm=llm
         )
-        compacted_tokens = llm.count_tokens(compacted_messages, tools=tools)
+        compaction_usage = compaction_result.usage
+        compacted_tokens = llm.count_tokens(compaction_result.messages_after_compaction, tools=tools)
         compacted_total_tokens = compacted_tokens.total_tokens
 
         if compacted_total_tokens < initial_tokens.total_tokens:
-            messages = compacted_messages
+            messages = compaction_result.messages_after_compaction
             compaction_message = f"The conversation history has been compacted from {initial_tokens.total_tokens} to {compacted_total_tokens} tokens"
             logging.info(compaction_message)
             conversation_history_compacted = True
@@ -85,7 +88,7 @@ def limit_input_context_window(
                     event=StreamEvents.CONVERSATION_HISTORY_COMPACTED,
                     data={
                         "content": compaction_message,
-                        "messages": compacted_messages,
+                        "messages": compaction_result.messages_after_compaction,
                         "metadata": {
                             "initial_tokens": initial_tokens.total_tokens,
                             "compacted_tokens": compacted_total_tokens,
@@ -131,4 +134,5 @@ def limit_input_context_window(
         maximum_output_token=maximum_output_token,
         tokens=tokens,
         conversation_history_compacted=conversation_history_compacted,
+        compaction_usage=compaction_usage,
     )
