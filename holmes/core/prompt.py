@@ -106,6 +106,11 @@ def is_component_enabled(
         return False  # env var wins, can't override to enabled
     if overrides and component in overrides:
         return overrides[component]  # env allows, API decides
+
+    # AI safety guidelines are off by default - LLMs already have built-in safety guardrails
+    if component == PromptComponent.AI_SAFETY:
+        return False
+
     return True  # env allows, no override, default enabled
 
 

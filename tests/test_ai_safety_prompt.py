@@ -1,76 +1,72 @@
-"""Tests to verify AI safety prompt is included in all system prompts."""
+"""Tests to verify AI safety prompt behavior: off by default, opt-in when enabled."""
 
 import pytest
 
 from holmes.plugins.prompts import load_and_render_prompt
 
 
-class TestAISafetyPromptInclusion:
-    """Test that AI safety prompt is included in all main system prompt templates."""
+SAFETY_MARKERS = [
+    "# Safety & Guardrails",
+    "## Content Harms",
+    "## Jailbreaks – UPIA",
+    "## Jailbreaks – XPIA",
+    "## IP / Third-Party Content Regurgitation",
+    "## Ungrounded Content",
+]
 
-    @pytest.mark.parametrize(
-        "template_path",
-        [
-            "builtin://generic_ask.jinja2",
-            "builtin://generic_ask_for_issue_conversation.jinja2",
-            "builtin://generic_investigation.jinja2",
-        ],
-    )
-    def test_ai_safety_prompt_included(self, template_path):
-        """Test that AI safety prompt is included in system prompt templates."""
-        # Basic context that all templates should support
-        context = {
-            "toolsets": [],
-            "cluster_name": "test-cluster",
-            "issue": {"source_type": "test"},  # for investigation template
-            "investigation": "test investigation",  # for issue conversation template
-            "tools_called_for_investigation": [],  # for issue conversation template
-            "sections": {},  # for investigation template output format
-            "ai_safety_enabled": True,  # Required for conditional AI safety section
-        }
+TEMPLATES_WITH_FLAG = [
+    "builtin://generic_ask.jinja2",
+]
 
-        rendered = load_and_render_prompt(template_path, context)
+TEMPLATES_WITHOUT_FLAG = [
+    "builtin://generic_ask_for_issue_conversation.jinja2",
+    "builtin://generic_investigation.jinja2",
+]
 
-        # Check that key AI safety sections are present
-        assert (
-            "# Safety & Guardrails" in rendered
-        ), f"AI safety header missing from {template_path}"
-        assert (
-            "## Content Harms" in rendered
-        ), f"Content Harms section missing from {template_path}"
-        assert (
-            "## Jailbreaks – UPIA" in rendered
-        ), f"UPIA section missing from {template_path}"
-        assert (
-            "## Jailbreaks – XPIA" in rendered
-        ), f"XPIA section missing from {template_path}"
-        assert (
-            "## IP / Third-Party Content Regurgitation" in rendered
-        ), f"IP section missing from {template_path}"
-        assert (
-            "## Ungrounded Content" in rendered
-        ), f"Ungrounded Content section missing from {template_path}"
 
-        # Check for key safety phrases
-        assert (
-            "non-negotiable" in rendered
-        ), f"Non-negotiable clause missing from {template_path}"
-        assert (
-            "copyright laws" in rendered
-        ), f"Copyright clause missing from {template_path}"
-        assert (
-            "physical or emotional harm" in rendered
-        ), f"Harm prevention clause missing from {template_path}"
+def _base_context(**overrides):
+    ctx = {
+        "toolsets": [],
+        "cluster_name": "test-cluster",
+        "issue": {"source_type": "test"},
+        "investigation": "test investigation",
+        "tools_called_for_investigation": [],
+        "sections": {},
+    }
+    ctx.update(overrides)
+    return ctx
+
+
+class TestAISafetyOffByDefault:
+    """AI safety prompt should NOT be included by default."""
+
+    @pytest.mark.parametrize("template_path", TEMPLATES_WITH_FLAG)
+    def test_flagged_templates_exclude_safety_by_default(self, template_path):
+        rendered = load_and_render_prompt(template_path, _base_context())
+        for marker in SAFETY_MARKERS:
+            assert marker not in rendered, f"Safety content unexpectedly present in {template_path}"
+
+    @pytest.mark.parametrize("template_path", TEMPLATES_WITHOUT_FLAG)
+    def test_noflag_templates_exclude_safety(self, template_path):
+        rendered = load_and_render_prompt(template_path, _base_context())
+        for marker in SAFETY_MARKERS:
+            assert marker not in rendered, f"Safety content unexpectedly present in {template_path}"
+
+
+class TestAISafetyOptIn:
+    """AI safety prompt should be included when explicitly enabled."""
+
+    @pytest.mark.parametrize("template_path", TEMPLATES_WITH_FLAG)
+    def test_flagged_templates_include_safety_when_enabled(self, template_path):
+        rendered = load_and_render_prompt(
+            template_path, _base_context(ai_safety_enabled=True)
+        )
+        for marker in SAFETY_MARKERS:
+            assert marker in rendered, f"Safety content missing from {template_path} when enabled"
 
 
 def test_ai_safety_template_exists():
     """Test that the AI safety template file exists and can be rendered."""
     rendered = load_and_render_prompt("builtin://_ai_safety.jinja2", {})
-
-    # Should contain all expected sections
-    assert "# Safety & Guardrails" in rendered
-    assert "## Content Harms" in rendered
-    assert "## Jailbreaks – UPIA" in rendered
-    assert "## Jailbreaks – XPIA" in rendered
-    assert "## IP / Third-Party Content Regurgitation" in rendered
-    assert "## Ungrounded Content" in rendered
+    for marker in SAFETY_MARKERS:
+        assert marker in rendered
