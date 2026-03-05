@@ -93,6 +93,31 @@ export HOLMES_LOG_LEVEL="DEBUG"
 ### HOLMES_CACHE_DIR
 Directory for caching HolmesGPT data and temporary files.
 
+### CERTIFICATE
+
+Base64-encoded custom CA certificate for outbound HTTPS requests. When set, the certificate is appended to the default CA bundle so that HolmesGPT trusts your private CA for all connections (LLM APIs, Elasticsearch, Prometheus, etc.).
+
+=== "Holmes CLI"
+
+    ```bash
+    export CERTIFICATE="$(base64 -w0 /path/to/ca.crt)"
+    ```
+
+=== "Holmes Helm Chart"
+
+    ```yaml
+    # values.yaml
+    certificate: "<base64-encoded CA cert>"
+    ```
+
+=== "Robusta Helm Chart"
+
+    ```yaml
+    # generated_values.yaml
+    holmes:
+      certificate: "<base64-encoded CA cert>"
+    ```
+
 ## Data Source Configuration
 
 ### Prometheus
