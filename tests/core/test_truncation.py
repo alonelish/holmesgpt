@@ -18,7 +18,7 @@ class TestContextWindowOverflowError:
 
         assert "150,000 tokens" in str(error)
         assert "100,000 tokens" in str(error)
-        assert "could not be summarized" in str(error)
+        assert "robusta-dev/holmesgpt/issues" in str(error)
         assert "start a new conversation" in str(error)
 
     def test_error_message_without_compaction(self):
@@ -31,7 +31,7 @@ class TestContextWindowOverflowError:
 
         assert "150,000 tokens" in str(error)
         assert "100,000 tokens" in str(error)
-        assert "enable conversation history compaction" in str(error)
+        assert "robusta-dev/holmesgpt/issues" in str(error)
 
     def test_error_attributes(self):
         """Test that error attributes are stored correctly."""

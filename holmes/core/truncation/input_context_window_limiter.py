@@ -29,14 +29,15 @@ class ContextWindowOverflowError(Exception):
             message = (
                 f"The conversation history is too long ({current_tokens:,} tokens) and could not be "
                 f"summarized to fit within the context window ({max_tokens:,} tokens). "
-                "This can happen when there are many large tool responses in a single turn. "
-                "Please start a new conversation or ask a more specific question about a subset of the data."
+                "This is likely a bug. Please report it at https://github.com/robusta-dev/holmesgpt/issues "
+                "and start a new conversation in the meantime."
             )
         else:
             message = (
                 f"The conversation ({current_tokens:,} tokens) exceeds the context window "
-                f"({max_tokens:,} tokens). Please start a new conversation or enable "
-                "conversation history compaction."
+                f"({max_tokens:,} tokens). This is likely a bug. Please report it at "
+                "https://github.com/robusta-dev/holmesgpt/issues and start a new conversation "
+                "in the meantime."
             )
         super().__init__(message)
 
