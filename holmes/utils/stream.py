@@ -13,6 +13,8 @@ from holmes.core.investigation_structured_output import process_response_into_se
 from holmes.core.llm import TokenCountMetadata, get_llm_usage
 from holmes.utils import sentry_helper
 
+DEFAULT_ANALYSIS = ""
+
 
 class StreamEvents(str, Enum):
     ANSWER_END = "ai_answer_end"
@@ -80,11 +82,16 @@ def stream_investigate_formatter(
                         content=message.data.get("content"),
                     )
 
+                analysis = text_response
+                if analysis is None or not isinstance(analysis, str):
+                    logging.error("Expected analysis to be a string in stream investigate, got %s in sse_event data %s", type(analysis).__name__, message.data)
+                    analysis = DEFAULT_ANALYSIS
+
                 yield create_sse_message(
                     StreamEvents.ANSWER_END.value,
                     {
                         "sections": sections or {},
-                        "analysis": text_response,
+                        "analysis": analysis,
                         "metadata": message.data.get("metadata") or {},
                     },
                 )
@@ -105,8 +112,13 @@ def stream_chat_formatter(
     try:
         for message in call_stream:
             if message.event == StreamEvents.ANSWER_END:
+                analysis = message.data.get("content")
+                if analysis is None or not isinstance(analysis, str):
+                    logging.error("Expected analysis to be a string in stream chat answer_end, got %s in sse_event data %s", type(analysis).__name__, message.data)
+                    analysis = DEFAULT_ANALYSIS
+
                 response_data = {
-                    "analysis": message.data.get("content"),
+                    "analysis": analysis,
                     "conversation_history": message.data.get("messages"),
                     "follow_up_actions": followups,
                     "metadata": message.data.get("metadata") or {},
@@ -114,8 +126,13 @@ def stream_chat_formatter(
 
                 yield create_sse_message(StreamEvents.ANSWER_END.value, response_data)
             elif message.event == StreamEvents.APPROVAL_REQUIRED:
+                analysis = message.data.get("content")
+                if analysis is None or not isinstance(analysis, str):
+                    logging.error("Expected analysis to be a string in stream chat approval_required, got %s in sse_event data %s", type(analysis).__name__, message.data)
+                    analysis = DEFAULT_ANALYSIS
+
                 response_data = {
-                    "analysis": message.data.get("content"),
+                    "analysis": analysis,
                     "conversation_history": message.data.get("messages"),
                     "follow_up_actions": followups,
                 }
