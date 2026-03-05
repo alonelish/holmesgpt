@@ -33,6 +33,7 @@ from holmes.common.env_vars import (
     HOLMES_HOST,
     HOLMES_PORT,
     LOG_PERFORMANCE,
+    MCP_RETRY_BACKOFF_SCHEDULE,
     SENTRY_DSN,
     SENTRY_TRACES_SAMPLE_RATE,
     TOOLSET_STATUS_REFRESH_INTERVAL_SECONDS,
@@ -51,11 +52,13 @@ from holmes.core.models import (
     IssueChatRequest,
 )
 from holmes.core.prompt import PromptComponent
+from holmes.core.tools import ToolsetStatusEnum, ToolsetType
 from holmes.core.scheduled_prompts import ScheduledPromptsExecutor
 from holmes.utils.connection_utils import patch_socket_create_connection
 from holmes.utils.holmes_status import update_holmes_status_in_db
 from holmes.utils.holmes_sync_toolsets import holmes_sync_toolsets_status
 from holmes.utils.log import EndpointFilter
+from holmes.checks.checks_api import init_checks_app
 from holmes.core.tools_utils.filesystem_result_storage import tool_result_storage
 from holmes.utils.stream import stream_chat_formatter, stream_investigate_formatter
 
@@ -81,6 +84,10 @@ def init_logging():
     httpx_logger = logging.getLogger("httpx")
     if httpx_logger:
         httpx_logger.setLevel(logging.WARNING)
+
+    litellm_logger = logging.getLogger("LiteLLM")
+    if litellm_logger:
+        litellm_logger.handlers = []
 
     logging.info(f"logger initialized using {logging_level} log level")
 
@@ -137,6 +144,31 @@ def sync_before_server_start():
         logging.error("Failed to start scheduled prompts executor", exc_info=True)
 
 
+def _has_failed_mcp_toolsets() -> bool:
+    """Check if any MCP toolsets are in FAILED state."""
+    executor = config._server_tool_executor
+    if not executor:
+        return False
+    return any(
+        t.type == ToolsetType.MCP and t.status == ToolsetStatusEnum.FAILED
+        for t in executor.toolsets
+    )
+
+
+def _get_next_refresh_interval(
+    has_failed_mcp: bool,
+    backoff_index: int,
+    default_interval: int,
+) -> tuple[int, int]:
+    """Determine the next sleep interval and updated backoff index.
+
+    Returns (sleep_seconds, new_backoff_index).
+    """
+    if has_failed_mcp and backoff_index < len(MCP_RETRY_BACKOFF_SCHEDULE):
+        return MCP_RETRY_BACKOFF_SCHEDULE[backoff_index], backoff_index + 1
+    return default_interval, 0
+
+
 def _toolset_status_refresh_loop():
     interval = TOOLSET_STATUS_REFRESH_INTERVAL_SECONDS
     if interval <= 0:
@@ -148,8 +180,19 @@ def _toolset_status_refresh_loop():
     )
 
     def refresh_loop():
+        backoff_index = 0
+
         while True:
-            time.sleep(interval)
+            # Use shorter intervals when MCP servers are failing
+            sleep_time, backoff_index = _get_next_refresh_interval(
+                _has_failed_mcp_toolsets(), backoff_index, interval
+            )
+            if sleep_time < interval:
+                logging.info(
+                    f"Failed MCP server(s) detected, retrying in {sleep_time} seconds"
+                )
+
+            time.sleep(sleep_time)
             try:
                 changes = config.refresh_server_tool_executor(dal)
                 if changes:
@@ -222,6 +265,9 @@ if LOG_PERFORMANCE:
             )
 
 
+init_checks_app(app, config)
+
+
 @app.post("/api/investigate")
 def investigate_issues(investigate_request: InvestigateRequest, http_request: Request):
     try:
@@ -251,6 +297,8 @@ def investigate_issues(investigate_request: InvestigateRequest, http_request: Re
 @app.post("/api/stream/investigate")
 def stream_investigate_issues(req: InvestigateRequest, http_request: Request):
     try:
+        req_info = f"/api/stream/investigate request: title={req.title}"
+        logging.info(f"Received {req_info}")
         storage = tool_result_storage()
         tool_results_dir = storage.__enter__()
         ai, system_prompt, user_prompt, response_format, sections = (
@@ -272,6 +320,7 @@ def stream_investigate_issues(req: InvestigateRequest, http_request: Request):
                         request_context=request_context,
                     ),
                 ),
+                req_info
             ),
             media_type="text/event-stream",
         )
@@ -362,11 +411,12 @@ def extract_passthrough_headers(request: Request) -> dict:
     return {"headers": passthrough_headers} if passthrough_headers else {}
 
 
-def _stream_with_storage_cleanup(storage, stream_generator):
+def _stream_with_storage_cleanup(storage, stream_generator, req_info):
     """Wrap a stream generator to clean up tool result files after streaming completes."""
     try:
         yield from stream_generator
     finally:
+        logging.info(f"Stream request end: {req_info}")
         storage.__exit__(None, None, None)
 
 
@@ -376,8 +426,9 @@ def chat(chat_request: ChatRequest, http_request: Request):
         # Log incoming request details
         has_images = bool(chat_request.images)
         has_structured_output = bool(chat_request.response_format)
+        req_info = f"/api/chat request: ask={chat_request.ask}"
         logging.info(
-            f"Received /api/chat request: model={chat_request.model}, "
+            f"Received: {req_info}, model={chat_request.model}, "
             f"images={has_images}, structured_output={has_structured_output}, "
             f"streaming={chat_request.stream}"
         )
@@ -451,7 +502,7 @@ def chat(chat_request: ChatRequest, http_request: Request):
                 [f.model_dump() for f in follow_up_actions],
             )
             return StreamingResponse(
-                _stream_with_storage_cleanup(storage, stream),
+                _stream_with_storage_cleanup(storage, stream, req_info),
                 media_type="text/event-stream",
             )
         else:
@@ -463,6 +514,7 @@ def chat(chat_request: ChatRequest, http_request: Request):
                     request_context=request_context,
                 )
 
+                logging.info(f"Completed {req_info}")
                 return ChatResponse(
                     analysis=llm_call.result,
                     tool_calls=llm_call.tool_calls,

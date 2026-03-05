@@ -66,13 +66,6 @@ Configure HolmesGPT to use AWS Bedrock foundation models.
 
     # Configure at least one model using modelList
     modelList:
-      bedrock-claude-35-sonnet:
-        aws_access_key_id: "{{ env.AWS_ACCESS_KEY_ID }}"
-        aws_secret_access_key: "{{ env.AWS_SECRET_ACCESS_KEY }}"
-        aws_region_name: us-east-1
-        model: bedrock/anthropic.claude-3-5-sonnet-20240620-v1:0
-        temperature: 1
-
       bedrock-claude-sonnet-4:
         aws_access_key_id: "{{ env.AWS_ACCESS_KEY_ID }}"
         aws_secret_access_key: "{{ env.AWS_SECRET_ACCESS_KEY }}"
@@ -99,7 +92,7 @@ Configure HolmesGPT to use AWS Bedrock foundation models.
 
     # Optional: Set default model (use modelList key name)
     config:
-      model: "bedrock-claude-35-sonnet"  # This refers to the key name in modelList above
+      model: "bedrock-claude-sonnet-4"  # This refers to the key name in modelList above
     ```
 
 === "Robusta Helm Chart"
@@ -130,13 +123,6 @@ Configure HolmesGPT to use AWS Bedrock foundation models.
 
       # Configure at least one model using modelList
       modelList:
-        bedrock-claude-35-sonnet:
-          aws_access_key_id: "{{ env.AWS_ACCESS_KEY_ID }}"
-          aws_secret_access_key: "{{ env.AWS_SECRET_ACCESS_KEY }}"
-          aws_region_name: us-east-1
-          model: bedrock/anthropic.claude-3-5-sonnet-20240620-v1:0
-          temperature: 1
-
         bedrock-claude-sonnet-4:
           aws_access_key_id: "{{ env.AWS_ACCESS_KEY_ID }}"
           aws_secret_access_key: "{{ env.AWS_SECRET_ACCESS_KEY }}"
@@ -163,7 +149,7 @@ Configure HolmesGPT to use AWS Bedrock foundation models.
 
       # Optional: Set default model (use modelList key name)
       config:
-        model: "bedrock-claude-35-sonnet"  # This refers to the key name in modelList above
+        model: "bedrock-claude-sonnet-4"  # This refers to the key name in modelList above
     ```
 
 ### Using Claude Sonnet with 1M Context Window
@@ -186,6 +172,24 @@ This tells HolmesGPT the actual context window size (1M tokens) so it can proper
 
 !!! warning "Both Parameters Required"
     You must include **both** `extra_headers` and `custom_args` to use the 1M context window. The `extra_headers` enables the feature, while `custom_args.max_context_size` ensures HolmesGPT knows the correct window size.
+
+### Using Bearer Token Authentication (IAM Identity Center)
+
+If you're using AWS IAM Identity Center (SSO) with Bedrock, you can authenticate via bearer token instead of access/secret keys.
+
+Set the environment variable:
+```bash
+export AWS_BEARER_TOKEN_BEDROCK="your-bearer-token"
+```
+
+Or use `api_key` in the `modelList` config:
+```yaml
+modelList:
+  bedrock-claude-sonnet-4:
+    api_key: "{{ env.AWS_BEARER_TOKEN_BEDROCK }}"
+    aws_region_name: us-east-1
+    model: bedrock/anthropic.claude-sonnet-4-20250514-v1:0
+```
 
 ### Finding Your AWS Credentials
 
