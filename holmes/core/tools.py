@@ -191,9 +191,6 @@ class ToolInvokeContext(BaseModel):
         str
     ] = []  # Bash prefixes approved during this session
     request_context: Optional[Dict[str, Any]] = None
-    # Pre-rendered extra headers from the parent toolset's extra_headers templates.
-    # Computed at invocation time using request_context. Available for all tool types.
-    rendered_extra_headers: Dict[str, str] = Field(default_factory=dict)
 
     def model_dump(self, **kwargs):
         """Override to exclude sensitive context from serialization"""
@@ -206,10 +203,6 @@ class ToolInvokeContext(BaseModel):
                     k: "***REDACTED***" for k in ctx["headers"].keys()
                 }
             data["request_context"] = ctx
-        if data.get("rendered_extra_headers"):
-            data["rendered_extra_headers"] = {
-                k: "***REDACTED***" for k in data["rendered_extra_headers"].keys()
-            }
         return data
 
     def __str__(self):
@@ -474,6 +467,7 @@ class Tool(ABC, BaseModel):
 class YAMLTool(Tool, BaseModel):
     command: Optional[str] = None
     script: Optional[str] = None
+    _toolset: Optional["YAMLToolset"] = PrivateAttr(default=None)
 
     def __init__(self, **data):
         super().__init__(**data)
@@ -522,7 +516,8 @@ class YAMLTool(Tool, BaseModel):
         params: dict,
         context: ToolInvokeContext,
     ) -> StructuredToolResult:
-        extra_env = self._build_header_env_vars(context.rendered_extra_headers)
+        rendered_headers = self._toolset.render_extra_headers(context.request_context) if self._toolset else {}
+        extra_env = self._build_header_env_vars(rendered_headers)
         if self.command is not None:
             raw_output, return_code, invocation = self.__invoke_command(params, extra_env)
         else:
@@ -1024,6 +1019,8 @@ class YAMLToolset(Toolset):
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
+        for tool in self.tools:
+            tool._toolset = self
         if self.llm_instructions:
             self._load_llm_instructions(self.llm_instructions)
 

@@ -688,13 +688,6 @@ class ToolCallingLLM:
             )
 
         try:
-            # Pre-render extra_headers from the parent toolset so all tool types
-            # (YAML, HTTP, Python, MCP) can access them via context.rendered_extra_headers.
-            rendered_extra_headers: Dict[str, str] = {}
-            toolset = self.tool_executor.get_toolset_for_tool(tool_name)
-            if toolset:
-                rendered_extra_headers = toolset.render_extra_headers(request_context)
-
             invoke_context = ToolInvokeContext(
                 tool_number=tool_number,
                 user_approved=user_approved,
@@ -704,7 +697,6 @@ class ToolCallingLLM:
                 tool_call_id=tool_call_id,
                 session_approved_prefixes=session_approved_prefixes or [],
                 request_context=request_context,
-                rendered_extra_headers=rendered_extra_headers,
             )
             tool_response = tool.invoke(tool_params, context=invoke_context)
 

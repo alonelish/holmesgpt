@@ -201,7 +201,7 @@ See [Custom Toolsets](custom-toolsets.md) for the full YAML toolset reference.
 
 ### Built-in Python Toolsets
 
-Each built-in Python toolset decides individually whether to support `extra_headers`. Not all toolsets support it — only those whose `_invoke()` method reads `context.rendered_extra_headers` and merges them into outgoing HTTP calls.
+Each built-in Python toolset decides individually whether to support `extra_headers`. Not all toolsets support it — only those whose `_invoke()` method calls `self._toolset.render_extra_headers()` and merges the result into outgoing HTTP calls.
 
 The following example shows how ServiceNow Tables, one toolset that supports header propagation, is configured:
 

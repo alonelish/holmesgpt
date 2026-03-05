@@ -434,9 +434,10 @@ class HttpRequest(Tool, JsonFilterMixin):
 
         headers = self._toolset.build_headers(endpoint, extra_headers)
 
-        # Merge pre-rendered toolset-level extra_headers (from Toolset base class)
-        if context.rendered_extra_headers:
-            headers.update(context.rendered_extra_headers)
+        # Merge rendered toolset-level extra_headers
+        rendered_extra = self._toolset.render_extra_headers(context.request_context)
+        if rendered_extra:
+            headers.update(rendered_extra)
         basic_auth = self._toolset.get_basic_auth(endpoint)
         timeout = self._toolset.http_config.timeout_seconds
         verify_ssl = self._toolset.http_config.verify_ssl

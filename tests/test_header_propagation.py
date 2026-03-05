@@ -219,7 +219,7 @@ class TestToolsetExtraHeaders:
 # ---------------------------------------------------------------------------
 
 class TestToolInvokeContextHeaders:
-    def test_rendered_extra_headers_default_empty(self):
+    def test_model_dump_redacts_request_context_headers(self):
         ctx = ToolInvokeContext.model_construct(
             tool_number=1,
             user_approved=False,
@@ -227,34 +227,9 @@ class TestToolInvokeContextHeaders:
             max_token_count=1000,
             tool_call_id="call-1",
             tool_name="test_tool",
-        )
-        assert ctx.rendered_extra_headers == {}
-
-    def test_rendered_extra_headers_set(self):
-        ctx = ToolInvokeContext.model_construct(
-            tool_number=1,
-            user_approved=False,
-            llm=Mock(),
-            max_token_count=1000,
-            tool_call_id="call-1",
-            tool_name="test_tool",
-            rendered_extra_headers={"X-Foo": "bar"},
-        )
-        assert ctx.rendered_extra_headers == {"X-Foo": "bar"}
-
-    def test_model_dump_redacts_rendered_extra_headers(self):
-        ctx = ToolInvokeContext.model_construct(
-            tool_number=1,
-            user_approved=False,
-            llm=Mock(),
-            max_token_count=1000,
-            tool_call_id="call-1",
-            tool_name="test_tool",
-            rendered_extra_headers={"X-Secret": "sensitive-value"},
             request_context={"headers": {"H1": "v1"}},
         )
         dumped = ctx.model_dump()
-        assert dumped["rendered_extra_headers"]["X-Secret"] == "***REDACTED***"
         # request_context header values are redacted but names preserved
         assert dumped["request_context"]["headers"]["H1"] == "***REDACTED***"
 
@@ -283,11 +258,14 @@ class TestYAMLToolHeaderEnvVars:
 
     def test_yaml_tool_command_with_header_env_var(self):
         """Verify that rendered extra_headers are available as env vars in bash commands."""
+        mock_toolset = Mock()
+        mock_toolset.render_extra_headers.return_value = {"X-Token": "my-secret-token"}
         tool = YAMLTool(
             name="test_echo",
             description="Echo a header value",
             command='echo "$HOLMES_HEADER_X_TOKEN"',
         )
+        tool._toolset = mock_toolset
         context = ToolInvokeContext.model_construct(
             tool_number=1,
             user_approved=False,
@@ -295,7 +273,6 @@ class TestYAMLToolHeaderEnvVars:
             max_token_count=1000,
             tool_call_id="call-1",
             tool_name="test_echo",
-            rendered_extra_headers={"X-Token": "my-secret-token"},
         )
         result = tool._invoke({}, context)
         assert result.status == StructuredToolResultStatus.SUCCESS
@@ -303,11 +280,14 @@ class TestYAMLToolHeaderEnvVars:
 
     def test_yaml_tool_script_with_header_env_var(self):
         """Verify that rendered extra_headers are available as env vars in bash scripts."""
+        mock_toolset = Mock()
+        mock_toolset.render_extra_headers.return_value = {"Authorization": "Bearer tok-456"}
         tool = YAMLTool(
             name="test_script",
             description="Script using a header",
             script='#!/bin/bash\necho "$HOLMES_HEADER_AUTHORIZATION"',
         )
+        tool._toolset = mock_toolset
         context = ToolInvokeContext.model_construct(
             tool_number=1,
             user_approved=False,
@@ -315,7 +295,6 @@ class TestYAMLToolHeaderEnvVars:
             max_token_count=1000,
             tool_call_id="call-1",
             tool_name="test_script",
-            rendered_extra_headers={"Authorization": "Bearer tok-456"},
         )
         result = tool._invoke({}, context)
         assert result.status == StructuredToolResultStatus.SUCCESS
@@ -323,11 +302,14 @@ class TestYAMLToolHeaderEnvVars:
 
     def test_yaml_tool_no_extra_headers(self):
         """Verify YAML tools still work when no extra_headers are configured."""
+        mock_toolset = Mock()
+        mock_toolset.render_extra_headers.return_value = {}
         tool = YAMLTool(
             name="test_echo",
             description="Simple echo",
             command="echo hello",
         )
+        tool._toolset = mock_toolset
         context = ToolInvokeContext.model_construct(
             tool_number=1,
             user_approved=False,
@@ -335,7 +317,6 @@ class TestYAMLToolHeaderEnvVars:
             max_token_count=1000,
             tool_call_id="call-1",
             tool_name="test_echo",
-            rendered_extra_headers={},
         )
         result = tool._invoke({}, context)
         assert result.status == StructuredToolResultStatus.SUCCESS
@@ -379,7 +360,7 @@ class TestHttpToolsetHeaderPropagation:
 
         tool = toolset.tools[0]
         ctx = Mock(spec=ToolInvokeContext)
-        ctx.rendered_extra_headers = {"X-Custom": "static-val"}
+        ctx.request_context = None
 
         result = tool._invoke(
             {"url": "https://api.example.com/test"},
@@ -405,6 +386,7 @@ class TestHttpToolsetHeaderPropagation:
                     {"hosts": ["api.example.com"], "methods": ["GET"]}
                 ],
                 "default_headers": {"X-Default": "original"},
+                "extra_headers": {"X-Default": "overridden"},
             },
         )
         ok, _ = toolset.prerequisites_callable({
@@ -412,6 +394,7 @@ class TestHttpToolsetHeaderPropagation:
                 {"hosts": ["api.example.com"], "methods": ["GET"]}
             ],
             "default_headers": {"X-Default": "original"},
+            "extra_headers": {"X-Default": "overridden"},
         })
         assert ok
 
@@ -423,7 +406,7 @@ class TestHttpToolsetHeaderPropagation:
 
         tool = toolset.tools[0]
         ctx = Mock(spec=ToolInvokeContext)
-        ctx.rendered_extra_headers = {"X-Default": "overridden"}
+        ctx.request_context = None
 
         result = tool._invoke(
             {"url": "https://api.example.com/test"},

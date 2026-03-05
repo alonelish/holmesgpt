@@ -348,7 +348,7 @@ class GetRecords(BaseServiceNowTool):
             endpoint=endpoint,
             query_params=query_params,
             timeout=30,
-            extra_headers=context.rendered_extra_headers or None,
+            extra_headers=self._toolset.render_extra_headers(context.request_context) or None,
         )
 
         # Create the response with records and relevant headers
@@ -448,7 +448,7 @@ class GetRecord(BaseServiceNowTool):
 
         endpoint = f"/api/now/v2/table/{table_name}/{sys_id}"
         return self._make_servicenow_request(
-            endpoint, params, query_params, extra_headers=context.rendered_extra_headers or None
+            endpoint, params, query_params, extra_headers=self._toolset.render_extra_headers(context.request_context) or None
         )
 
     def get_parameterized_one_liner(self, params: Dict) -> str:
