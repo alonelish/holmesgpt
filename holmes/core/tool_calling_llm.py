@@ -468,9 +468,14 @@ class ToolCallingLLM:
                 return LLMResult(
                     result=str(e),
                     tool_calls=all_tool_calls,
-                    num_llm_calls=i,
+                    num_llm_calls=max(0, i - 1),
                     messages=messages,
                     metadata=metadata,
+                    total_cost=costs.total_cost,
+                    total_tokens=costs.total_tokens,
+                    prompt_tokens=costs.prompt_tokens,
+                    completion_tokens=costs.completion_tokens,
+                    num_compactions=costs.num_compactions,
                 )
 
             messages = limit_result.messages

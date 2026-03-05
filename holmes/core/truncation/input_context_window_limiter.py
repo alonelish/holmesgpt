@@ -20,25 +20,16 @@ from holmes.utils.stream import StreamEvents, StreamMessage
 class ContextWindowOverflowError(Exception):
     """Raised when conversation exceeds context window and cannot be compacted."""
 
-    def __init__(self, current_tokens: int, max_tokens: int, compaction_attempted: bool):
+    def __init__(self, current_tokens: int, max_tokens: int):
         self.current_tokens = current_tokens
         self.max_tokens = max_tokens
-        self.compaction_attempted = compaction_attempted
 
-        if compaction_attempted:
-            message = (
-                f"The conversation history is too long ({current_tokens:,} tokens) and could not be "
-                f"summarized to fit within the context window ({max_tokens:,} tokens). "
-                "This is likely a bug. Please report it at https://github.com/robusta-dev/holmesgpt/issues "
-                "and start a new conversation in the meantime."
-            )
-        else:
-            message = (
-                f"The conversation ({current_tokens:,} tokens) exceeds the context window "
-                f"({max_tokens:,} tokens). This is likely a bug. Please report it at "
-                "https://github.com/robusta-dev/holmesgpt/issues and start a new conversation "
-                "in the meantime."
-            )
+        message = (
+            f"The conversation history ({current_tokens:,} tokens) exceeds the context window "
+            f"({max_tokens:,} tokens) even after attempting to summarize it. "
+            "This is likely a bug. Please report it at https://github.com/robusta-dev/holmesgpt/issues "
+            "and start a new conversation in the meantime."
+        )
         super().__init__(message)
 
 
@@ -61,9 +52,8 @@ def limit_input_context_window(
     metadata: dict = {}
     initial_tokens = llm.count_tokens(messages=messages, tools=tools)  # type: ignore
     max_context_size = llm.get_context_window_size()
-    maximum_output_token = llm.get_maximum_output_token()
-    reserved_for_output = min(maximum_output_token, MAX_OUTPUT_TOKEN_RESERVATION)
-    available_for_input = max_context_size - reserved_for_output
+    maximum_output_token = min(llm.get_maximum_output_token(), MAX_OUTPUT_TOKEN_RESERVATION)
+    available_for_input = max_context_size - maximum_output_token
     conversation_history_compacted = False
     compaction_usage = CompactionUsage()
 
@@ -115,16 +105,11 @@ def limit_input_context_window(
         logging.error(
             f"Context window overflow: {tokens.total_tokens} tokens exceeds "
             f"available space of {available_for_input} tokens (max: {max_context_size}, "
-            f"reserved for output: {reserved_for_output})"
+            f"reserved for output: {maximum_output_token})"
         )
         raise ContextWindowOverflowError(
             current_tokens=tokens.total_tokens,
             max_tokens=available_for_input,
-            compaction_attempted=conversation_history_compacted
-            or (
-                ENABLE_CONVERSATION_HISTORY_COMPACTION
-                and (initial_tokens.total_tokens + maximum_output_token) > compaction_threshold
-            ),
         )
 
     return ContextWindowLimiterOutput(
