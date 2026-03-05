@@ -521,7 +521,7 @@ class YAMLTool(Tool, BaseModel):
         if self.command is not None:
             raw_output, return_code, invocation = self.__invoke_command(params, extra_env)
         else:
-            raw_output, return_code, invocation = self.__invoke_script(params, extra_env)  # type: ignore
+            raw_output, return_code, invocation = self.__invoke_script(params, extra_env)
 
         error = (
             None
@@ -565,7 +565,7 @@ class YAMLTool(Tool, BaseModel):
 
     def __invoke_script(
         self, params: dict, extra_env: Optional[Dict[str, str]] = None
-    ) -> str:
+    ) -> Tuple[str, int, str]:
         context = self._build_context(params)
         script = os.path.expandvars(self.script)  # type: ignore
         template = Template(script)  # type: ignore
@@ -582,7 +582,7 @@ class YAMLTool(Tool, BaseModel):
             output, return_code = self.__execute_subprocess(temp_script_path, extra_env)
         finally:
             subprocess.run(["rm", temp_script_path])
-        return output, return_code, rendered_script  # type: ignore
+        return output, return_code, rendered_script
 
     def __execute_subprocess(
         self, cmd: str, extra_env: Optional[Dict[str, str]] = None
