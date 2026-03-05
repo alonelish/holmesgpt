@@ -20,7 +20,7 @@ from holmes.utils.stream import StreamEvents, StreamMessage
 class ContextWindowOverflowError(Exception):
     """Raised when conversation exceeds context window and cannot be compacted."""
 
-    def __init__(self, current_tokens: int, max_tokens: int):
+    def __init__(self, current_tokens: int, max_tokens: int) -> None:
         self.current_tokens = current_tokens
         self.max_tokens = max_tokens
 
