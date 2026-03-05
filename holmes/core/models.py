@@ -8,6 +8,19 @@ from holmes.core.investigation_structured_output import InputSectionsDataType
 from holmes.core.tools import StructuredToolResult, StructuredToolResultStatus
 
 
+class TruncationMetadata(BaseModel):
+    tool_call_id: str
+    start_index: int
+    end_index: int
+    tool_name: str
+    original_token_count: int
+
+
+class TruncationResult(BaseModel):
+    truncated_messages: list[dict]
+    truncations: list[TruncationMetadata]
+
+
 class ToolCallResult(BaseModel):
     tool_call_id: str
     tool_name: str
