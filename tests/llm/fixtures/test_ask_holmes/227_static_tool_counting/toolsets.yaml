@@ -1,0 +1,24 @@
+toolsets:
+  static/issues:
+    type: static
+    enabled: true
+    config:
+      tools:
+        - name: get_issues
+          description: "Retrieve all reported issues"
+          response: |
+            ID    TITLE                           SEVERITY   STATUS
+            1001  Database connection timeout      critical   open
+            1002  CSS alignment on login page      low        open
+            1003  Memory leak in worker process    critical   investigating
+            1004  Slow API response on /users      medium     open
+            1005  SSL certificate expiring soon    high       open
+            1006  Disk usage above 90%             critical   open
+            1007  Flaky test in CI pipeline        low        closed
+            1008  Missing input validation         medium     open
+  helm/core:
+    enabled: false
+  kubernetes/core:
+    enabled: false
+  kubernetes/logs:
+    enabled: false

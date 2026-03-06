@@ -12,6 +12,7 @@ from holmes.core.tools import (
 )
 from holmes.plugins.toolsets import load_builtin_toolsets, load_toolsets_from_file
 from holmes.plugins.toolsets.mcp.toolset_mcp import RemoteMCPToolset
+from holmes.plugins.toolsets.static.static_toolset import StaticToolset
 from tests.llm.utils.mock_dal import load_test_dal
 
 
@@ -101,7 +102,7 @@ class TestToolsetManager:
         # (except for HTTP and MCP toolsets which are dynamically created)
         builtin_names = {ts.name for ts in builtin_toolsets}
         for definition in custom_definitions:
-            if isinstance(definition, (HttpToolset, RemoteMCPToolset)):
+            if isinstance(definition, (HttpToolset, RemoteMCPToolset, StaticToolset)):
                 continue
             if definition.name not in builtin_names:
                 raise RuntimeError(
@@ -119,13 +120,18 @@ class TestToolsetManager:
             d.name: d for d in custom_definitions if isinstance(d, RemoteMCPToolset)
         }
 
+        # Collect static toolsets from custom definitions
+        static_toolsets = {
+            d.name: d for d in custom_definitions if isinstance(d, StaticToolset)
+        }
+
         dal = load_test_dal(
             test_case_folder=Path(self.test_case_folder),
             initialize_base=False,
         )
         for toolset in builtin_toolsets:
-            # Skip built-in toolsets that are replaced by HTTP or MCP toolsets
-            if toolset.name in http_toolsets or toolset.name in mcp_toolsets:
+            # Skip built-in toolsets that are replaced by HTTP, MCP, or static toolsets
+            if toolset.name in http_toolsets or toolset.name in mcp_toolsets or toolset.name in static_toolsets:
                 continue
             # Replace RunbookToolset with one that has test folder search path
             if toolset.name == "runbook":
@@ -256,6 +262,30 @@ if [ "{{ kind }}" = "secret" ] || [ "{{ kind }}" = "secrets" ]; then echo "Not a
                 except Exception as e:
                     raise ToolsetPrerequisiteError(
                         toolset_name=mcp_toolset.name,
+                        error_detail=str(e),
+                    ) from e
+
+        # Add static toolsets from custom definitions
+        for static_toolset in static_toolsets.values():
+            configured.append(static_toolset)
+
+            if static_toolset.enabled:
+                try:
+                    static_toolset.check_prerequisites()
+
+                    if (
+                        static_toolset.status != ToolsetStatusEnum.ENABLED
+                        and not self.allow_toolset_failures
+                    ):
+                        raise ToolsetPrerequisiteError(
+                            toolset_name=static_toolset.name,
+                            error_detail=static_toolset.error or "Unknown error",
+                        )
+                except ToolsetPrerequisiteError:
+                    raise
+                except Exception as e:
+                    raise ToolsetPrerequisiteError(
+                        toolset_name=static_toolset.name,
                         error_detail=str(e),
                     ) from e
 

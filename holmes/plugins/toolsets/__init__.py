@@ -57,6 +57,7 @@ from holmes.plugins.toolsets.runbook.runbook_fetcher import RunbookToolset
 from holmes.plugins.toolsets.servicenow_tables.servicenow_tables import (
     ServiceNowTablesToolset,
 )
+from holmes.plugins.toolsets.static.static_toolset import StaticToolset
 
 THIS_DIR = os.path.abspath(os.path.dirname(__file__))
 
@@ -210,6 +211,8 @@ def load_toolsets_from_config(
                 validated_toolset = HttpToolset(name=name, **config)
             elif toolset_type == ToolsetType.DATABASE.value:
                 validated_toolset = DatabaseToolset(name=name, **config)
+            elif toolset_type == ToolsetType.STATIC.value:
+                validated_toolset = StaticToolset(name=name, **config)
             elif strict_check:
                 validated_toolset = YAMLToolset(**config, name=name)  # type: ignore
             else:

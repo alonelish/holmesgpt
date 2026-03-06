@@ -164,6 +164,7 @@ class ToolsetType(str, Enum):
     MCP = "mcp"
     HTTP = "http"
     DATABASE = "database"
+    STATIC = "static"
 
 
 class ToolParameter(BaseModel):
