@@ -1,5 +1,4 @@
 import logging
-import re
 from dataclasses import dataclass
 from typing import List, Optional, Union
 
@@ -7,7 +6,6 @@ import openai
 from autoevals import LLMClassifier, init
 from braintrust import Span, SpanTypeAttribute
 from braintrust.oai import wrap_openai
-from braintrust_core.score import Score
 
 from tests.llm.utils.test_case_utils import _model_list_exists, create_eval_llm
 from tests.llm.utils.test_env_vars import (
@@ -80,171 +78,6 @@ def get_classifier_model_params() -> ClassifierModelParams:
         api_base=client_base_url,
         api_version=client_api_version,
     )
-
-
-class TextBasedClassifier:
-    """Simple text-based classifier that doesn't use tool calling.
-
-    This works better with non-OpenAI providers like OpenRouter/Claude that
-    may not handle function calling correctly.
-    """
-
-    TEXT_PROMPT_SUFFIX = """
-Think step by step, then give your final answer.
-
-CRITICAL: You MUST end your response with EXACTLY this format on the last line:
-Final Answer: [A or B]
-
-Do NOT end with any other text after the Final Answer line.
-"""
-
-    def __init__(
-        self,
-        name,
-        prompt_template,
-        choice_scores,
-        model="gpt-4o",
-        use_cot=True,
-        max_tokens=512,
-        temperature=0,
-        api_key=None,
-        base_url=None,
-        **extra_render_args,
-    ):
-        self.name = name
-        self.prompt_template = prompt_template
-        self.choice_scores = choice_scores
-        self.model = model
-        self.use_cot = use_cot
-        self.max_tokens = max_tokens
-        self.temperature = temperature
-        self.api_key = api_key
-        self.base_url = base_url
-        self.extra_render_args = extra_render_args
-        self.choice_strings = list(choice_scores.keys())
-
-    def _render_prompt(self, output, expected, **kwargs):
-        import chevron
-
-        render_args = {
-            "output": output,
-            "expected": expected,
-            "__choices": self.choice_strings,
-            **self.extra_render_args,
-            **kwargs,
-        }
-        prompt = self.prompt_template
-        if self.use_cot:
-            prompt += self.TEXT_PROMPT_SUFFIX.format(
-                choices=", ".join(self.choice_strings)
-            )
-        return chevron.render(prompt, render_args, warn=True)
-
-    def _extract_choice(self, content):
-        """Extract choice from text content."""
-        if not content:
-            return None, None
-
-        # Look for "Final Answer: X" pattern first (most reliable)
-        final_answer_match = re.search(
-            r"final\s*answer[:\s]+([A-Z])\b", content, re.IGNORECASE
-        )
-        if final_answer_match:
-            choice = final_answer_match.group(1).upper()
-            if choice in self.choice_strings:
-                return choice, content
-
-        # Look for choice at the end of the response
-        lines = content.strip().split("\n")
-        for line in reversed(lines[-5:]):  # Check last 5 lines
-            line = line.strip()
-            for choice in self.choice_strings:
-                if line == choice or line.endswith(f": {choice}") or line.endswith(f":{choice}"):
-                    return choice, content
-                # Match patterns like "A." or "A:" or "A -" at start of line
-                if re.match(rf"^{re.escape(choice)}[\s.:\-]", line):
-                    return choice, content
-
-        # Look for explicit patterns anywhere
-        for choice in self.choice_strings:
-            patterns = [
-                rf"\bchoice[:\s]+{re.escape(choice)}\b",
-                rf"\bselect[:\s]+{re.escape(choice)}\b",
-                rf"\banswer[:\s]+{re.escape(choice)}\b",
-                rf"\b{re.escape(choice)}\b\s*$",
-            ]
-            for pattern in patterns:
-                if re.search(pattern, content, re.IGNORECASE | re.MULTILINE):
-                    return choice, content
-
-        # For A/B choices, look for semantic indicators
-        if set(self.choice_strings) == {"A", "B"}:
-            # Check for "all elements present" indicators -> A
-            all_present_patterns = [
-                r"all\s+(?:elements?\s+)?(?:are\s+)?present",
-                r"all\s+(?:the\s+)?(?:expected\s+)?(?:elements?\s+)?(?:are\s+)?(?:found|included|covered)",
-                r"(?:fully|completely)\s+match",
-                r"matches?\s+(?:all|the)\s+expected",
-            ]
-            for pattern in all_present_patterns:
-                if re.search(pattern, content, re.IGNORECASE):
-                    return "A", content
-
-            # Check for "missing/some elements" indicators -> B
-            missing_patterns = [
-                r"(?:some|not all)\s+elements?\s+(?:are\s+)?(?:missing|absent|not present)",
-                r"(?:missing|lacks?|doesn't have)\s+(?:some|the following)",
-                r"only\s+(?:some|partial)",
-            ]
-            for pattern in missing_patterns:
-                if re.search(pattern, content, re.IGNORECASE):
-                    return "B", content
-
-        # Count occurrences as last resort for binary choices
-        if len(self.choice_strings) == 2:
-            counts = {}
-            for choice in self.choice_strings:
-                counts[choice] = len(
-                    re.findall(rf"\b{re.escape(choice)}\b", content, re.IGNORECASE)
-                )
-            if counts[self.choice_strings[0]] != counts[self.choice_strings[1]]:
-                winner = max(counts, key=counts.get)
-                return winner, content
-
-        return None, content
-
-    def eval(self, output, expected, **kwargs):
-        """Evaluate the output against expected."""
-        return self._run_eval_sync(output, expected, **kwargs)
-
-    def __call__(self, output, expected, **kwargs):
-        """Make the classifier callable."""
-        return self.eval(output=output, expected=expected, **kwargs)
-
-    def _run_eval_sync(self, output, expected, **kwargs):
-        """Run evaluation synchronously."""
-        prompt = self._render_prompt(output=output, expected=expected, **kwargs)
-
-        client = openai.OpenAI(api_key=self.api_key, base_url=self.base_url)
-        response = client.chat.completions.create(
-            model=self.model,
-            messages=[{"role": "user", "content": prompt}],
-            max_tokens=self.max_tokens,
-            temperature=self.temperature,
-        )
-
-        content = response.choices[0].message.content or ""
-        choice, rationale = self._extract_choice(content)
-
-        if choice is None:
-            raise ValueError(
-                f"Could not extract choice from response. "
-                f"Expected one of {self.choice_strings}. Response: {content[:500]}"
-            )
-
-        metadata = {"choice": choice, "rationale": rationale}
-        score = self.choice_scores.get(choice, 0)
-        return Score(name=self.name, score=score, metadata=metadata)
 
 
 classifier_model = CLASSIFIER_MODEL
@@ -368,15 +201,15 @@ Possible choices:
             "To use Azure OpenAI instead, set the environment variables AZURE_API_BASE, AZURE_API_VERSION, and AZURE_API_KEY"
         )
 
-    classifier = TextBasedClassifier(
+    classifier = LLMClassifier(
         name="Correctness",
         prompt_template=prompt_prefix,
         choice_scores={"A": 1, "B": 0},
         use_cot=True,
         model=params.model,
-        max_tokens=1024,
         api_key=params.api_key if not params.is_azure else None,
         base_url=params.api_base if not params.is_azure else None,
+        api_version=params.api_version if not params.is_azure else None,
     )
     if parent_span:
         with parent_span.start_span(
