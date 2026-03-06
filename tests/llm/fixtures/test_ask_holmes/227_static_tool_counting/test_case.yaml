@@ -1,6 +1,0 @@
-user_prompt: "How many of the reported issues are critical severity?"
-expected_output:
-  - 3 issues are critical severity
-tags:
-  - counting
-  - easy
