@@ -1,7 +1,10 @@
+import json
 import logging
 import os
 from typing import Any, Dict
 from uuid import uuid4
+
+import jq as jq_lib
 
 from holmes.core.todo_tasks_formatter import format_tasks
 from holmes.core.tools import (
@@ -130,6 +133,85 @@ class TodoWriteTool(Tool):
         return "Update investigation tasks"
 
 
+class JqQueryTool(Tool):
+    name: str = "jq_query"
+    description: str = (
+        "Run a jq expression on JSON data to count, filter, group, or transform it. "
+        "Use this when you need to perform precise counting, grouping, or aggregation "
+        "on JSON data returned by other tools. Pass the JSON data from a previous tool "
+        "call and a jq expression to process it."
+    )
+    parameters: Dict[str, ToolParameter] = {
+        "data": ToolParameter(
+            description="The JSON data to query (copy from a previous tool call result)",
+            type="string",
+            required=True,
+        ),
+        "expression": ToolParameter(
+            description=(
+                "A jq expression to run on the data. Examples: "
+                "'. | length' (count items), "
+                "'[.[] | .severity] | group_by(.) | map({key: .[0], count: length})' (group and count), "
+                "'[.[] | select(.status == \"open\")] | length' (count filtered items), "
+                "'group_by(.team) | map({team: .[0].team, count: length})' (group by field)"
+            ),
+            type="string",
+            required=True,
+        ),
+    }
+
+    def _invoke(self, params: dict, context: ToolInvokeContext) -> StructuredToolResult:
+        data_str = params.get("data", "")
+        expression = params.get("expression", "")
+
+        if not data_str:
+            return StructuredToolResult(
+                status=StructuredToolResultStatus.ERROR,
+                error="The 'data' parameter is required and must contain valid JSON",
+                params=params,
+            )
+        if not expression:
+            return StructuredToolResult(
+                status=StructuredToolResultStatus.ERROR,
+                error="The 'expression' parameter is required",
+                params=params,
+            )
+
+        try:
+            parsed_data = json.loads(data_str)
+        except json.JSONDecodeError as e:
+            return StructuredToolResult(
+                status=StructuredToolResultStatus.ERROR,
+                error=f"Invalid JSON data: {e}",
+                params=params,
+            )
+
+        try:
+            compiled = jq_lib.compile(expression)
+            results = compiled.input(parsed_data).all()
+            if len(results) == 1:
+                output = results[0]
+            else:
+                output = results
+            return StructuredToolResult(
+                status=StructuredToolResultStatus.SUCCESS,
+                data=output,
+                params=params,
+            )
+        except Exception as e:
+            return StructuredToolResult(
+                status=StructuredToolResultStatus.ERROR,
+                error=f"jq expression error: {e}",
+                params=params,
+            )
+
+    def get_parameterized_one_liner(self, params: Dict) -> str:
+        expr = params.get("expression", "")
+        if len(expr) > 60:
+            expr = expr[:57] + "..."
+        return f"jq: {expr}"
+
+
 class CoreInvestigationToolset(Toolset):
     """Core toolset for investigation management and task planning."""
 
@@ -138,7 +220,7 @@ class CoreInvestigationToolset(Toolset):
             name="core_investigation",
             description="Core investigation tools for task management and planning",
             enabled=True,
-            tools=[TodoWriteTool()],
+            tools=[TodoWriteTool(), JqQueryTool()],
             tags=[ToolsetTag.CORE],
             is_default=True,
         )
