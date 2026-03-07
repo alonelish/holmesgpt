@@ -23,7 +23,6 @@ from holmes.common.env_vars import (
     FALLBACK_CONTEXT_WINDOW_SIZE,
     LLM_REQUEST_TIMEOUT,
     LOAD_ALL_ROBUSTA_MODELS,
-    PROMPT_CACHE_TTL,
     REASONING_EFFORT,
     ROBUSTA_AI,
     ROBUSTA_API_ENDPOINT,
@@ -387,10 +386,9 @@ class DefaultLLM(LLM):
             # the tools prefix independently of system/messages. Without this, different
             # prompts sharing the same toolset (e.g. scheduled reports) get no cache hits
             # for the tool definitions. Anthropic's cache hierarchy: tools → system → messages.
-            tool_cache_control: dict = {"type": "ephemeral"}
-            if PROMPT_CACHE_TTL:
-                tool_cache_control["ttl"] = PROMPT_CACHE_TTL
-            tools[-1] = {**tools[-1], "cache_control": tool_cache_control}
+            # Note: no ttl here — litellm strips ttl from messages for Bedrock but not
+            # from tools, so adding ttl here would cause a 400 error on Bedrock.
+            tools[-1] = {**tools[-1], "cache_control": {"type": "ephemeral"}}
 
         if THINKING:
             self.args.setdefault("thinking", json.loads(THINKING))
@@ -446,26 +444,16 @@ class DefaultLLM(LLM):
     def _build_cache_control_injection_points() -> list:
         """Build cache control injection points for Anthropic prompt caching.
 
-        When PROMPT_CACHE_TTL is set (e.g. "1h"), the tools and system prompt
-        breakpoints use the longer TTL so they persist across infrequent calls
-        (e.g. scheduled reports). The last-message breakpoint always uses the
-        default 5-min TTL since it changes every request.
+        Sets cache breakpoints on the system message and the last message.
+        The system prompt + tools prefix is stable across requests and benefits
+        from caching.  The last-message breakpoint caches the full conversation
+        prefix for multi-turn conversations.
 
-        Anthropic requires longer-TTL breakpoints to appear before shorter ones.
+        Note: we'd like to use 1h TTL on the system breakpoint for scheduled
+        reports, but litellm < 1.82 doesn't strip ttl from string-content
+        messages on Bedrock, causing 400 errors.  Revisit once litellm is
+        updated (see BerriAI/litellm#20326).
         """
-        if PROMPT_CACHE_TTL:
-            control = {"type": "ephemeral", "ttl": PROMPT_CACHE_TTL}
-            return [
-                {
-                    "location": "message",
-                    "role": "system",
-                    "control": control,
-                },
-                {
-                    "location": "message",
-                    "index": -1,
-                },
-            ]
         return [
             {
                 "location": "message",

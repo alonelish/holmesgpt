@@ -572,7 +572,6 @@ def _warm_prompt_cache():
     """
     import litellm
 
-    from holmes.common.env_vars import PROMPT_CACHE_TTL
     from holmes.core.llm import DefaultLLM
     from holmes.core.prompt import build_initial_ask_messages
     from holmes.core.tools_utils.tool_executor import ToolExecutor
@@ -601,10 +600,7 @@ def _warm_prompt_cache():
 
             # Add cache_control to last tool (same as DefaultLLM.completion does)
             if tools:
-                tool_cache_control: dict = {"type": "ephemeral"}
-                if PROMPT_CACHE_TTL:
-                    tool_cache_control["ttl"] = PROMPT_CACHE_TTL
-                tools[-1] = {**tools[-1], "cache_control": tool_cache_control}
+                tools[-1] = {**tools[-1], "cache_control": {"type": "ephemeral"}}
 
             litellm.completion(
                 model=model,
