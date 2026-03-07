@@ -9,6 +9,11 @@ expected_output:
   - "frontend team has 4 open issues"
   - "data team has 5 open issues"
   - "infra team has 5 open issues"
+evaluation:
+  correctness:
+    expected_score: 0
+    type: "strict"
 tags:
   - counting
   - hard
+  - regression
