@@ -91,6 +91,11 @@ BASH_TOOL_UNSAFE_ALLOW_ALL = load_bool("BASH_TOOL_UNSAFE_ALLOW_ALL", False)
 
 LOG_LLM_USAGE_RESPONSE = load_bool("LOG_LLM_USAGE_RESPONSE", False)
 
+# Prompt cache TTL for Anthropic models. Supported values: "" (default 5min), "1h" (1 hour).
+# Use "1h" for scheduled reports or batch processing where prompts are reused >5min apart.
+# Requires Claude 4.5+ models and litellm >= 1.82 for Bedrock support.
+PROMPT_CACHE_TTL = os.environ.get("PROMPT_CACHE_TTL", "").strip().lower()
+
 
 MAX_GRAPH_POINTS = float(os.environ.get("MAX_GRAPH_POINTS", 300))
 MAX_GRAPH_POINTS_HARD_LIMIT = float(os.environ.get("MAX_GRAPH_POINTS_HARD_LIMIT", MAX_GRAPH_POINTS * 2))
