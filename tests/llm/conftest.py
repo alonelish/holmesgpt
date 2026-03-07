@@ -1,6 +1,8 @@
 import logging
 import os
+import tempfile
 from contextlib import contextmanager
+from pathlib import Path
 from typing import Optional
 
 import pytest
@@ -558,6 +560,65 @@ def check_llm_api_with_test_call():
     return True, None
 
 
+def _warm_prompt_cache():
+    """Prime Anthropic's prompt cache with default tools + system prompt.
+
+    Runs a single LLM call (max_tokens=1) with the full default toolset and
+    system prompt so that the cache_write completes before parallel eval workers
+    start.  Without this, all workers start simultaneously and all cache-miss on
+    the system prompt (~9k tokens), wasting tokens and money.
+
+    The warmup is best-effort – failures are logged but never block the test run.
+    """
+    import litellm
+
+    from holmes.common.env_vars import PROMPT_CACHE_TTL
+    from holmes.core.llm import DefaultLLM
+    from holmes.core.prompt import build_initial_ask_messages
+    from holmes.core.tools_utils.tool_executor import ToolExecutor
+    from holmes.plugins.runbooks import load_runbook_catalog
+    from tests.llm.utils.test_toolset import TestToolsetManager
+
+    try:
+        models = [m.strip() for m in MODEL.split(",") if m.strip()]
+        model = models[0] if models else DEFAULT_MODEL
+
+        with tempfile.TemporaryDirectory() as tmp:
+            toolset_manager = TestToolsetManager(
+                test_case_folder=tmp,
+                allow_toolset_failures=True,
+            )
+            tool_executor = ToolExecutor(toolset_manager.toolsets)
+            runbooks = load_runbook_catalog()
+
+            messages = build_initial_ask_messages(
+                initial_user_prompt="hello",
+                file_paths=None,
+                tool_executor=tool_executor,
+                runbooks=runbooks,
+            )
+            tools = tool_executor.get_all_tools_openai_format(target_model=model)
+
+            # Add cache_control to last tool (same as DefaultLLM.completion does)
+            if tools:
+                tool_cache_control: dict = {"type": "ephemeral"}
+                if PROMPT_CACHE_TTL:
+                    tool_cache_control["ttl"] = PROMPT_CACHE_TTL
+                tools[-1] = {**tools[-1], "cache_control": tool_cache_control}
+
+            litellm.completion(
+                model=model,
+                messages=messages,
+                tools=tools,
+                tool_choice="auto",
+                max_tokens=1,
+                cache_control_injection_points=DefaultLLM._build_cache_control_injection_points(),
+            )
+            print("  ✅ Prompt cache warmed (tools + system prompt cached for workers)")
+    except Exception as e:
+        logging.warning(f"Prompt cache warmup failed (non-fatal): {e}")
+
+
 def pytest_collection_modifyitems(config, items):
     """
     Hook to modify test collection. Runs BEFORE any tests start.
@@ -582,6 +643,11 @@ def pytest_collection_modifyitems(config, items):
         # Store the result in config to avoid re-checking later
         config._llm_api_available = api_available
         config._llm_api_error_msg = error_msg
+
+        if api_available:
+            # Prime Anthropic prompt cache before parallel workers start.
+            # This ensures the tools + system prompt are cached for all workers.
+            _warm_prompt_cache()
 
         if not api_available:
             # Print skip message immediately
