@@ -386,9 +386,10 @@ class DefaultLLM(LLM):
             # the tools prefix independently of system/messages. Without this, different
             # prompts sharing the same toolset (e.g. scheduled reports) get no cache hits
             # for the tool definitions. Anthropic's cache hierarchy: tools → system → messages.
-            # 1h TTL keeps tools cached across scheduled report runs (default is 5min).
-            # Requires Claude 4.5+ on Bedrock; direct Anthropic API supports TTL on all models.
-            tools[-1] = {**tools[-1], "cache_control": {"type": "ephemeral", "ttl": "1h"}}
+            # Uses default 5min TTL (refreshed on each cache hit). Extended TTL (1h) is not
+            # used because litellm doesn't reliably strip TTL from tools/system on Bedrock
+            # for non-Claude-4.5 models, causing 400 errors.
+            tools[-1] = {**tools[-1], "cache_control": {"type": "ephemeral"}}
 
         if THINKING:
             self.args.setdefault("thinking", json.loads(THINKING))
@@ -446,21 +447,14 @@ class DefaultLLM(LLM):
 
         Sets cache breakpoints on the system message and the last message.
         The system prompt + tools prefix is stable across requests and benefits
-        from caching.  The last-message breakpoint caches the full conversation
-        prefix for multi-turn conversations.
-
-        System message uses 1h TTL to persist across scheduled report runs
-        (default TTL is 5min).  The last-message breakpoint uses the default
-        5min TTL since user messages change every request.
-        Requires Claude 4.5+ on Bedrock; direct Anthropic API supports TTL
-        on all models.  litellm >= 1.81.9 preserves TTL for Claude 4.5 on
-        Bedrock (PR #20338).
+        from caching (default 5min TTL, refreshed on each hit).
+        The last-message breakpoint caches the full conversation prefix for
+        multi-turn conversations.
         """
         return [
             {
                 "location": "message",
                 "role": "system",
-                "control": {"type": "ephemeral", "ttl": "1h"},
             },
             {
                 "location": "message",

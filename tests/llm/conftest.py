@@ -607,9 +607,9 @@ def _warm_prompt_cache() -> None:
         )
         tools = tool_executor.get_all_tools_openai_format(target_model=model)
 
-        # Add cache_control to last tool with 1h TTL (same as DefaultLLM.completion)
+        # Add cache_control to last tool (same as DefaultLLM.completion)
         if tools:
-            tools[-1] = {**tools[-1], "cache_control": {"type": "ephemeral", "ttl": "1h"}}
+            tools[-1] = {**tools[-1], "cache_control": {"type": "ephemeral"}}
 
         litellm.completion(
             model=model,
