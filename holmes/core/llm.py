@@ -386,9 +386,9 @@ class DefaultLLM(LLM):
             # the tools prefix independently of system/messages. Without this, different
             # prompts sharing the same toolset (e.g. scheduled reports) get no cache hits
             # for the tool definitions. Anthropic's cache hierarchy: tools → system → messages.
-            # Note: no ttl here — litellm strips ttl from messages for Bedrock but not
-            # from tools, so adding ttl here would cause a 400 error on Bedrock.
-            tools[-1] = {**tools[-1], "cache_control": {"type": "ephemeral"}}
+            # 1h TTL keeps tools cached across scheduled report runs (default is 5min).
+            # Requires Claude 4.5+ on Bedrock; direct Anthropic API supports TTL on all models.
+            tools[-1] = {**tools[-1], "cache_control": {"type": "ephemeral", "ttl": "1h"}}
 
         if THINKING:
             self.args.setdefault("thinking", json.loads(THINKING))
@@ -449,15 +449,18 @@ class DefaultLLM(LLM):
         from caching.  The last-message breakpoint caches the full conversation
         prefix for multi-turn conversations.
 
-        Note: we'd like to use 1h TTL on the system breakpoint for scheduled
-        reports, but litellm < 1.82 doesn't strip ttl from string-content
-        messages on Bedrock, causing 400 errors.  Revisit once litellm is
-        updated (see BerriAI/litellm#20326).
+        System message uses 1h TTL to persist across scheduled report runs
+        (default TTL is 5min).  The last-message breakpoint uses the default
+        5min TTL since user messages change every request.
+        Requires Claude 4.5+ on Bedrock; direct Anthropic API supports TTL
+        on all models.  litellm >= 1.81.9 preserves TTL for Claude 4.5 on
+        Bedrock (PR #20338).
         """
         return [
             {
                 "location": "message",
                 "role": "system",
+                "control": {"type": "ephemeral", "ttl": "1h"},
             },
             {
                 "location": "message",

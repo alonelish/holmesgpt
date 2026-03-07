@@ -1,8 +1,6 @@
 import logging
 import os
-import tempfile
 from contextlib import contextmanager
-from pathlib import Path
 from typing import Optional
 
 import pytest
@@ -560,13 +558,16 @@ def check_llm_api_with_test_call():
     return True, None
 
 
-def _warm_prompt_cache():
+def _warm_prompt_cache() -> None:
     """Prime Anthropic's prompt cache with default tools + system prompt.
 
     Runs a single LLM call (max_tokens=1) with the full default toolset and
     system prompt so that the cache_write completes before parallel eval workers
     start.  Without this, all workers start simultaneously and all cache-miss on
     the system prompt (~9k tokens), wasting tokens and money.
+
+    Uses a real test fixture folder (one without custom toolsets.yaml) so the
+    tools match what most eval tests load.
 
     The warmup is best-effort – failures are logged but never block the test run.
     """
@@ -582,37 +583,45 @@ def _warm_prompt_cache():
         models = [m.strip() for m in MODEL.split(",") if m.strip()]
         model = models[0] if models else DEFAULT_MODEL
 
-        with tempfile.TemporaryDirectory() as tmp:
-            toolset_manager = TestToolsetManager(
-                test_case_folder=tmp,
-                allow_toolset_failures=True,
-            )
-            tool_executor = ToolExecutor(toolset_manager.toolsets)
-            runbooks = load_runbook_catalog()
+        # Use a real test fixture folder so we load the same default toolsets
+        # as most eval tests.  Folder 43 has no custom toolsets.yaml and is
+        # always present.
+        fixture_folder = os.path.join(
+            os.path.dirname(__file__),
+            "fixtures",
+            "test_ask_holmes",
+            "43_current_datetime_from_prompt",
+        )
+        toolset_manager = TestToolsetManager(
+            test_case_folder=fixture_folder,
+            allow_toolset_failures=True,
+        )
+        tool_executor = ToolExecutor(toolset_manager.toolsets)
+        runbooks = load_runbook_catalog()
 
-            messages = build_initial_ask_messages(
-                initial_user_prompt="hello",
-                file_paths=None,
-                tool_executor=tool_executor,
-                runbooks=runbooks,
-            )
-            tools = tool_executor.get_all_tools_openai_format(target_model=model)
+        messages = build_initial_ask_messages(
+            initial_user_prompt="hello",
+            file_paths=None,
+            tool_executor=tool_executor,
+            runbooks=runbooks,
+        )
+        tools = tool_executor.get_all_tools_openai_format(target_model=model)
 
-            # Add cache_control to last tool (same as DefaultLLM.completion does)
-            if tools:
-                tools[-1] = {**tools[-1], "cache_control": {"type": "ephemeral"}}
+        # Add cache_control to last tool with 1h TTL (same as DefaultLLM.completion)
+        if tools:
+            tools[-1] = {**tools[-1], "cache_control": {"type": "ephemeral", "ttl": "1h"}}
 
-            litellm.completion(
-                model=model,
-                messages=messages,
-                tools=tools,
-                tool_choice="auto",
-                max_tokens=1,
-                cache_control_injection_points=DefaultLLM._build_cache_control_injection_points(),
-            )
-            print("  ✅ Prompt cache warmed (tools + system prompt cached for workers)")
-    except Exception as e:
-        logging.warning(f"Prompt cache warmup failed (non-fatal): {e}")
+        litellm.completion(
+            model=model,
+            messages=messages,
+            tools=tools,
+            tool_choice="auto",
+            max_tokens=1,
+            cache_control_injection_points=DefaultLLM._build_cache_control_injection_points(),
+        )
+        print("  ✅ Prompt cache warmed (tools + system prompt cached for workers)")
+    except Exception as exc:
+        logging.warning("Prompt cache warmup failed (non-fatal): %s", exc, exc_info=True)
 
 
 def pytest_collection_modifyitems(config, items):
