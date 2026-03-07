@@ -663,6 +663,7 @@ class ToolCallingLLM:
         tool_number: Optional[int] = None,
         session_approved_prefixes: Optional[List[str]] = None,
         request_context: Optional[Dict[str, Any]] = None,
+        previous_tool_calls: Optional[list[dict]] = None,
     ) -> StructuredToolResult:
         # Ensure the toolset is initialized (lazy initialization on first use)
         init_error = self.tool_executor.ensure_toolset_initialized(tool_name)
@@ -694,6 +695,7 @@ class ToolCallingLLM:
                 tool_call_id=tool_call_id,
                 session_approved_prefixes=session_approved_prefixes or [],
                 request_context=request_context,
+                previous_tool_calls=previous_tool_calls or [],
             )
             tool_response = tool.invoke(tool_params, context=invoke_context)
 
@@ -753,6 +755,7 @@ class ToolCallingLLM:
                 tool_call_id=tool_call_id,
                 session_approved_prefixes=session_approved_prefixes,
                 request_context=request_context,
+                previous_tool_calls=previous_tool_calls,
             )
 
         if not isinstance(tool_response, StructuredToolResult):

@@ -136,14 +136,13 @@ class TodoWriteTool(Tool):
 class JqQueryTool(Tool):
     name: str = "jq_query"
     description: str = (
-        "Run a jq expression on JSON data to count, filter, group, or transform it. "
-        "Use this when you need to perform precise counting, grouping, or aggregation "
-        "on JSON data returned by other tools. Pass the JSON data from a previous tool "
-        "call and a jq expression to process it."
+        "Run a jq expression on the JSON output of a previous tool call. "
+        "Use this for precise counting, grouping, filtering, or aggregation. "
+        "Reference the previous tool call by its tool_call_id."
     )
     parameters: Dict[str, ToolParameter] = {
-        "data": ToolParameter(
-            description="The JSON data to query (copy from a previous tool call result)",
+        "tool_call_id": ToolParameter(
+            description="The tool_call_id of a previous tool call whose output you want to query",
             type="string",
             required=True,
         ),
@@ -160,14 +159,22 @@ class JqQueryTool(Tool):
         ),
     }
 
+    def _find_tool_call_data(self, tool_call_id: str, context: ToolInvokeContext) -> str | None:
+        """Look up the result data from a previous tool call by its ID."""
+        for tc in context.previous_tool_calls:
+            if tc.get("tool_call_id") == tool_call_id:
+                result = tc.get("result", {})
+                return result.get("data", "")
+        return None
+
     def _invoke(self, params: dict, context: ToolInvokeContext) -> StructuredToolResult:
-        data_str = params.get("data", "")
+        ref_tool_call_id = params.get("tool_call_id", "")
         expression = params.get("expression", "")
 
-        if not data_str:
+        if not ref_tool_call_id:
             return StructuredToolResult(
                 status=StructuredToolResultStatus.ERROR,
-                error="The 'data' parameter is required and must contain valid JSON",
+                error="The 'tool_call_id' parameter is required - pass the tool_call_id of the tool whose output you want to query",
                 params=params,
             )
         if not expression:
@@ -177,14 +184,20 @@ class JqQueryTool(Tool):
                 params=params,
             )
 
-        try:
-            parsed_data = json.loads(data_str)
-        except json.JSONDecodeError as e:
+        data_str = self._find_tool_call_data(ref_tool_call_id, context)
+        if data_str is None:
+            available_ids = [tc.get("tool_call_id", "?") for tc in context.previous_tool_calls]
             return StructuredToolResult(
                 status=StructuredToolResultStatus.ERROR,
-                error=f"Invalid JSON data: {e}",
+                error=f"No previous tool call found with id '{ref_tool_call_id}'. Available tool_call_ids: {available_ids}",
                 params=params,
             )
+
+        try:
+            parsed_data = json.loads(data_str)
+        except json.JSONDecodeError:
+            # Data might not be JSON - try to use it as a raw string
+            parsed_data = data_str
 
         try:
             compiled = jq_lib.compile(expression)
