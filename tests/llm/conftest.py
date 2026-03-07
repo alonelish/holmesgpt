@@ -587,12 +587,15 @@ def _warm_prompt_cache() -> None:
     try:
         models = [m.strip() for m in MODEL.split(",") if m.strip()]
         model = models[0] if models else DEFAULT_MODEL
+        print(f"  🔥 Warmup: model={model}")
 
         # Resolve model through model registry to get proper auth params.
         # In CI, MODEL_LIST_FILE_LOCATION provides api_key/api_base for Bedrock.
         # Without this, the warmup hits the wrong endpoint and the cache is
         # never primed for the actual provider the eval tests use.
         llm = create_eval_llm(model)
+        litellm_model = llm.get_litellm_corrected_name_for_robusta_ai()
+        print(f"  🔥 Warmup: resolved model={litellm_model}, api_base={llm.api_base}")
 
         # Use a real test fixture folder so we load the same default toolsets
         # as most eval tests.  Folder 43 has no custom toolsets.yaml and is
@@ -617,6 +620,7 @@ def _warm_prompt_cache() -> None:
             runbooks=runbooks,
         )
         tools = tool_executor.get_all_tools_openai_format(target_model=model)
+        print(f"  🔥 Warmup: {len(tools)} tools, {len(messages)} messages, system_prompt_len={len(messages[0]['content']) if messages else 0}")
 
         # Add cache_control to last tool (same as DefaultLLM.completion)
         if tools:
@@ -624,8 +628,8 @@ def _warm_prompt_cache() -> None:
 
         # Call litellm directly (DefaultLLM.completion doesn't accept max_tokens)
         # but use the resolved LLM's auth params so we hit the same endpoint.
-        litellm.completion(
-            model=llm.get_litellm_corrected_name_for_robusta_ai(),
+        response = litellm.completion(
+            model=litellm_model,
             api_key=llm.api_key,
             base_url=llm.api_base,
             api_version=llm.api_version,
@@ -635,8 +639,17 @@ def _warm_prompt_cache() -> None:
             max_tokens=1,
             cache_control_injection_points=DefaultLLM._build_cache_control_injection_points(),
         )
-        print("  ✅ Prompt cache warmed (tools + system prompt cached for workers)")
+        # Report cache statistics from the warmup call itself
+        usage = getattr(response, "usage", None)
+        if usage:
+            cache_creation = getattr(usage, "cache_creation_input_tokens", 0) or 0
+            cache_read = getattr(usage, "cache_read_input_tokens", 0) or 0
+            prompt_tokens = getattr(usage, "prompt_tokens", 0) or 0
+            print(f"  ✅ Warmup done: prompt_tokens={prompt_tokens}, cache_creation={cache_creation}, cache_read={cache_read}")
+        else:
+            print("  ✅ Warmup done (no usage data in response)")
     except Exception as exc:
+        print(f"  ❌ Warmup FAILED: {type(exc).__name__}: {exc}")
         logging.warning("Prompt cache warmup failed (non-fatal): %s", exc, exc_info=True)
 
 
