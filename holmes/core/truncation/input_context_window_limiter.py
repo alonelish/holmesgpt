@@ -21,16 +21,25 @@ from holmes.utils.stream import StreamEvents, StreamMessage
 class ContextWindowOverflowError(Exception):
     """Raised when conversation exceeds context window and cannot be compacted."""
 
-    def __init__(self, current_tokens: int, max_tokens: int) -> None:
+    def __init__(self, current_tokens: int, max_tokens: int, compaction_attempted: bool):
         self.current_tokens = current_tokens
         self.max_tokens = max_tokens
+        self.compaction_attempted = compaction_attempted
 
-        message = (
-            f"This conversation is too long ({current_tokens:,} tokens) and could not be "
-            f"summarized to fit within the context window ({max_tokens:,} tokens). "
-            "Please start a new conversation or clarify what context from the previous "
-            "conversation you need me to remember."
-        )
+        if compaction_attempted:
+            message = (
+                f"The conversation history is too long ({current_tokens:,} tokens) and could not be "
+                f"summarized to fit within the context window ({max_tokens:,} tokens). "
+                "This is likely a bug. Please report it at https://github.com/robusta-dev/holmesgpt/issues "
+                "and start a new conversation in the meantime."
+            )
+        else:
+            message = (
+                f"The conversation ({current_tokens:,} tokens) exceeds the context window "
+                f"({max_tokens:,} tokens). This is likely a bug. Please report it at "
+                "https://github.com/robusta-dev/holmesgpt/issues and start a new conversation "
+                "in the meantime."
+            )
         super().__init__(message)
 
 
@@ -112,6 +121,11 @@ def limit_input_context_window(
         raise ContextWindowOverflowError(
             current_tokens=tokens.total_tokens,
             max_tokens=available_for_input,
+            compaction_attempted=conversation_history_compacted
+            or (
+                ENABLE_CONVERSATION_HISTORY_COMPACTION
+                and (initial_tokens.total_tokens + maximum_output_token) > compaction_threshold
+            ),
         )
 
     elapsed_ms = (time.monotonic() - t0) * 1000
