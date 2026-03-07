@@ -1,7 +1,8 @@
 services:
   holmes:
     image: us-central1-docker.pkg.dev/genuine-flight-317411/devel/holmes
-    network_mode: host
+    ports:
+      - "5050:5050"
     environment:
       # Uncomment the API key for your LLM provider:
       - OPENAI_API_KEY=${OPENAI_API_KEY:-}
@@ -18,8 +19,10 @@ services:
       - ~/.kube/config:/root/.kube/config:ro
       - ~/.aws:/root/.aws:ro
       - ~/.config/gcloud:/root/.config/gcloud:ro
-    # Override with your own question or subcommand, e.g.:
-    #   docker compose run holmes ask "what pods are unhealthy and why?"
-    #   docker compose run holmes investigate alertmanager
-    entrypoint: ["python", "holmes_cli.py"]
-    command: ["ask", "what pods are unhealthy and why?"]
+    command: ["python3", "-u", "server.py"]
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5050/healthz"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s

@@ -85,7 +85,7 @@ Run HolmesGPT from your terminal as a standalone CLI tool.
 
 === "Docker Compose"
 
-    Use Docker Compose for a simpler setup that avoids long `docker run` commands:
+    Run the HolmesGPT HTTP server using Docker Compose — no Kubernetes or Helm chart required:
 
     1. Clone the repository (or just download `docker-compose.yaml`):
        ```bash
@@ -98,9 +98,14 @@ Run HolmesGPT from your terminal as a standalone CLI tool.
        export OPENAI_API_KEY="your-api-key"
        ```
 
-    3. Run HolmesGPT:
+    3. Start the server:
        ```bash
-       docker compose run holmes ask "what pods are unhealthy and why?"
+       docker compose up
+       ```
+
+    4. The API is available at `http://localhost:5050`. Verify with:
+       ```bash
+       curl http://localhost:5050/healthz
        ```
 
     Edit `docker-compose.yaml` to uncomment additional API keys or adjust volume mounts for your environment.
