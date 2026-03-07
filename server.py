@@ -58,6 +58,7 @@ from holmes.utils.connection_utils import patch_socket_create_connection
 from holmes.utils.holmes_status import update_holmes_status_in_db
 from holmes.utils.holmes_sync_toolsets import holmes_sync_toolsets_status
 from holmes.utils.log import EndpointFilter
+from holmes.checks.checks_api import init_checks_app
 from holmes.core.tools_utils.filesystem_result_storage import tool_result_storage
 from holmes.utils.stream import stream_chat_formatter, stream_investigate_formatter
 
@@ -264,6 +265,9 @@ if LOG_PERFORMANCE:
             )
 
 
+init_checks_app(app, config)
+
+
 @app.post("/api/investigate")
 def investigate_issues(investigate_request: InvestigateRequest, http_request: Request):
     try:
@@ -382,7 +386,7 @@ def already_answered(conversation_history: Optional[List[dict]]) -> bool:
 def extract_passthrough_headers(request: Request) -> dict:
     """
     Extract pass-through headers from the request, excluding sensitive auth headers.
-    These headers are forwarded to MCP servers for authentication and context.
+    These headers are forwarded to all toolset types (MCP, HTTP, YAML, Python) for authentication and context.
 
     The blocked headers can be configured via the HOLMES_PASSTHROUGH_BLOCKED_HEADERS
     environment variable (comma-separated list). Defaults to "authorization,cookie,set-cookie".
