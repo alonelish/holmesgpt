@@ -566,6 +566,10 @@ def _warm_prompt_cache() -> None:
     start.  Without this, all workers start simultaneously and all cache-miss on
     the system prompt (~9k tokens), wasting tokens and money.
 
+    Uses create_eval_llm() to resolve the model through the model registry,
+    ensuring the same api_key/api_base/api_version as real eval tests (critical
+    for CI where MODEL_LIST_FILE_LOCATION configures Bedrock credentials).
+
     Uses a real test fixture folder (one without custom toolsets.yaml) so the
     tools match what most eval tests load.
 
@@ -577,11 +581,18 @@ def _warm_prompt_cache() -> None:
     from holmes.core.prompt import build_initial_ask_messages
     from holmes.core.tools_utils.tool_executor import ToolExecutor
     from holmes.plugins.runbooks import load_runbook_catalog
+    from tests.llm.utils.test_case_utils import create_eval_llm
     from tests.llm.utils.test_toolset import TestToolsetManager
 
     try:
         models = [m.strip() for m in MODEL.split(",") if m.strip()]
         model = models[0] if models else DEFAULT_MODEL
+
+        # Resolve model through model registry to get proper auth params.
+        # In CI, MODEL_LIST_FILE_LOCATION provides api_key/api_base for Bedrock.
+        # Without this, the warmup hits the wrong endpoint and the cache is
+        # never primed for the actual provider the eval tests use.
+        llm = create_eval_llm(model)
 
         # Use a real test fixture folder so we load the same default toolsets
         # as most eval tests.  Folder 43 has no custom toolsets.yaml and is
@@ -611,8 +622,13 @@ def _warm_prompt_cache() -> None:
         if tools:
             tools[-1] = {**tools[-1], "cache_control": {"type": "ephemeral"}}
 
+        # Call litellm directly (DefaultLLM.completion doesn't accept max_tokens)
+        # but use the resolved LLM's auth params so we hit the same endpoint.
         litellm.completion(
-            model=model,
+            model=llm.get_litellm_corrected_name_for_robusta_ai(),
+            api_key=llm.api_key,
+            base_url=llm.api_base,
+            api_version=llm.api_version,
             messages=messages,
             tools=tools,
             tool_choice="auto",
