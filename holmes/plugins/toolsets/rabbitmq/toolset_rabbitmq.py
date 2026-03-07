@@ -117,7 +117,8 @@ class GetRabbitMQClusterStatus(BaseRabbitMQTool, JsonFilterMixin):
             result = get_cluster_status(cluster_config)
             return self.filter_result(
                 StructuredToolResult(
-                    status=StructuredToolResultStatus.SUCCESS, data=result
+                    status=StructuredToolResultStatus.SUCCESS,
+                    data=result.model_dump(),
                 ),
                 params,
             )
