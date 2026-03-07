@@ -6,15 +6,37 @@ toolsets:
         description: "Retrieve all reported issues"
         script: |
           cat <<'DATA'
-          ID    TITLE                           SEVERITY   STATUS
-          1001  Database connection timeout      critical   open
-          1002  CSS alignment on login page      low        open
-          1003  Memory leak in worker process    critical   investigating
-          1004  Slow API response on /users      medium     open
-          1005  SSL certificate expiring soon    high       open
-          1006  Disk usage above 90%             critical   open
-          1007  Flaky test in CI pipeline        low        closed
-          1008  Missing input validation         medium     open
+          ID    TITLE                                    SEVERITY   STATUS          TEAM
+          1001  Database connection timeout               critical   open            backend
+          1002  CSS alignment on login page               low        open            frontend
+          1003  Memory leak in worker process             critical   investigating   platform
+          1004  Slow API response on /users               medium     open            backend
+          1005  SSL certificate expiring soon             high       open            infra
+          1006  Disk usage above 90% on node-3            critical   open            infra
+          1007  Flaky test in CI pipeline                 low        closed          platform
+          1008  Missing input validation on signup        medium     open            frontend
+          1009  Redis cluster failover not working        critical   open            platform
+          1010  Stale cache entries after deploy          medium     investigating   backend
+          1011  Log aggregation pipeline delay            high       open            platform
+          1012  Broken pagination on search results       low        open            frontend
+          1013  Race condition in payment processing      critical   open            backend
+          1014  Grafana dashboard queries slow            medium     open            platform
+          1015  Kubernetes pod eviction loop              high       open            infra
+          1016  Deadlock in connection pool               critical   investigating   backend
+          1017  Unhandled null in user profile API        medium     open            backend
+          1018  Mobile layout broken on tablet            low        open            frontend
+          1019  Prometheus scrape target missing          high       open            platform
+          1020  DNS resolution failures intermittent      critical   open            infra
+          1021  Data pipeline schema mismatch             high       open            data
+          1022  ETL job failing silently                  critical   open            data
+          1023  Spark executor OOM on large datasets      medium     open            data
+          1024  Stale feature flags not cleaned up        low        closed          platform
+          1025  Webhook delivery retry storm              high       open            backend
+          1026  Dashboard permission sync broken          medium     open            platform
+          1027  Audit log missing write events            medium     open            data
+          1028  Container image scan false positives      low        open            infra
+          1029  SSO session expiry mismatch               high       open            platform
+          1030  Data lake partition skew                  medium     open            data
           DATA
   helm/core:
     enabled: false

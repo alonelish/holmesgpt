@@ -1,6 +1,14 @@
-user_prompt: "How many of the reported issues are critical severity?"
+user_prompt: "Summarize the issues by severity: how many are there at each severity level? Also, how many open issues does each team have?"
 expected_output:
-  - 3 issues are critical severity
+  - "critical: 8"
+  - "high: 7"
+  - "medium: 9"
+  - "low: 6"
+  - "platform team has 7 open issues"
+  - "backend team has 7 open issues"
+  - "frontend team has 4 open issues"
+  - "data team has 5 open issues"
+  - "infra team has 5 open issues"
 tags:
   - counting
-  - easy
+  - hard
