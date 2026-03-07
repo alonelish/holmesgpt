@@ -83,6 +83,28 @@ Run HolmesGPT from your terminal as a standalone CLI tool.
 
     > **Note:** Use `-e` flags to pass API keys for your provider (e.g., `-e ANTHROPIC_API_KEY`, `-e GEMINI_API_KEY`). See [Environment Variables Reference](../reference/environment-variables.md) for the complete list.
 
+=== "Docker Compose"
+
+    Use Docker Compose for a simpler setup that avoids long `docker run` commands:
+
+    1. Clone the repository (or just download `docker-compose.yaml`):
+       ```bash
+       git clone https://github.com/HolmesGPT/holmesgpt.git
+       cd holmesgpt
+       ```
+
+    2. Set your API key:
+       ```bash
+       export OPENAI_API_KEY="your-api-key"
+       ```
+
+    3. Run HolmesGPT:
+       ```bash
+       docker compose run holmes ask "what pods are unhealthy and why?"
+       ```
+
+    Edit `docker-compose.yaml` to uncomment additional API keys or adjust volume mounts for your environment.
+
 ## Quick Start
 
 Choose your AI provider (see [all providers](../ai-providers/index.md) for more options).
