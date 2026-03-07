@@ -156,7 +156,7 @@ def limit_input_context_window(
     metadata = {}
     initial_tokens = llm.count_tokens(messages=messages, tools=tools)  # type: ignore
     max_context_size = llm.get_context_window_size()
-    maximum_output_token = llm.get_maximum_output_token()
+    maximum_output_token = min(llm.get_maximum_output_token(), MAX_OUTPUT_TOKEN_RESERVATION)
     conversation_history_compacted = False
     compaction_usage = CompactionUsage()
     if ENABLE_CONVERSATION_HISTORY_COMPACTION and (
