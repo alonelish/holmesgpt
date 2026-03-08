@@ -65,7 +65,7 @@ class TestDatadogToolsetCheckPrerequisites:
         assert "Failed to parse Datadog configuration" in toolset.error
 
     @patch(
-        "holmes.plugins.toolsets.datadog.toolset_datadog_logs.execute_datadog_http_request"
+        "holmes.plugins.toolsets.datadog.datadog_api.execute_datadog_http_request"
     )
     def test_check_prerequisites_successful_healthcheck(self, mock_execute_request):
         """Test check_prerequisites with successful healthcheck"""
@@ -113,7 +113,7 @@ class TestDatadogToolsetCheckPrerequisites:
         assert toolset.error == 'Datadog API error: 401 - {"errors":["Unauthorized"]}'
 
     @patch(
-        "holmes.plugins.toolsets.datadog.toolset_datadog_logs.execute_datadog_http_request"
+        "holmes.plugins.toolsets.datadog.datadog_api.execute_datadog_http_request"
     )
     def test_check_prerequisites_healthcheck_exception(self, mock_execute_request):
         """Test check_prerequisites with healthcheck throwing exception"""
@@ -132,7 +132,7 @@ class TestDatadogToolsetCheckPrerequisites:
         assert "Healthcheck failed with exception: Network error" in toolset.error
 
     @patch(
-        "holmes.plugins.toolsets.datadog.toolset_datadog_logs.execute_datadog_http_request"
+        "holmes.plugins.toolsets.datadog.datadog_api.execute_datadog_http_request"
     )
     def test_check_prerequisites_with_custom_config(self, mock_execute_request):
         """Test check_prerequisites with custom configuration"""

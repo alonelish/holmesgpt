@@ -27,6 +27,7 @@ from holmes.plugins.toolsets.datadog.datadog_api import (
     DataDogRequestError,
     execute_datadog_http_request,
     get_headers,
+    perform_healthcheck_with_retries,
 )
 from holmes.plugins.toolsets.datadog.datadog_models import DatadogMetricsConfig
 from holmes.plugins.toolsets.datadog.datadog_url_utils import (
@@ -729,31 +730,35 @@ class DatadogMetricsToolset(Toolset):
         self._reload_instructions()
 
     def _perform_healthcheck(self, dd_config: DatadogMetricsConfig) -> Tuple[bool, str]:
-        try:
-            logging.debug("Performing Datadog metrics configuration healthcheck...")
+        """Perform health check on Datadog metrics API.
 
-            url = f"{dd_config.api_url}/api/v1/validate"
-            headers = get_headers(dd_config)
+        Uses retry logic for transient errors (408, 5xx) to avoid flapping
+        the toolset status on temporary Datadog API issues.
+        """
+        logging.debug("Performing Datadog metrics configuration healthcheck...")
 
-            data = execute_datadog_http_request(
-                url=url,
-                headers=headers,
-                payload_or_params={},
-                timeout=dd_config.timeout_seconds,
-                method="GET",
-            )
+        url = f"{dd_config.api_url}/api/v1/validate"
+        headers = get_headers(dd_config)
 
-            if data.get("valid", False):
-                logging.info("Datadog metrics healthcheck completed successfully")
-                return True, ""
-            else:
-                error_msg = "Datadog API key validation failed"
-                logging.error(f"Datadog metrics healthcheck failed: {error_msg}")
-                return False, f"Datadog metrics healthcheck failed: {error_msg}"
+        data, success, error_msg = perform_healthcheck_with_retries(
+            url=url,
+            headers=headers,
+            payload_or_params={},
+            timeout=dd_config.timeout_seconds,
+            method="GET",
+            toolset_name="datadog/metrics",
+        )
 
-        except Exception as e:
-            logging.exception("Failed during Datadog metrics healthcheck")
-            return False, f"Healthcheck failed with exception: {str(e)}"
+        if not success:
+            return False, error_msg
+
+        if data and data.get("valid", False):
+            logging.info("Datadog metrics healthcheck completed successfully")
+            return True, ""
+        else:
+            error_msg = "Datadog API key validation failed"
+            logging.error(f"Datadog metrics healthcheck failed: {error_msg}")
+            return False, f"Datadog metrics healthcheck failed: {error_msg}"
 
     def prerequisites_callable(self, config: dict[str, Any]) -> Tuple[bool, str]:
         if not config:

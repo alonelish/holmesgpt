@@ -26,6 +26,7 @@ from holmes.plugins.toolsets.datadog.datadog_api import (
     DataDogRequestError,
     execute_datadog_http_request,
     get_headers,
+    perform_healthcheck_with_retries,
 )
 from holmes.plugins.toolsets.datadog.datadog_models import DatadogTracesConfig
 from holmes.plugins.toolsets.datadog.datadog_url_utils import (
@@ -84,54 +85,39 @@ class DatadogTracesToolset(Toolset):
             return False, f"Failed to parse Datadog configuration: {str(e)}"
 
     def _perform_healthcheck(self, dd_config: DatadogTracesConfig) -> Tuple[bool, str]:
-        """Perform health check on Datadog traces API."""
-        try:
-            logging.info("Performing Datadog traces configuration healthcheck...")
-            headers = get_headers(dd_config)
+        """Perform health check on Datadog traces API.
 
-            # The spans API uses POST, not GET
-            payload = {
-                "data": {
-                    "type": "search_request",
-                    "attributes": {
-                        "filter": {
-                            "from": "now-1m",
-                            "to": "now",
-                            "query": "*",
-                            "indexes": dd_config.indexes,
-                        },
-                        "page": {"limit": 1},
+        Uses retry logic for transient errors (408, 5xx) to avoid flapping
+        the toolset status on temporary Datadog API issues.
+        """
+        logging.info("Performing Datadog traces configuration healthcheck...")
+        headers = get_headers(dd_config)
+
+        payload = {
+            "data": {
+                "type": "search_request",
+                "attributes": {
+                    "filter": {
+                        "from": "now-1m",
+                        "to": "now",
+                        "query": "*",
+                        "indexes": dd_config.indexes,
                     },
-                }
+                    "page": {"limit": 1},
+                },
             }
+        }
 
-            # Use search endpoint instead
-            search_url = f"{dd_config.api_url}/api/v2/spans/events/search"
-
-            execute_datadog_http_request(
-                url=search_url,
-                headers=headers,
-                payload_or_params=payload,
-                timeout=dd_config.timeout_seconds,
-                method="POST",
-            )
-
-            return True, ""
-
-        except DataDogRequestError as e:
-            logging.error(
-                f"Datadog API error during healthcheck: {e.status_code} - {e.response_text}"
-            )
-            if e.status_code == 403:
-                return (
-                    False,
-                    "API key lacks required permissions. Make sure your API key has 'apm_read' scope.",
-                )
-            else:
-                return False, f"Datadog API error: {e.status_code} - {e.response_text}"
-        except Exception as e:
-            logging.exception("Failed during Datadog traces healthcheck")
-            return False, f"Healthcheck failed with exception: {str(e)}"
+        search_url = f"{dd_config.api_url}/api/v2/spans/events/search"
+        _, success, error_msg = perform_healthcheck_with_retries(
+            url=search_url,
+            headers=headers,
+            payload_or_params=payload,
+            timeout=dd_config.timeout_seconds,
+            method="POST",
+            toolset_name="datadog/traces",
+        )
+        return success, error_msg
 
 
 class BaseDatadogTracesTool(Tool):

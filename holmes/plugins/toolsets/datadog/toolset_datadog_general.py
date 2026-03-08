@@ -27,6 +27,7 @@ from holmes.plugins.toolsets.datadog.datadog_api import (
     execute_datadog_http_request,
     fetch_openapi_spec,
     get_headers,
+    perform_healthcheck_with_retries,
     preprocess_time_fields,
 )
 from holmes.plugins.toolsets.datadog.datadog_models import (
@@ -263,32 +264,35 @@ class DatadogGeneralToolset(Toolset):
             return False, f"Failed to parse Datadog configuration: {str(e)}"
 
     def _perform_healthcheck(self, dd_config: DatadogGeneralConfig) -> Tuple[bool, str]:
-        """Perform health check on Datadog API."""
-        try:
-            logging.info("Performing Datadog general API configuration healthcheck...")
-            base_url = str(dd_config.api_url).rstrip("/")
-            url = f"{base_url}/api/v1/validate"
-            headers = get_headers(dd_config)
+        """Perform health check on Datadog API.
 
-            data = execute_datadog_http_request(
-                url=url,
-                headers=headers,
-                payload_or_params={},
-                timeout=dd_config.timeout_seconds,
-                method="GET",
-            )
+        Uses retry logic for transient errors (408, 5xx) to avoid flapping
+        the toolset status on temporary Datadog API issues.
+        """
+        logging.info("Performing Datadog general API configuration healthcheck...")
+        base_url = str(dd_config.api_url).rstrip("/")
+        url = f"{base_url}/api/v1/validate"
+        headers = get_headers(dd_config)
 
-            if data.get("valid", False):
-                logging.debug("Datadog general API healthcheck completed successfully")
-                return True, ""
-            else:
-                error_msg = "Datadog API key validation failed"
-                logging.error(f"Datadog general API healthcheck failed: {error_msg}")
-                return False, f"Datadog general API healthcheck failed: {error_msg}"
+        data, success, error_msg = perform_healthcheck_with_retries(
+            url=url,
+            headers=headers,
+            payload_or_params={},
+            timeout=dd_config.timeout_seconds,
+            method="GET",
+            toolset_name="datadog/general",
+        )
 
-        except Exception as e:
-            logging.exception("Failed during Datadog general API healthcheck")
-            return False, f"Healthcheck failed with exception: {str(e)}"
+        if not success:
+            return False, error_msg
+
+        if data and data.get("valid", False):
+            logging.debug("Datadog general API healthcheck completed successfully")
+            return True, ""
+        else:
+            error_msg = "Datadog API key validation failed"
+            logging.error(f"Datadog general API healthcheck failed: {error_msg}")
+            return False, f"Datadog general API healthcheck failed: {error_msg}"
 
 
 def is_endpoint_allowed(

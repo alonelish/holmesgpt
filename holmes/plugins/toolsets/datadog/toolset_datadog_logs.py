@@ -19,6 +19,7 @@ from holmes.plugins.toolsets.datadog.datadog_api import (
     DataDogRequestError,
     execute_datadog_http_request,
     get_headers,
+    perform_healthcheck_with_retries,
 )
 from holmes.plugins.toolsets.datadog.datadog_models import (
     DatadogLogsConfig,
@@ -80,47 +81,36 @@ class DatadogLogsToolset(Toolset):
         self._reload_instructions()
 
     def _perform_healthcheck(self) -> Tuple[bool, str]:
-        """Perform health check on Datadog logs API."""
+        """Perform health check on Datadog logs API.
+
+        Uses retry logic for transient errors (408, 5xx) to avoid flapping
+        the toolset status on temporary Datadog API issues.
+        """
         if not self.dd_config:
             return False, "Datadog configuration not initialized"
-        try:
-            logging.info("Performing Datadog logs configuration healthcheck...")
-            headers = get_headers(self.dd_config)
-            payload = {
-                "filter": {
-                    "from": "now-1m",
-                    "to": "now",
-                    "query": "*",
-                    "indexes": self.dd_config.indexes,
-                },
-                "page": {"limit": 1},
-            }
 
-            search_url = f"{self.dd_config.api_url}/api/v2/logs/events/search"
-            execute_datadog_http_request(
-                url=search_url,
-                headers=headers,
-                payload_or_params=payload,
-                timeout=self.dd_config.timeout_seconds,
-                method="POST",
-            )
+        logging.info("Performing Datadog logs configuration healthcheck...")
+        headers = get_headers(self.dd_config)
+        payload = {
+            "filter": {
+                "from": "now-1m",
+                "to": "now",
+                "query": "*",
+                "indexes": self.dd_config.indexes,
+            },
+            "page": {"limit": 1},
+        }
 
-            return True, ""
-
-        except DataDogRequestError as e:
-            logging.error(
-                f"Datadog API error during healthcheck: {e.status_code} - {e.response_text}"
-            )
-            if e.status_code == 403:
-                return (
-                    False,
-                    "API key lacks required permissions. Make sure your API key has 'apm_read' scope.",
-                )
-            else:
-                return False, f"Datadog API error: {e.status_code} - {e.response_text}"
-        except Exception as e:
-            logging.exception("Failed during Datadog traces healthcheck")
-            return False, f"Healthcheck failed with exception: {str(e)}"
+        search_url = f"{self.dd_config.api_url}/api/v2/logs/events/search"
+        _, success, error_msg = perform_healthcheck_with_retries(
+            url=search_url,
+            headers=headers,
+            payload_or_params=payload,
+            timeout=self.dd_config.timeout_seconds,
+            method="POST",
+            toolset_name="datadog/logs",
+        )
+        return success, error_msg
 
     def prerequisites_callable(self, config: dict[str, Any]) -> Tuple[bool, str]:
         if not config:

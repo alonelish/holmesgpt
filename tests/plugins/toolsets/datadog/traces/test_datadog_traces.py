@@ -30,7 +30,7 @@ class TestDatadogTracesToolset:
         assert toolset.tools[1].name == "aggregate_datadog_spans"
 
     @patch(
-        "holmes.plugins.toolsets.datadog.toolset_datadog_traces.execute_datadog_http_request"
+        "holmes.plugins.toolsets.datadog.datadog_api.execute_datadog_http_request"
     )
     def test_prerequisites_success(self, mock_execute):
         """Test successful prerequisites check."""
@@ -43,7 +43,7 @@ class TestDatadogTracesToolset:
         assert error_msg == ""
 
     @patch(
-        "holmes.plugins.toolsets.datadog.toolset_datadog_traces.execute_datadog_http_request"
+        "holmes.plugins.toolsets.datadog.datadog_api.execute_datadog_http_request"
     )
     def test_prerequisites_permission_error(self, mock_execute):
         """Test prerequisites check with permission error."""

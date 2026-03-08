@@ -2,6 +2,7 @@ import json
 import logging
 import re
 import threading
+import time
 from datetime import datetime, timedelta, timezone
 from typing import Any, ClassVar, Dict, Optional, Tuple, Union
 from urllib.parse import urlparse, urlunparse
@@ -19,6 +20,17 @@ START_RETRY_DELAY = (
 )
 INCREMENT_RETRY_DELAY = 5.0  # Delay increment after each rate limit, if datadog does not return a reset_time
 MAX_RETRY_COUNT_ON_RATE_LIMIT = 5
+
+# Healthcheck retry settings — transient errors (408, 5xx, connection errors)
+# are retried to avoid flapping the toolset status on temporary DD API issues.
+HEALTHCHECK_MAX_RETRIES = 3
+HEALTHCHECK_RETRY_DELAY_SECONDS = 5
+
+# HTTP status codes that indicate permanent errors (no retry)
+PERMANENT_ERROR_STATUS_CODES = {401, 403}
+
+# HTTP status codes that indicate transient errors (should retry)
+TRANSIENT_ERROR_STATUS_CODES = {408, 429, 500, 502, 503, 504}
 
 RATE_LIMIT_REMAINING_SECONDS_HEADER = "X-RateLimit-Reset"
 
@@ -212,6 +224,105 @@ class wait_for_retry_after_header(wait_base):
                         )
 
         return self.fallback(retry_state)
+
+
+def _is_transient_error(exc: Exception) -> bool:
+    """Check if an exception represents a transient error that should be retried."""
+    if isinstance(exc, DataDogRequestError):
+        return exc.status_code in TRANSIENT_ERROR_STATUS_CODES
+    # Connection errors, timeouts etc. are transient
+    if isinstance(exc, (requests.ConnectionError, requests.Timeout)):
+        return True
+    return False
+
+
+def perform_healthcheck_with_retries(
+    url: str,
+    headers: dict,
+    payload_or_params: dict,
+    timeout: int,
+    method: str = "POST",
+    toolset_name: str = "datadog",
+) -> Tuple[Any, bool, str]:
+    """Execute a Datadog healthcheck request with retries for transient errors.
+
+    Permanent errors (401, 403) fail immediately. Transient errors (408, 5xx,
+    connection errors) are retried up to HEALTHCHECK_MAX_RETRIES times to avoid
+    flapping the toolset status on temporary Datadog API issues.
+
+    Returns:
+        Tuple of (response_data, success, error_message).
+        On success: (data, True, "")
+        On failure: (None, False, error_message)
+    """
+    last_error: Optional[Exception] = None
+
+    for attempt in range(1, HEALTHCHECK_MAX_RETRIES + 1):
+        try:
+            data = execute_datadog_http_request(
+                url=url,
+                headers=headers,
+                payload_or_params=payload_or_params,
+                timeout=timeout,
+                method=method,
+            )
+            return data, True, ""
+
+        except DataDogRequestError as e:
+            last_error = e
+            if e.status_code in PERMANENT_ERROR_STATUS_CODES:
+                # Permanent error — don't retry
+                logging.error(
+                    f"{toolset_name} healthcheck failed with permanent error: "
+                    f"{e.status_code} - {e.response_text}"
+                )
+                if e.status_code == 403:
+                    return None, False, (
+                        "API key lacks required permissions. "
+                        "Make sure your API key has the required scopes. "
+                        f"Error: {e.response_text}"
+                    )
+                return None, False, f"Datadog API error: {e.status_code} - {e.response_text}"
+
+            # Transient error — retry
+            if attempt < HEALTHCHECK_MAX_RETRIES:
+                logging.warning(
+                    f"{toolset_name} healthcheck transient error "
+                    f"(attempt {attempt}/{HEALTHCHECK_MAX_RETRIES}): "
+                    f"{e.status_code} - {e.response_text}. "
+                    f"Retrying in {HEALTHCHECK_RETRY_DELAY_SECONDS}s..."
+                )
+                time.sleep(HEALTHCHECK_RETRY_DELAY_SECONDS)
+            else:
+                logging.error(
+                    f"{toolset_name} healthcheck failed after {HEALTHCHECK_MAX_RETRIES} "
+                    f"attempts: {e.status_code} - {e.response_text}"
+                )
+
+        except Exception as e:
+            last_error = e
+            if _is_transient_error(e) and attempt < HEALTHCHECK_MAX_RETRIES:
+                logging.warning(
+                    f"{toolset_name} healthcheck transient error "
+                    f"(attempt {attempt}/{HEALTHCHECK_MAX_RETRIES}): {e}. "
+                    f"Retrying in {HEALTHCHECK_RETRY_DELAY_SECONDS}s..."
+                )
+                time.sleep(HEALTHCHECK_RETRY_DELAY_SECONDS)
+            elif attempt >= HEALTHCHECK_MAX_RETRIES:
+                logging.error(
+                    f"{toolset_name} healthcheck failed after {HEALTHCHECK_MAX_RETRIES} "
+                    f"attempts: {e}"
+                )
+            else:
+                # Non-transient, non-DataDogRequestError — fail immediately
+                logging.error(f"{toolset_name} healthcheck failed: {e}")
+                return None, False, f"Healthcheck failed with exception: {str(e)}"
+
+    # All retries exhausted
+    error_msg = f"Healthcheck failed after {HEALTHCHECK_MAX_RETRIES} attempts"
+    if last_error:
+        error_msg += f": {str(last_error)}"
+    return None, False, error_msg
 
 
 @retry(
