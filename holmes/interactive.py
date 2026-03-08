@@ -78,24 +78,24 @@ from holmes.version import check_version_async
 
 
 class SlashCommands(Enum):
-    EXIT = ("/exit", "Exit interactive mode")
-    HELP = ("/help", "Show help message with all commands")
-    CLEAR = ("/clear", "Clear screen and reset conversation context")
-    TOOLS_CONFIG = ("/tools", "Show available toolsets and their status")
     TOGGLE_TOOL_OUTPUT = (
         "/auto",
         "Toggle auto-display of tool outputs after responses",
     )
+    CLEAR = ("/clear", "Clear screen and reset conversation context")
+    CONFIG = ("/config", "Open interactive toolset configuration editor")
+    CONTEXT = ("/context", "Show conversation context size and token count")
+    EXIT = ("/exit", "Exit interactive mode")
+    FEEDBACK = ("/feedback", "Provide feedback on the agent's response")
+    HELP = ("/help", "Show help message with all commands")
     LAST_OUTPUT = ("/last", "Show all tool outputs from last response")
     RUN = ("/run", "Run a bash command and optionally share with LLM")
     SHELL = (
         "/shell",
         "Drop into interactive shell, then optionally share session with LLM",
     )
-    CONTEXT = ("/context", "Show conversation context size and token count")
     SHOW = ("/show", "Show specific tool output in scrollable view")
-    FEEDBACK = ("/feedback", "Provide feedback on the agent's response")
-    CONFIG = ("/config", "Open interactive toolset configuration editor")
+    TOOLS_CONFIG = ("/tools", "Show available toolsets and their status")
 
     def __init__(self, command, description):
         self.command = command
