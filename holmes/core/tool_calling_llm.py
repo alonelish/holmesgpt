@@ -541,6 +541,30 @@ class ToolCallingLLM:
                     metadata=metadata,
                 )
 
+            # Fallback: if tool_choice="none" was ignored and LLM still returned tool calls on the last step,
+            # retry with tools=None to force a text response (this busts cache but is a rare edge case)
+            if i == max_steps:
+                logging.warning("LLM returned tool calls despite tool_choice='none' on last step, retrying with tools=None")
+                fallback_response = self.llm.completion(
+                    messages=parse_messages_tags(messages),
+                    tools=None,
+                    tool_choice=None,
+                    temperature=TEMPERATURE,
+                    response_format=response_format,
+                    drop_params=True,
+                )
+                _process_cost_info(fallback_response, costs, "LLM call (fallback)")
+                fallback_message = fallback_response.choices[0].message
+                return LLMResult(
+                    result=fallback_message.content or "",
+                    tool_calls=all_tool_calls,
+                    num_llm_calls=i + 1,
+                    prompt=json.dumps(messages, indent=2),
+                    messages=messages,
+                    **costs.model_dump(),
+                    metadata=metadata,
+                )
+
             if text_response and text_response.strip():
                 logging.info(f"[bold {AI_COLOR}]AI:[/bold {AI_COLOR}] {text_response}")
             logging.info(
@@ -1078,6 +1102,30 @@ class ToolCallingLLM:
                     event=StreamEvents.ANSWER_END,
                     data={
                         "content": response_message.content,
+                        "messages": messages,
+                        "metadata": metadata,
+                    },
+                )
+                return
+
+            # Fallback: if tool_choice="none" was ignored and LLM still returned tool calls on the last step,
+            # retry with tools=None to force a text response (this busts cache but is a rare edge case)
+            if i == max_steps:
+                logging.warning("LLM returned tool calls despite tool_choice='none' on last step, retrying with tools=None")
+                fallback_response = self.llm.completion(
+                    model=self.llm.model,
+                    messages=messages,
+                    tools=None,
+                    tool_choice=None,
+                    temperature=self.llm.temperature,
+                    stream=False,
+                )
+                _process_cost_info(fallback_response, costs, "LLM call (fallback)")
+                fallback_message = fallback_response.choices[0].message
+                yield StreamMessage(
+                    event=StreamEvents.ANSWER_END,
+                    data={
+                        "content": fallback_message.content,
                         "messages": messages,
                         "metadata": metadata,
                     },
