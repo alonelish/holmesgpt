@@ -618,7 +618,25 @@ class ToolCallingLLM:
                 if tools_to_call:
                     logging.info("")
 
-        raise Exception(f"Too many LLM calls - exceeded max_steps: {i}/{max_steps}")
+        logging.warning(f"Too many LLM calls - exceeded max_steps: {i}/{max_steps}")
+        # Force one final LLM call with no tools to get a summary response
+        messages.append({"role": "user", "content": "You have reached the tool call limit. Please provide your best answer based on the information gathered so far."})
+        final_response = self.llm.completion(
+            model=self.llm.model,
+            messages=messages,
+            tools=None,
+            tool_choice=None,
+            temperature=self.llm.temperature,
+            stream=False,
+        )
+        final_message = final_response.choices[0].message
+        _process_cost_info(final_response, costs, log_prefix=f"LLM call {i + 1} (final summary)")
+        return LLMResult(
+            result=final_message.content or "Reached tool call limit. Unable to provide a complete answer.",
+            tool_calls=all_tool_calls,
+            metadata=metadata,
+            costs=costs,
+        )
 
     def _directly_invoke_tool_call(
         self,
@@ -1197,8 +1215,32 @@ class ToolCallingLLM:
                         )
                         tools = new_tools
 
-        raise Exception(
-            f"Too many LLM calls - exceeded max_steps: {i}/{self.max_steps}"
+        max_steps_message = f"Reached the tool call limit ({self.max_steps} iterations). Providing a response based on the information gathered so far."
+        logging.warning(f"Too many LLM calls - exceeded max_steps: {i}/{self.max_steps}")
+        yield StreamMessage(
+            event=StreamEvents.AI_MESSAGE,
+            data={"content": max_steps_message},
+        )
+
+        # Force one final LLM call with no tools to get a summary response
+        messages.append({"role": "user", "content": "You have reached the tool call limit. Please provide your best answer based on the information gathered so far."})
+        final_response = self.llm.completion(
+            model=self.llm.model,
+            messages=messages,
+            tools=None,
+            tool_choice=None,
+            temperature=self.llm.temperature,
+            stream=False,
+        )
+        final_message = final_response.choices[0].message
+        _process_cost_info(final_response, costs, log_prefix=f"LLM call {i + 1} (final summary)")
+        yield StreamMessage(
+            event=StreamEvents.ANSWER_END,
+            data={
+                "content": final_message.content,
+                "messages": messages,
+                "metadata": metadata,
+            },
         )
 
     def find_assistant_tool_call_request(
