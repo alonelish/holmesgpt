@@ -433,9 +433,9 @@ class ToolCallingLLM:
 
             i += 1
             logging.debug(f"running iteration {i}")
-            # on the last step we don't allow tools - we want to force a reply, not a request to run another tool
-            tools = None if i == max_steps else tools
-            tool_choice = "auto" if tools else None
+            # on the last step we force tool_choice="none" to get a reply without calling tools
+            # we keep the tools in the request to preserve prompt cache (tools are part of the cached prefix)
+            tool_choice = "none" if i == max_steps else "auto"
 
             limit_result = limit_input_context_window(
                 llm=self.llm, messages=messages, tools=tools
@@ -619,13 +619,14 @@ class ToolCallingLLM:
                     logging.info("")
 
         logging.warning(f"Too many LLM calls - exceeded max_steps: {i}/{max_steps}")
-        # Force one final LLM call with no tools to get a summary response
+        # Force one final LLM call with tool_choice="none" to get a summary response
+        # Keep tools in the request to preserve prompt cache (tools are part of the cached prefix)
         messages.append({"role": "user", "content": "You have reached the tool call limit. Please provide your best answer based on the information gathered so far."})
         final_response = self.llm.completion(
             model=self.llm.model,
             messages=messages,
-            tools=None,
-            tool_choice=None,
+            tools=tools,
+            tool_choice="none",
             temperature=self.llm.temperature,
             stream=False,
         )
@@ -984,8 +985,9 @@ class ToolCallingLLM:
             i += 1
             logging.debug(f"running iteration {i}")
 
-            tools = None if i == max_steps else tools
-            tool_choice = "auto" if tools else None
+            # on the last step we force tool_choice="none" to get a reply without calling tools
+            # we keep the tools in the request to preserve prompt cache (tools are part of the cached prefix)
+            tool_choice = "none" if i == max_steps else "auto"
 
             limit_result = limit_input_context_window(
                 llm=self.llm, messages=messages, tools=tools
@@ -1222,13 +1224,14 @@ class ToolCallingLLM:
             data={"content": max_steps_message},
         )
 
-        # Force one final LLM call with no tools to get a summary response
+        # Force one final LLM call with tool_choice="none" to get a summary response
+        # Keep tools in the request to preserve prompt cache (tools are part of the cached prefix)
         messages.append({"role": "user", "content": "You have reached the tool call limit. Please provide your best answer based on the information gathered so far."})
         final_response = self.llm.completion(
             model=self.llm.model,
             messages=messages,
-            tools=None,
-            tool_choice=None,
+            tools=tools,
+            tool_choice="none",
             temperature=self.llm.temperature,
             stream=False,
         )
