@@ -7,6 +7,7 @@ mirroring the behavior of the CI/CD workflow.
 """
 
 import argparse
+import json
 import os
 import subprocess
 import sys
@@ -313,11 +314,58 @@ If you are not redirected automatically, [click here]({history_relative}).
         print("  git commit -m 'Update benchmark results [skip ci]'")
         print("=" * 50)
 
+    def validate_results(self) -> bool:
+        """Check if eval_results.json has actual test results (not just collection errors)."""
+        results_path = Path("eval_results.json")
+        if not results_path.exists():
+            print("❌ ERROR: eval_results.json was not created - pytest may have crashed during startup")
+            return False
+
+        try:
+            with open(results_path) as f:
+                results = json.load(f)
+        except (json.JSONDecodeError, OSError) as e:
+            print(f"❌ ERROR: Failed to parse eval_results.json: {e}")
+            return False
+
+        tests = results.get("tests", [])
+        # Filter out deselected tests - they don't count as "ran"
+        ran_tests = [t for t in tests if t.get("outcome") != "deselected"]
+
+        if not ran_tests:
+            print()
+            print("=" * 70)
+            print("❌ ERROR: No tests were collected or executed!")
+            print()
+            print("This usually means:")
+            print("  1. MODEL_LIST_YAML secret is empty or has mismatched model name keys")
+            print("  2. The model names in --models don't match the keys in the model list file")
+            print("  3. A test collection error occurred (check pytest output above)")
+            print()
+            # Show collection errors if present
+            collectors = results.get("collectors", [])
+            for collector in collectors:
+                if collector.get("outcome") == "failed":
+                    longrepr = collector.get("longrepr", "")
+                    print(f"  Collection error: {longrepr[:500]}")
+            print("=" * 70)
+            return False
+
+        print(f"✅ {len(ran_tests)} tests executed")
+        return True
+
     def run(self) -> int:
         """Run the complete benchmark workflow."""
         self.check_environment()
         self.setup_environment()
         exit_code = self.run_tests()
+
+        # Validate that tests actually ran before generating reports
+        if not self.validate_results():
+            print()
+            print("⚠️  Skipping report generation due to empty results")
+            return 1
+
         report_file = self.generate_report()
         self.show_summary(report_file)
         return exit_code
@@ -450,10 +498,14 @@ def main():
         benchmark_type=benchmark_type,
     )
 
-    # Ignore the exit code from tests to match bash script behavior
-    runner.run()
+    exit_code = runner.run()
 
-    # Exit with 0 even if tests failed (matching bash script behavior)
+    # Exit 0 when tests ran (even if some failed) - test failures are expected in benchmarks.
+    # Exit 1 when NO tests ran (collection error, empty results) - this is a CI infrastructure problem.
+    if exit_code == 1:
+        print("❌ Benchmark run failed - no tests were executed")
+        sys.exit(1)
+
     sys.exit(0)
 
 

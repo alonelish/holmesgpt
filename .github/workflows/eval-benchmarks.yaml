@@ -103,6 +103,33 @@ jobs:
           ${{ secrets.MODEL_LIST_YAML }}
           EOF
 
+      - name: Validate model list file
+        run: |
+          echo "=== Model list file contents ==="
+          if [ ! -s /tmp/model_list.yaml ]; then
+            echo "❌ ERROR: /tmp/model_list.yaml is empty!"
+            echo "The MODEL_LIST_YAML secret may not be configured."
+            exit 1
+          fi
+          # Count top-level YAML keys (model entries)
+          MODEL_COUNT=$(python3 -c "
+          import yaml, sys
+          with open('/tmp/model_list.yaml') as f:
+              data = yaml.safe_load(f)
+          if not data or not isinstance(data, dict):
+              print('0')
+              sys.exit(0)
+          print(len(data))
+          for key in sorted(data.keys()):
+              print(f'  - {key}', file=sys.stderr)
+          ")
+          echo "Found $MODEL_COUNT model(s) in model list file"
+          if [ "$MODEL_COUNT" -eq 0 ]; then
+            echo "❌ ERROR: Model list file has no model entries!"
+            echo "Check the MODEL_LIST_YAML secret."
+            exit 1
+          fi
+
       - name: Run evaluation benchmarks
         env:
           AZURE_API_BASE: ${{ secrets.AZURE_API_BASE }}
@@ -135,8 +162,36 @@ jobs:
             docs/development/evaluations/latest-results.md
             eval_results.json
 
+      - name: Validate benchmark results
+        id: validate-results
+        if: always()
+        run: |
+          # Check if eval_results.json exists and has actual test results
+          if [ ! -f eval_results.json ]; then
+            echo "has_results=false" >> $GITHUB_OUTPUT
+            echo "❌ No eval_results.json found"
+            exit 0
+          fi
+
+          TEST_COUNT=$(python3 -c "
+          import json
+          with open('eval_results.json') as f:
+              data = json.load(f)
+          tests = [t for t in data.get('tests', []) if t.get('outcome') != 'deselected']
+          print(len(tests))
+          ")
+
+          echo "Tests executed: $TEST_COUNT"
+          if [ "$TEST_COUNT" -eq 0 ]; then
+            echo "has_results=false" >> $GITHUB_OUTPUT
+            echo "❌ No tests were executed - skipping PR creation"
+          else
+            echo "has_results=true" >> $GITHUB_OUTPUT
+            echo "✅ $TEST_COUNT tests executed"
+          fi
+
       - name: Create PR with benchmark results
-        if: always() && (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch')
+        if: always() && steps.validate-results.outputs.has_results == 'true' && (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch')
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
