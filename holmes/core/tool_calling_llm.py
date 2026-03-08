@@ -643,14 +643,14 @@ class ToolCallingLLM:
                     logging.info("")
 
         logging.warning(f"Too many LLM calls - exceeded max_steps: {i}/{max_steps}")
-        # Force one final LLM call with tool_choice="none" to get a summary response
-        # Keep tools in the request to preserve prompt cache (tools are part of the cached prefix)
+        # Final call to get a summary. Appending a user message at the end preserves the cached prefix.
+        # No need to keep tools since there are no subsequent calls that would benefit from the cache.
         messages.append({"role": "user", "content": "You have reached the tool call limit. Please provide your best answer based on the information gathered so far."})
         final_response = self.llm.completion(
             model=self.llm.model,
             messages=messages,
-            tools=tools,
-            tool_choice="none",
+            tools=None,
+            tool_choice=None,
             temperature=self.llm.temperature,
             stream=False,
         )
@@ -1272,14 +1272,14 @@ class ToolCallingLLM:
             data={"content": max_steps_message},
         )
 
-        # Force one final LLM call with tool_choice="none" to get a summary response
-        # Keep tools in the request to preserve prompt cache (tools are part of the cached prefix)
+        # Final call to get a summary. Appending a user message at the end preserves the cached prefix.
+        # No need to keep tools since there are no subsequent calls that would benefit from the cache.
         messages.append({"role": "user", "content": "You have reached the tool call limit. Please provide your best answer based on the information gathered so far."})
         final_response = self.llm.completion(
             model=self.llm.model,
             messages=messages,
-            tools=tools,
-            tool_choice="none",
+            tools=None,
+            tool_choice=None,
             temperature=self.llm.temperature,
             stream=False,
         )
