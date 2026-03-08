@@ -96,7 +96,10 @@ class JsonFilterMixin:
                 # the context with a huge raw payload.
                 max_preview_chars = 2000
                 truncated = _truncate_to_depth(original_data, max_depth=2)
-                preview_str = json.dumps(truncated, separators=(",", ":"), ensure_ascii=False)
+                try:
+                    preview_str = json.dumps(truncated, separators=(",", ":"), ensure_ascii=False)
+                except (TypeError, ValueError):
+                    preview_str = repr(truncated)
                 if len(preview_str) > max_preview_chars:
                     preview_str = preview_str[:max_preview_chars] + "…(truncated)"
                 return {
