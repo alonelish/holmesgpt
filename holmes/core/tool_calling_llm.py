@@ -618,7 +618,17 @@ class ToolCallingLLM:
                 if tools_to_call:
                     logging.info("")
 
-        raise Exception(f"Too many LLM calls - exceeded max_steps: {i}/{max_steps}")
+        max_steps_message = f"Reached the maximum tool call limit ({max_steps}) - providing the best answer based on information gathered so far."
+        logging.warning(f"Too many LLM calls - exceeded max_steps: {i}/{max_steps}")
+        return LLMResult(
+            result=max_steps_message,
+            tool_calls=all_tool_calls,
+            num_llm_calls=i,
+            prompt=json.dumps(messages, indent=2),
+            messages=messages,
+            **costs.model_dump(),
+            metadata=metadata,
+        )
 
     def _directly_invoke_tool_call(
         self,
@@ -1197,8 +1207,19 @@ class ToolCallingLLM:
                         )
                         tools = new_tools
 
-        raise Exception(
-            f"Too many LLM calls - exceeded max_steps: {i}/{self.max_steps}"
+        max_steps_message = f"Reached the maximum tool call limit ({self.max_steps}) - providing the best answer based on information gathered so far."
+        logging.warning(f"Too many LLM calls - exceeded max_steps: {i}/{self.max_steps}")
+        yield StreamMessage(
+            event=StreamEvents.AI_MESSAGE,
+            data={"content": max_steps_message},
+        )
+        yield StreamMessage(
+            event=StreamEvents.ANSWER_END,
+            data={
+                "content": max_steps_message,
+                "messages": messages,
+                "metadata": metadata,
+            },
         )
 
     def find_assistant_tool_call_request(
