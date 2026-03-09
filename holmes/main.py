@@ -9,6 +9,7 @@ if add_custom_certificate(ADDITIONAL_CERTIFICATE):
 
 # DO NOT ADD ANY IMPORTS OR CODE ABOVE THIS LINE
 # IMPORTING ABOVE MIGHT INITIALIZE AN HTTPS CLIENT THAT DOESN'T TRUST THE CUSTOM CERTIFICATE
+import asyncio
 import sys
 from holmes.utils.colors import USER_COLOR
 import json
@@ -153,7 +154,7 @@ def parse_documents(documents: Optional[str]) -> List[ResourceInstructionDocumen
     return resource_documents
 
 
-def _investigate_issue(
+async def _investigate_issue(
     ai: ToolCallingLLM,
     issue: Issue,
     config: Config,
@@ -172,7 +173,7 @@ def _investigate_issue(
         f"\n #This is context from the issue:\n{issue.raw}",
         context={},
     )
-    return ai.prompt_call(system_prompt, user_prompt)
+    return await ai.prompt_call(system_prompt, user_prompt)
 
 
 # TODO: add streaming output
@@ -369,15 +370,19 @@ def ask(
             prompt_component_overrides=prompt_component_overrides,
         )
 
-        with tracer.start_trace(
-            f'holmes ask "{prompt}"', span_type=SpanType.TASK
-        ) as trace_span:
-            trace_span.log(input=prompt, metadata={"type": "user_question"})
-            response = ai.call(messages, trace_span=trace_span)
-            trace_span.log(
-                output=response.result,
-            )
-            trace_url = tracer.get_trace_url()
+        async def _run_ask():
+            with tracer.start_trace(
+                f'holmes ask "{prompt}"', span_type=SpanType.TASK
+            ) as trace_span:
+                trace_span.log(input=prompt, metadata={"type": "user_question"})
+                response = await ai.call(messages, trace_span=trace_span)
+                trace_span.log(
+                    output=response.result,
+                )
+                trace_url = tracer.get_trace_url()
+            return response, trace_url
+
+        response, trace_url = asyncio.run(_run_ask())
 
         messages = response.messages  # type: ignore # Update messages with the full history
 
@@ -494,7 +499,7 @@ def alertmanager(
             console.print(
                 f"[bold yellow]Analyzing issue {i+1}/{len(issues)}: {issue.name}...[/bold yellow]"
             )
-            result = _investigate_issue(ai, issue, config)
+            result = asyncio.run(_investigate_issue(ai, issue, config))
             results.append({"issue": issue.model_dump(), "result": result.model_dump()})
             handle_result(result, console, destination, config, issue, False, True)  # type: ignore
 
@@ -601,7 +606,7 @@ def jira(
             console.print(
                 f"[bold yellow]Analyzing Jira ticket {i+1}/{len(issues)}: {issue.name}...[/bold yellow]"
             )
-            result = _investigate_issue(ai, issue, config)
+            result = asyncio.run(_investigate_issue(ai, issue, config))
 
             console.print(Rule())
             console.print(f"[bold green]AI analysis of {issue.url}[/bold green]")
@@ -713,7 +718,7 @@ def ticket(
         )
 
         ticket_user_prompt = generate_user_prompt(prompt, context={})
-        result = ai.prompt_call(system_prompt, ticket_user_prompt)
+        result = asyncio.run(ai.prompt_call(system_prompt, ticket_user_prompt))
 
         console.print(Rule())
         console.print(
@@ -796,7 +801,7 @@ def github(
                 f"[bold yellow]Analyzing GitHub issue {i+1}/{len(issues)}: {issue.name}...[/bold yellow]"
             )
 
-            result = _investigate_issue(ai, issue, config)
+            result = asyncio.run(_investigate_issue(ai, issue, config))
 
             console.print(Rule())
             console.print(f"[bold green]AI analysis of {issue.url}[/bold green]")
@@ -872,7 +877,7 @@ def pagerduty(
                 f"[bold yellow]Analyzing PagerDuty incident {i+1}/{len(issues)}: {issue.name}...[/bold yellow]"
             )
 
-            result = _investigate_issue(ai, issue, config)
+            result = asyncio.run(_investigate_issue(ai, issue, config))
 
             console.print(Rule())
             console.print(f"[bold green]AI analysis of {issue.url}[/bold green]")
@@ -945,7 +950,7 @@ def opsgenie(
             console.print(
                 f"[bold yellow]Analyzing OpsGenie alert {i+1}/{len(issues)}: {issue.name}...[/bold yellow]"
             )
-            result = _investigate_issue(ai, issue, config)
+            result = asyncio.run(_investigate_issue(ai, issue, config))
 
             console.print(Rule())
             console.print(f"[bold green]AI analysis of {issue.url}[/bold green]")

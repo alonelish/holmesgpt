@@ -57,7 +57,7 @@ def _extract_compaction_usage(response: ModelResponse) -> CompactionUsage:
     )
 
 
-def compact_conversation_history(
+async def compact_conversation_history(
     original_conversation_history: list[dict], llm: LLM
 ) -> CompactionResult:
     """
@@ -75,7 +75,7 @@ def compact_conversation_history(
     )
     conversation_history.append({"role": "user", "content": compaction_instructions})
 
-    response: ModelResponse = llm.completion(
+    response: ModelResponse = await llm.completion(
         messages=conversation_history, drop_params=True
     )  # type: ignore
     compaction_usage = _extract_compaction_usage(response)
@@ -92,7 +92,10 @@ def compact_conversation_history(
         logging.error(
             "Failed to compact conversation history. Unexpected LLM's response for compaction"
         )
-        return CompactionResult(messages_after_compaction=original_conversation_history, usage=compaction_usage)
+        return CompactionResult(
+            messages_after_compaction=original_conversation_history,
+            usage=compaction_usage,
+        )
 
     compacted_conversation_history: list[dict] = []
     if system_prompt_message:

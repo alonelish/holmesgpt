@@ -312,7 +312,7 @@ def _stream_with_storage_cleanup(storage, stream_generator, req_info):
 
 
 @app.post("/api/chat")
-def chat(chat_request: ChatRequest, http_request: Request):
+async def chat(chat_request: ChatRequest, http_request: Request):
     try:
         # Log incoming request details
         has_images = bool(chat_request.images)
@@ -398,7 +398,7 @@ def chat(chat_request: ChatRequest, http_request: Request):
             )
         else:
             try:
-                llm_call = ai.messages_call(
+                llm_call = await ai.messages_call(
                     messages=messages,
                     trace_span=chat_request.trace_span,
                     response_format=chat_request.response_format,

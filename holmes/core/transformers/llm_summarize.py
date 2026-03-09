@@ -2,6 +2,7 @@
 LLM Summarize Transformer for fast model summarization of large tool outputs.
 """
 
+import asyncio
 import logging
 from typing import ClassVar, Optional
 
@@ -150,8 +151,8 @@ class LLMSummarizeTransformer(BaseTransformer):
             # Perform the summarization
             logger.debug(f"Summarizing {len(input_text)} characters with fast model")
 
-            response = self._fast_llm.completion(
-                [{"role": "user", "content": full_prompt}]
+            response = asyncio.run(
+                self._fast_llm.completion([{"role": "user", "content": full_prompt}])
             )
             summarized_text = response.choices[0].message.content  # type: ignore
 

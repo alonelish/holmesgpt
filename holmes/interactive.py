@@ -1,3 +1,4 @@
+import asyncio
 import logging
 import os
 import re
@@ -63,6 +64,7 @@ from holmes.plugins.toolsets.bash.common.cli_prefixes import (
 from holmes.plugins.toolsets.bash.common.cli_prefixes import (
     save_cli_bash_tools_approved_prefixes as _save_approved_prefixes,
 )
+from holmes.toolset_config_tui import run_toolset_config_tui
 from holmes.utils.colors import (
     AI_COLOR,
     ERROR_COLOR,
@@ -71,7 +73,6 @@ from holmes.utils.colors import (
     TOOLS_COLOR,
     USER_COLOR,
 )
-from holmes.toolset_config_tui import run_toolset_config_tui
 from holmes.utils.console.consts import agent_name
 from holmes.utils.file_utils import write_json_file
 from holmes.version import check_version_async
@@ -1138,9 +1139,7 @@ def _wait_for_completion_or_escape(
                 ch = sys.stdin.read(1)
                 if ch == "\x1b":
                     # Disambiguate standalone Escape from escape sequences (arrow keys etc.)
-                    ready2, _, _ = select_module.select(
-                        [sys.stdin], [], [], 0.05
-                    )
+                    ready2, _, _ = select_module.select([sys.stdin], [], [], 0.05)
                     if ready2:
                         # Part of an escape sequence — consume and discard
                         sys.stdin.read(1)
@@ -1515,11 +1514,13 @@ def run_interactive_loop(
                     _cancel_event=cancel_event,
                 ) -> None:
                     try:
-                        _call_result[0] = ai.call(
-                            _messages,
-                            trace_span=_trace_span,
-                            tool_number_offset=len(all_tool_calls_history),
-                            cancel_event=_cancel_event,
+                        _call_result[0] = asyncio.run(
+                            ai.call(
+                                _messages,
+                                trace_span=_trace_span,
+                                tool_number_offset=len(all_tool_calls_history),
+                                cancel_event=_cancel_event,
+                            )
                         )
                     except Exception as exc:  # noqa: BLE001
                         _call_error[0] = exc
@@ -1529,7 +1530,9 @@ def run_interactive_loop(
 
                 try:
                     interrupted = _wait_for_completion_or_escape(
-                        ai_thread, cancel_event, approval_active,
+                        ai_thread,
+                        cancel_event,
+                        approval_active,
                         terminal_restored,
                     )
                 finally:

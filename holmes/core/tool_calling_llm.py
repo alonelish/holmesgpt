@@ -12,14 +12,12 @@ from openai.types.chat.chat_completion_message_tool_call import (
     ChatCompletionMessageToolCall,
 )
 from pydantic import BaseModel, Field
-from rich.console import Console
 
 from holmes.common.env_vars import (
     LOG_LLM_USAGE_RESPONSE,
     RESET_REPEATED_TOOL_CALL_CHECK_AFTER_COMPACTION,
     TEMPERATURE,
 )
-from holmes.core.issue import Issue
 from holmes.core.llm import LLM
 from holmes.core.llm_usage import extract_usage_from_response
 from holmes.core.models import (
@@ -27,7 +25,6 @@ from holmes.core.models import (
     ToolApprovalDecision,
     ToolCallResult,
 )
-from holmes.core.prompt import generate_user_prompt
 from holmes.core.safeguards import prevent_overly_repeated_tool_call
 from holmes.core.tools import (
     StructuredToolResult,
@@ -50,6 +47,7 @@ from holmes.utils.stream import (
     build_stream_event_token_count,
 )
 from holmes.utils.tags import parse_messages_tags
+
 
 class LLMInterruptedError(Exception):
     """Raised when the user interrupts an in-progress LLM call (e.g. via Escape key)."""
@@ -362,7 +360,7 @@ class ToolCallingLLM:
 
         return messages, events
 
-    def prompt_call(
+    async def prompt_call(
         self,
         system_prompt: str,
         user_prompt: str,
@@ -374,7 +372,7 @@ class ToolCallingLLM:
             {"role": "system", "content": system_prompt},
             {"role": "user", "content": user_prompt},
         ]
-        return self.call(
+        return await self.call(
             messages,
             response_format=response_format,
             user_prompt=user_prompt,
@@ -382,14 +380,14 @@ class ToolCallingLLM:
             request_context=request_context,
         )
 
-    def messages_call(
+    async def messages_call(
         self,
         messages: List[Dict[str, str]],
         response_format: Optional[Union[dict, Type[BaseModel]]] = None,
         trace_span=DummySpan(),
         request_context: Optional[Dict[str, Any]] = None,
     ) -> LLMResult:
-        return self.call(
+        return await self.call(
             messages,
             response_format=response_format,
             trace_span=trace_span,
@@ -408,7 +406,7 @@ class ToolCallingLLM:
         )
 
     @sentry_sdk.trace
-    def call(  # type: ignore
+    async def call(  # type: ignore
         self,
         messages: List[Dict[str, str]],
         response_format: Optional[Union[dict, Type[BaseModel]]] = None,
@@ -437,7 +435,7 @@ class ToolCallingLLM:
             tools = None if i == max_steps else tools
             tool_choice = "auto" if tools else None
 
-            limit_result = limit_input_context_window(
+            limit_result = await limit_input_context_window(
                 llm=self.llm, messages=messages, tools=tools
             )
             messages = limit_result.messages
@@ -462,7 +460,7 @@ class ToolCallingLLM:
             logging.debug(f"sending messages={messages}\n\ntools={tools}")
 
             try:
-                full_response = self.llm.completion(
+                full_response = await self.llm.completion(
                     messages=parse_messages_tags(messages),
                     tools=tools,
                     tool_choice=tool_choice,
@@ -925,7 +923,7 @@ class ToolCallingLLM:
 
         return tool_call_result
 
-    def call_stream(
+    async def call_stream(
         self,
         system_prompt: str = "",
         user_prompt: Optional[str] = None,
@@ -945,7 +943,8 @@ class ToolCallingLLM:
             msgs, events = self.process_tool_decisions(
                 msgs, tool_decisions, request_context
             )
-            yield from events
+            for event in events:
+                yield event
 
         messages: list[dict] = []
         if system_prompt:
@@ -969,10 +968,11 @@ class ToolCallingLLM:
             tools = None if i == max_steps else tools
             tool_choice = "auto" if tools else None
 
-            limit_result = limit_input_context_window(
+            limit_result = await limit_input_context_window(
                 llm=self.llm, messages=messages, tools=tools
             )
-            yield from limit_result.events
+            for event in limit_result.events:
+                yield event
             messages = limit_result.messages
             metadata = metadata | limit_result.metadata
 
@@ -998,7 +998,7 @@ class ToolCallingLLM:
             logging.debug(f"sending messages={messages}\n\ntools={tools}")
 
             try:
-                full_response = self.llm.completion(
+                full_response = await self.llm.completion(
                     messages=parse_messages_tags(messages),  # type: ignore
                     tools=tools,
                     tool_choice=tool_choice,

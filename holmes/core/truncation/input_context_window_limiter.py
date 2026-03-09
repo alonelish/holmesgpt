@@ -15,7 +15,10 @@ from holmes.core.llm import (
     get_context_window_compaction_threshold_pct,
 )
 from holmes.core.models import TruncationMetadata, TruncationResult
-from holmes.core.truncation.compaction import CompactionUsage, compact_conversation_history
+from holmes.core.truncation.compaction import (
+    CompactionUsage,
+    compact_conversation_history,
+)
 from holmes.utils import sentry_helper
 from holmes.utils.stream import StreamEvents, StreamMessage
 
@@ -103,11 +106,12 @@ def truncate_messages_to_fit_context(
     remaining_space = available_space
     t_sort = time.monotonic()
     tool_call_messages.sort(
-        key=lambda x: x.get("token_count") or count_tokens_fn(
-            [{"role": "tool", "content": x["content"]}]
-        ).total_tokens
+        key=lambda x: x.get("token_count")
+        or count_tokens_fn([{"role": "tool", "content": x["content"]}]).total_tokens
     )
-    logging.debug(f"truncate_messages: sort {len(tool_call_messages)} tool msgs took {(time.monotonic() - t_sort) * 1000:.1f}ms")
+    logging.debug(
+        f"truncate_messages: sort {len(tool_call_messages)} tool msgs took {(time.monotonic() - t_sort) * 1000:.1f}ms"
+    )
 
     truncations = []
 
@@ -117,9 +121,12 @@ def truncate_messages_to_fit_context(
     for i, msg in enumerate(tool_call_messages):
         remaining_tools = len(tool_call_messages) - i
         max_allocation = remaining_space // remaining_tools
-        needed_space = msg.get("token_count") or count_tokens_fn(
-            [{"role": "tool", "content": msg["content"]}]
-        ).total_tokens
+        needed_space = (
+            msg.get("token_count")
+            or count_tokens_fn(
+                [{"role": "tool", "content": msg["content"]}]
+            ).total_tokens
+        )
         allocated_space = min(needed_space, max_allocation)
 
         if needed_space > allocated_space:
@@ -148,7 +155,7 @@ class ContextWindowLimiterOutput(BaseModel):
 
 
 @sentry_sdk.trace
-def limit_input_context_window(
+async def limit_input_context_window(
     llm: LLM, messages: list[dict], tools: Optional[list[dict[str, Any]]]
 ) -> ContextWindowLimiterOutput:
     t0 = time.monotonic()
@@ -162,11 +169,13 @@ def limit_input_context_window(
     if ENABLE_CONVERSATION_HISTORY_COMPACTION and (
         initial_tokens.total_tokens + maximum_output_token
     ) > (max_context_size * get_context_window_compaction_threshold_pct() / 100):
-        compaction_result = compact_conversation_history(
+        compaction_result = await compact_conversation_history(
             original_conversation_history=messages, llm=llm
         )
         compaction_usage = compaction_result.usage
-        compacted_tokens = llm.count_tokens(compaction_result.messages_after_compaction, tools=tools)
+        compacted_tokens = llm.count_tokens(
+            compaction_result.messages_after_compaction, tools=tools
+        )
         compacted_total_tokens = compacted_tokens.total_tokens
 
         if compacted_total_tokens < initial_tokens.total_tokens:
@@ -216,7 +225,9 @@ def limit_input_context_window(
         metadata["truncations"] = []
 
     elapsed_ms = (time.monotonic() - t0) * 1000
-    logging.debug(f"limit_input_context_window: {elapsed_ms:.1f}ms total | {tokens.total_tokens} tokens")
+    logging.debug(
+        f"limit_input_context_window: {elapsed_ms:.1f}ms total | {tokens.total_tokens} tokens"
+    )
 
     return ContextWindowLimiterOutput(
         events=events,

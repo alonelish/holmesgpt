@@ -123,7 +123,7 @@ class LLM:
         pass
 
     @abstractmethod
-    def completion(
+    async def completion(
         self,
         messages: List[Dict[str, Any]],
         tools: Optional[List[Dict[str, Any]]] = [],
@@ -374,7 +374,7 @@ class DefaultLLM(LLM):
         else:
             return self.model
 
-    def completion(
+    async def completion(
         self,
         messages: List[Dict[str, Any]],
         tools: Optional[List[Dict[str, Any]]] = None,
@@ -428,7 +428,7 @@ class DefaultLLM(LLM):
         ]
 
         litellm_model_name = self.get_litellm_corrected_name_for_robusta_ai()
-        result = litellm_to_use.completion(
+        result = await litellm_to_use.acompletion(
             model=litellm_model_name,
             api_key=self.api_key,
             base_url=self.api_base,
