@@ -46,6 +46,15 @@ class ToolExecutor:
                 self.tools_by_name[tool.name] = tool
                 self._tool_to_toolset[tool.name] = ts
 
+        # Inject self-reference into config inspection toolset so it can
+        # enumerate all toolsets and their status at runtime.
+        from holmes.plugins.toolsets.holmes_config.holmes_config import HolmesConfigToolset
+
+        for ts in self.enabled_toolsets:
+            if isinstance(ts, HolmesConfigToolset):
+                ts.set_tool_executor(self)
+                break
+
     def get_tool_by_name(self, name: str) -> Optional[Tool]:
         if name in self.tools_by_name:
             return self.tools_by_name[name]
