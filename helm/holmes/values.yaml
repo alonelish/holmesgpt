@@ -464,6 +464,45 @@ mcpAddons:
     tolerations: []
     affinity: {}
 
+  # PagerDuty MCP Server Configuration
+  # Provides access to PagerDuty incident management, on-call schedules, and services
+  # Authentication: Create a PagerDuty User API Token
+  #   Go to My Profile → User Settings → API Access → Create API User Token
+  #   Then create a Kubernetes secret:
+  #   kubectl create secret generic pagerduty-mcp-token --from-literal=token=<YOUR_PAGERDUTY_API_TOKEN> -n <NAMESPACE>
+  pagerduty:
+    enabled: false
+
+    image: "pagerduty-mcp:1.0.0"
+    registry: "us-central1-docker.pkg.dev/genuine-flight-317411/mcp"
+    imagePullPolicy: IfNotPresent
+
+    auth:
+      secretName: ""      # Required: name of K8s secret containing the PagerDuty API token
+      secretKey: "token"  # Key in secret (default: "token")
+
+    config:
+      # PagerDuty API host (leave empty for US region: https://api.pagerduty.com)
+      # Set to "https://api.eu.pagerduty.com" for EU region
+      apiHost: ""
+
+    resources:
+      requests:
+        memory: "128Mi"
+        cpu: "100m"
+      limits:
+        memory: "512Mi"
+        cpu: "500m"
+
+    networkPolicy:
+      enabled: false
+
+    llmInstructions: ""
+
+    nodeSelector: {}
+    tolerations: []
+    affinity: {}
+
   # Kubernetes Remediation MCP Server Configuration
   # Provides safe kubectl command execution with security controls
   # WARNING: This addon can execute write operations. Configure allowedCommands carefully.

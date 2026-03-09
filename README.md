@@ -58,6 +58,7 @@ HolmesGPT integrates with popular observability and cloud platforms. The followi
 | [<img src="images/integration_logos/rabbit_mq_logo.png" alt="RabbitMQ" width="20" style="vertical-align: middle;"> **RabbitMQ**](https://holmesgpt.dev/data-sources/builtin-toolsets/rabbitmq/) | Partitions, memory/disk alerts, troubleshoot split-brain scenarios and more |
 | [<img src="images/integration_logos/robusta_logo.png" alt="Robusta" width="20" style="vertical-align: middle;"> **Robusta**](https://holmesgpt.dev/data-sources/builtin-toolsets/robusta/) | Multi-cluster monitoring, historical change data, runbooks, PromQL graphs and more |
 | [<img src="images/integration_logos/servicenow-icon.png" alt="ServiceNow" width="20" style="vertical-align: middle;"> **ServiceNow**](https://holmesgpt.dev/data-sources/builtin-toolsets/servicenow/) | Query tables and incident records |
+| [**PagerDuty**](https://holmesgpt.dev/data-sources/builtin-toolsets/pagerduty-mcp/) | Incidents, on-call schedules, services, and escalation policies (MCP) |
 | **Sentry** | Error tracking, issues, and performance monitoring (MCP) |
 | [<img src="images/integration_logos/slab_logo.png" alt="Slab" width="20" style="vertical-align: middle;"> **Slab**](https://holmesgpt.dev/data-sources/builtin-toolsets/slab/) | Team knowledge base and runbooks on demand |
 | **Splunk** | Log search and analysis (MCP) |
