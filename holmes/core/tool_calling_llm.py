@@ -422,7 +422,7 @@ class ToolCallingLLM:
         self,
         messages: List[Dict],
         response_format: Optional[Union[dict, Type[BaseModel]]] = None,
-        trace_span=DummySpan(),
+        trace_span: Optional[Any] = None,
         tool_number_offset: int = 0,
         request_context: Optional[Dict[str, Any]] = None,
         cancel_event: Optional[threading.Event] = None,
@@ -433,6 +433,8 @@ class ToolCallingLLM:
         Both call() and call_stream() delegate to this generator.
         The caller is responsible for mapping events to their output format.
         """
+        if trace_span is None:
+            trace_span = DummySpan()
         tool_calls: list[dict] = []  # For preventing repeated tool calls; reset after compaction
         all_tool_calls: list = []
         costs = LLMCosts()
@@ -664,6 +666,9 @@ class ToolCallingLLM:
                 metadata["costs"] = costs.model_dump()
                 yield TokenCountEvent(metadata=metadata.copy())
 
+                # Update the tool number offset for the next iteration
+                tool_number_offset += len(tools_to_call)
+
                 if pending_approvals:
                     for result in approval_required_tools:
                         tool_call = self.find_assistant_tool_call_request(
@@ -676,11 +681,9 @@ class ToolCallingLLM:
                         approval_required_tools=approval_required_tools,
                         messages=messages,
                         metadata=metadata,
+                        tool_number_offset=tool_number_offset,
                     )
                     return
-
-                # Update the tool number offset for the next iteration
-                tool_number_offset += len(tools_to_call)
 
                 # Re-fetch tools if runbook was just activated (enables restricted tools)
                 if self._runbook_in_use and tools is not None:
@@ -706,11 +709,13 @@ class ToolCallingLLM:
         messages: List[Dict[str, str]],
         response_format: Optional[Union[dict, Type[BaseModel]]] = None,
         user_prompt: Optional[str] = None,
-        trace_span=DummySpan(),
+        trace_span: Optional[Any] = None,
         tool_number_offset: int = 0,
         request_context: Optional[Dict[str, Any]] = None,
         cancel_event: Optional[threading.Event] = None,
     ) -> LLMResult:
+        if trace_span is None:
+            trace_span = DummySpan()
         for event in self._run_loop(
             messages=messages,
             response_format=response_format,

@@ -73,6 +73,7 @@ class ApprovalRequiredEvent:
     approval_required_tools: list  # list[ToolCallResult]
     messages: List[Dict]
     metadata: Dict[str, Any]
+    tool_number_offset: int = 0
 
 
 AgentEvent = Union[

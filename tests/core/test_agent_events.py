@@ -19,6 +19,7 @@ from holmes.core.llm import LLM, TokenCountMetadata
 from holmes.core.models import StructuredToolResult, StructuredToolResultStatus
 from holmes.core.tool_calling_llm import ToolCallingLLM
 from holmes.core.tools_utils.tool_executor import ToolExecutor
+from holmes.utils.stream import StreamEvents
 
 
 def _make_token_count_metadata() -> TokenCountMetadata:
@@ -372,7 +373,6 @@ class TestCallStreamAdapter:
     """Test that call_stream() correctly maps _run_loop() events to StreamMessages."""
 
     def test_call_stream_yields_stream_messages(self):
-        from holmes.utils.stream import StreamEvents
 
         mock_llm = MagicMock(spec=LLM)
         mock_tool_executor = MagicMock(spec=ToolExecutor)
@@ -403,7 +403,6 @@ class TestCallStreamAdapter:
         assert answer_end.data["content"] == "Streamed answer"
 
     def test_call_stream_with_tool_calls(self):
-        from holmes.utils.stream import StreamEvents
 
         mock_llm = MagicMock(spec=LLM)
         mock_tool_executor = MagicMock(spec=ToolExecutor)
