@@ -1,0 +1,107 @@
+{{- range $name, $server := .Values.customMcpServers }}
+{{- if $server.enabled }}
+{{- $port := $server.port | default 8000 }}
+{{- $outputTransport := $server.outputTransport | default "sse" }}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ $.Release.Name }}-{{ $name }}-mcp-server
+  namespace: {{ $.Release.Namespace }}
+  labels:
+    app: {{ $.Release.Name }}-{{ $name }}-mcp
+    app.kubernetes.io/name: {{ $name }}-mcp-server
+    app.kubernetes.io/instance: {{ $.Release.Name }}
+    app.kubernetes.io/component: custom-mcp-server
+    app.kubernetes.io/part-of: holmes
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: {{ $.Release.Name }}-{{ $name }}-mcp
+      app.kubernetes.io/name: {{ $name }}-mcp-server
+      app.kubernetes.io/instance: {{ $.Release.Name }}
+  template:
+    metadata:
+      labels:
+        app: {{ $.Release.Name }}-{{ $name }}-mcp
+        app.kubernetes.io/name: {{ $name }}-mcp-server
+        app.kubernetes.io/instance: {{ $.Release.Name }}
+        app.kubernetes.io/component: custom-mcp-server
+        app.kubernetes.io/part-of: holmes
+      annotations:
+        checksum/config: {{ $server | toYaml | sha256sum }}
+    spec:
+      {{- if $server.nodeSelector }}
+      nodeSelector:
+        {{- toYaml $server.nodeSelector | nindent 8 }}
+      {{- end }}
+      {{- if $server.tolerations }}
+      tolerations:
+        {{- toYaml $server.tolerations | nindent 8 }}
+      {{- end }}
+      {{- if $server.affinity }}
+      affinity:
+        {{- toYaml $server.affinity | nindent 8 }}
+      {{- end }}
+      containers:
+      - name: {{ $name }}-mcp
+        image: {{ required (printf "customMcpServers.%s.gatewayImage is required" $name) $server.gatewayImage | quote }}
+        imagePullPolicy: {{ $server.imagePullPolicy | default "IfNotPresent" }}
+        ports:
+        - containerPort: {{ $port }}
+          name: http
+          protocol: TCP
+        args:
+          - "--stdio"
+          - {{ required (printf "customMcpServers.%s.command is required" $name) $server.command | quote }}
+          - "--port"
+          - {{ $port | quote }}
+          - "--outputTransport"
+          - {{ $outputTransport | quote }}
+          - "--healthEndpoint"
+          - "/healthz"
+        {{- if $server.env }}
+        env:
+          {{- toYaml $server.env | nindent 8 }}
+        {{- end }}
+        {{- if $server.resources }}
+        resources:
+          {{- toYaml $server.resources | nindent 10 }}
+        {{- end }}
+        readinessProbe:
+          httpGet:
+            path: /healthz
+            port: {{ $port }}
+          initialDelaySeconds: 10
+          periodSeconds: 10
+        livenessProbe:
+          httpGet:
+            path: /healthz
+            port: {{ $port }}
+          initialDelaySeconds: 15
+          periodSeconds: 30
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ $.Release.Name }}-{{ $name }}-mcp-server
+  namespace: {{ $.Release.Namespace }}
+  labels:
+    app: {{ $.Release.Name }}-{{ $name }}-mcp
+    app.kubernetes.io/name: {{ $name }}-mcp-server
+    app.kubernetes.io/instance: {{ $.Release.Name }}
+    app.kubernetes.io/component: custom-mcp-server
+    app.kubernetes.io/part-of: holmes
+spec:
+  selector:
+    app: {{ $.Release.Name }}-{{ $name }}-mcp
+    app.kubernetes.io/name: {{ $name }}-mcp-server
+    app.kubernetes.io/instance: {{ $.Release.Name }}
+  ports:
+  - port: {{ $port }}
+    targetPort: {{ $port }}
+    protocol: TCP
+    name: http
+{{- end }}
+{{- end }}

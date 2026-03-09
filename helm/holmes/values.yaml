@@ -601,6 +601,57 @@ mcpAddons:
     tolerations: []
     affinity: {}
 
+# Generic Custom MCP Servers
+# Deploy any stdio-based MCP server as a network service using supergateway.
+# Supergateway wraps stdio MCP servers and exposes them over SSE or Streamable HTTP.
+#
+# Each entry creates a Deployment, Service, and optionally a NetworkPolicy.
+# Holmes automatically registers the server as an MCP toolset.
+#
+# Gateway image variants:
+#   - supercorp/supergateway:latest   → for npx-based MCP servers
+#   - supercorp/supergateway:uvx      → for uvx/Python-based MCP servers
+#
+# Example:
+#   customMcpServers:
+#     pagerduty:
+#       enabled: true
+#       description: "PagerDuty incident management - incidents, on-call, services"
+#       command: "uvx pagerduty-mcp"
+#       gatewayImage: "supercorp/supergateway:uvx"
+#       outputTransport: "sse"           # sse | streamable-http (default: sse)
+#       env:
+#         - name: PAGERDUTY_USER_API_KEY
+#           valueFrom:
+#             secretKeyRef:
+#               name: pagerduty-mcp-token
+#               key: token
+#         - name: PAGERDUTY_API_HOST
+#           value: "https://api.pagerduty.com"
+#       llmInstructions: |
+#         Use this MCP to investigate PagerDuty incidents and on-call schedules.
+#       iconUrl: "https://cdn.simpleicons.org/pagerduty/06AC38"
+#       resources:
+#         requests:
+#           memory: "256Mi"
+#           cpu: "100m"
+#         limits:
+#           memory: "512Mi"
+#           cpu: "500m"
+#       networkPolicy:
+#         enabled: false
+#       nodeSelector: {}
+#       tolerations: []
+#       affinity: {}
+#
+#     filesystem:
+#       enabled: true
+#       description: "Filesystem access via MCP"
+#       command: "npx -y @modelcontextprotocol/server-filesystem /data"
+#       gatewayImage: "supercorp/supergateway:latest"
+#       env: []
+customMcpServers: {}
+
 # Holmes Operator Configuration
 operator:
   enabled: false  # Set to true to deploy the operator

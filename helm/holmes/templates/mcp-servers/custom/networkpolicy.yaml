@@ -1,0 +1,34 @@
+{{- range $name, $server := .Values.customMcpServers }}
+{{- if and $server.enabled (and $server.networkPolicy $server.networkPolicy.enabled) }}
+{{- $port := $server.port | default 8000 }}
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ $.Release.Name }}-{{ $name }}-mcp-network-policy
+  namespace: {{ $.Release.Namespace }}
+  labels:
+    app: {{ $.Release.Name }}-{{ $name }}-mcp
+    app.kubernetes.io/name: {{ $name }}-mcp-server
+    app.kubernetes.io/instance: {{ $.Release.Name }}
+    app.kubernetes.io/component: custom-mcp-server
+    app.kubernetes.io/part-of: holmes
+spec:
+  podSelector:
+    matchLabels:
+      app: {{ $.Release.Name }}-{{ $name }}-mcp
+      app.kubernetes.io/name: {{ $name }}-mcp-server
+      app.kubernetes.io/instance: {{ $.Release.Name }}
+  policyTypes:
+  - Ingress
+  ingress:
+  # Allow traffic only from Holmes pods
+  - from:
+    - podSelector:
+        matchLabels:
+          app: holmes
+    ports:
+    - protocol: TCP
+      port: {{ $port }}
+{{- end }}
+{{- end }}
