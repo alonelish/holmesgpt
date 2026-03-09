@@ -4,7 +4,7 @@ import logging
 import re
 import threading
 from pathlib import Path
-from typing import Any, Callable, Dict, List, Optional, Type, Union
+from typing import Any, Callable, Dict, Generator, List, Optional, Type, Union
 
 import sentry_sdk
 from openai import BadRequestError
@@ -14,6 +14,17 @@ from openai.types.chat.chat_completion_message_tool_call import (
 from pydantic import BaseModel, Field
 from rich.console import Console
 
+from holmes.core.agent_events import (
+    AgentEvent,
+    ApprovalRequiredEvent,
+    CompactionEvent,
+    CompletionEvent,
+    IterationStartEvent,
+    LLMResponseEvent,
+    TokenCountEvent,
+    ToolResultEvent,
+    ToolStartEvent,
+)
 from holmes.common.env_vars import (
     LOG_LLM_USAGE_RESPONSE,
     RESET_REPEATED_TOOL_CALL_CHECK_AFTER_COMPACTION,
@@ -407,33 +418,42 @@ class ToolCallingLLM:
             include_restricted=self._should_include_restricted_tools(),
         )
 
-    @sentry_sdk.trace
-    def call(  # type: ignore
+    def _run_loop(
         self,
-        messages: List[Dict[str, str]],
+        messages: List[Dict],
         response_format: Optional[Union[dict, Type[BaseModel]]] = None,
-        user_prompt: Optional[str] = None,
         trace_span=DummySpan(),
         tool_number_offset: int = 0,
         request_context: Optional[Dict[str, Any]] = None,
         cancel_event: Optional[threading.Event] = None,
-    ) -> LLMResult:
-        tool_calls: list[
-            dict
-        ] = []  # Used for preventing repeated tool calls. potentially reset after compaction
-        all_tool_calls = []  # type: ignore
+        enable_tool_approval: bool = False,
+    ) -> Generator[AgentEvent, None, None]:
+        """Core agent loop that yields typed AgentEvent objects.
+
+        Both call() and call_stream() delegate to this generator.
+        The caller is responsible for mapping events to their output format.
+        """
+        tool_calls: list[dict] = []  # For preventing repeated tool calls; reset after compaction
+        all_tool_calls: list = []
         costs = LLMCosts()
         tools: Optional[list] = self._get_tools()
         max_steps = self.max_steps
-        i = 0
         metadata: Dict[Any, Any] = {}
+        i = 0
+
+        # Extract session approved prefixes from conversation history
+        session_prefixes = extract_bash_session_prefixes(messages)
+
         while i < max_steps:
             if cancel_event and cancel_event.is_set():
                 raise LLMInterruptedError()
 
             i += 1
             logging.debug(f"running iteration {i}")
-            # on the last step we don't allow tools - we want to force a reply, not a request to run another tool
+
+            yield IterationStartEvent(iteration=i, max_steps=max_steps)
+
+            # On the last step we don't allow tools - force a reply
             tools = None if i == max_steps else tools
             tool_choice = "auto" if tools else None
 
@@ -443,8 +463,7 @@ class ToolCallingLLM:
             messages = limit_result.messages
             metadata = metadata | limit_result.metadata
 
-            # Always accumulate compaction tokens/cost when a compaction LLM call
-            # was attempted, even if it didn't reduce token count
+            # Accumulate compaction tokens/cost
             compaction = limit_result.compaction_usage
             if compaction.total_tokens > 0:
                 costs.num_compactions += 1
@@ -452,6 +471,16 @@ class ToolCallingLLM:
                 costs.prompt_tokens += compaction.prompt_tokens
                 costs.completion_tokens += compaction.completion_tokens
                 costs.total_cost += compaction.cost
+                cost_logger.debug(
+                    f"Compaction cost: ${compaction.cost:.6f} | "
+                    f"Tokens: {compaction.prompt_tokens} prompt + {compaction.completion_tokens} completion = {compaction.total_tokens} total"
+                )
+
+            if limit_result.events or limit_result.conversation_history_compacted:
+                yield CompactionEvent(
+                    metadata=metadata.copy(),
+                    stream_events=limit_result.events,
+                )
 
             if (
                 limit_result.conversation_history_compacted
@@ -468,21 +497,18 @@ class ToolCallingLLM:
                     tool_choice=tool_choice,
                     temperature=TEMPERATURE,
                     response_format=response_format,
+                    stream=False,
                     drop_params=True,
                 )
                 logging.debug(f"got response {full_response.to_json()}")  # type: ignore
 
-                # Extract and accumulate cost information
                 _process_cost_info(full_response, costs, "LLM call")
 
-            # catch a known error that occurs with Azure and replace the error message with something more obvious to the user
             except BadRequestError as e:
-                if "Unrecognized request arguments supplied: tool_choice, tools" in str(
-                    e
-                ):
+                if "Unrecognized request arguments supplied: tool_choice, tools" in str(e):
                     raise Exception(
                         "The Azure model you chose is not supported. Model version 1106 and higher required."
-                    )
+                    ) from e
                 else:
                     logging.error(
                         f"LLM BadRequestError on model={self.llm.model} (iteration {i}): {e}",
@@ -500,9 +526,7 @@ class ToolCallingLLM:
             if cancel_event and cancel_event.is_set():
                 raise LLMInterruptedError()
 
-            response = full_response.choices[0]  # type: ignore
-
-            response_message = response.message  # type: ignore
+            response_message = full_response.choices[0].message  # type: ignore
 
             new_message = response_message.model_dump(
                 exclude_defaults=True, exclude_unset=True, exclude_none=True
@@ -511,50 +535,65 @@ class ToolCallingLLM:
 
             tools_to_call = getattr(response_message, "tool_calls", None)
             text_response = response_message.content
+            reasoning = getattr(response_message, "reasoning_content", None)
 
-            if (
-                hasattr(response_message, "reasoning_content")
-                and response_message.reasoning_content
-            ):
-                logging.info(
-                    f"[italic dim]AI reasoning:\n\n{response_message.reasoning_content}[/italic dim]\n"
-                )
+            # Token counting after LLM response
+            tokens = self.llm.count_tokens(messages=messages, tools=tools)
+            add_token_count_to_metadata(
+                tokens=tokens,
+                full_llm_response=full_response,
+                max_context_size=limit_result.max_context_size,
+                maximum_output_token=limit_result.maximum_output_token,
+                metadata=metadata,
+            )
+            metadata["costs"] = costs.model_dump()
+            yield TokenCountEvent(metadata=metadata.copy())
 
             if not tools_to_call:
-                tokens = self.llm.count_tokens(messages=messages, tools=tools)
-
-                add_token_count_to_metadata(
-                    tokens=tokens,
-                    full_llm_response=full_response,
-                    max_context_size=limit_result.max_context_size,
-                    maximum_output_token=limit_result.maximum_output_token,
-                    metadata=metadata,
+                yield LLMResponseEvent(
+                    content=text_response,
+                    reasoning_content=reasoning,
+                    has_tool_calls=False,
+                    iteration=i,
                 )
-
-                return LLMResult(
+                yield CompletionEvent(
                     result=text_response,
-                    tool_calls=all_tool_calls,
-                    num_llm_calls=i,
-                    prompt=json.dumps(messages, indent=2),
                     messages=messages,
-                    **costs.model_dump(),  # Include all cost fields
+                    tool_calls=all_tool_calls,
                     metadata=metadata,
+                    num_llm_calls=i,
                 )
+                return
+
+            # There are tool calls
+            yield LLMResponseEvent(
+                content=text_response,
+                reasoning_content=reasoning,
+                has_tool_calls=True,
+                iteration=i,
+            )
 
             if text_response and text_response.strip():
                 logging.info(f"[bold {AI_COLOR}]AI:[/bold {AI_COLOR}] {text_response}")
             logging.info(
                 f"The AI requested [bold]{len(tools_to_call) if tools_to_call else 0}[/bold] tool call(s)."
             )
+
+            pending_approvals = []
+            approval_required_tools = []
+
             with concurrent.futures.ThreadPoolExecutor(max_workers=16) as executor:
                 futures = []
-                futures_tool_numbers: dict[
-                    concurrent.futures.Future, Optional[int]
-                ] = {}
-                tool_number: Optional[int]
+                futures_tool_numbers: dict[concurrent.futures.Future, Optional[int]] = {}
                 for tool_index, t in enumerate(tools_to_call, 1):
                     logging.debug(f"Tool to call: {t}")
-                    tool_number = tool_number_offset + tool_index
+                    tool_number: Optional[int] = tool_number_offset + tool_index
+
+                    yield ToolStartEvent(
+                        tool_call_id=t.id,
+                        tool_name=t.function.name,
+                        tool_number=tool_number,
+                    )
 
                     future = executor.submit(
                         self._invoke_llm_tool_call,
@@ -562,45 +601,83 @@ class ToolCallingLLM:
                         previous_tool_calls=tool_calls,
                         trace_span=trace_span,
                         tool_number=tool_number,
+                        session_approved_prefixes=session_prefixes,
                         request_context=request_context,
                     )
                     futures_tool_numbers[future] = tool_number
                     futures.append(future)
 
                 for future in concurrent.futures.as_completed(futures):
-                    # Best-effort cancellation: in-flight tool calls run to completion
-                    # since f.cancel() only prevents queued (not running) tasks.
                     if cancel_event and cancel_event.is_set():
                         for f in futures:
                             f.cancel()
                         raise LLMInterruptedError()
 
                     tool_call_result: ToolCallResult = future.result()
-
-                    tool_number = (
-                        futures_tool_numbers[future]
-                        if future in futures_tool_numbers
-                        else None
-                    )
+                    tool_number = futures_tool_numbers.get(future)
 
                     if (
                         tool_call_result.result.status
                         == StructuredToolResultStatus.APPROVAL_REQUIRED
                     ):
-                        tool_call_result = self._handle_tool_call_approval(
-                            tool_call_result=tool_call_result,
-                            tool_number=tool_number,
-                            trace_span=trace_span,
-                            request_context=request_context,
-                        )
+                        if enable_tool_approval:
+                            # Streaming mode: collect for ApprovalRequiredEvent
+                            pending_approvals.append(
+                                PendingToolApproval(
+                                    tool_call_id=tool_call_result.tool_call_id,
+                                    tool_name=tool_call_result.tool_name,
+                                    description=tool_call_result.description,
+                                    params=tool_call_result.result.params or {},
+                                )
+                            )
+                            approval_required_tools.append(tool_call_result)
+                            yield ToolResultEvent(tool_call_result=tool_call_result)
+                        else:
+                            # Non-streaming: handle approval via callback or convert to error
+                            tool_call_result = self._handle_tool_call_approval(
+                                tool_call_result=tool_call_result,
+                                tool_number=tool_number,
+                                trace_span=trace_span,
+                                request_context=request_context,
+                            )
+                            tool_result_response_dict = tool_call_result.as_tool_result_response()
+                            tool_calls.append(tool_result_response_dict)
+                            all_tool_calls.append(tool_result_response_dict)
+                            messages.append(tool_call_result.as_tool_call_message())
+                            yield ToolResultEvent(tool_call_result=tool_call_result)
+                    else:
+                        tool_result_response_dict = tool_call_result.as_tool_result_response()
+                        tool_calls.append(tool_result_response_dict)
+                        all_tool_calls.append(tool_result_response_dict)
+                        messages.append(tool_call_result.as_tool_call_message())
+                        yield ToolResultEvent(tool_call_result=tool_call_result)
 
-                    tool_result_response_dict = (
-                        tool_call_result.as_tool_result_response()
+                # Token counting after tool results
+                tokens = self.llm.count_tokens(messages=messages, tools=tools)
+                add_token_count_to_metadata(
+                    tokens=tokens,
+                    full_llm_response=full_response,
+                    max_context_size=limit_result.max_context_size,
+                    maximum_output_token=limit_result.maximum_output_token,
+                    metadata=metadata,
+                )
+                metadata["costs"] = costs.model_dump()
+                yield TokenCountEvent(metadata=metadata.copy())
+
+                if pending_approvals:
+                    for result in approval_required_tools:
+                        tool_call = self.find_assistant_tool_call_request(
+                            tool_call_id=result.tool_call_id, messages=messages
+                        )
+                        tool_call["pending_approval"] = True
+
+                    yield ApprovalRequiredEvent(
+                        pending_approvals=pending_approvals,
+                        approval_required_tools=approval_required_tools,
+                        messages=messages,
+                        metadata=metadata,
                     )
-                    tool_calls.append(tool_result_response_dict)
-                    all_tool_calls.append(tool_result_response_dict)
-                    messages.append(tool_call_result.as_tool_call_message())
-                    tokens = self.llm.count_tokens(messages=messages, tools=tools)
+                    return
 
                 # Update the tool number offset for the next iteration
                 tool_number_offset += len(tools_to_call)
@@ -614,11 +691,54 @@ class ToolCallingLLM:
                         )
                         tools = new_tools
 
+                # Re-extract session prefixes (a tool may have added new approved prefixes)
+                session_prefixes = extract_bash_session_prefixes(messages)
+
                 # Add a blank line after all tools in this batch complete
                 if tools_to_call:
                     logging.info("")
 
         raise Exception(f"Too many LLM calls - exceeded max_steps: {i}/{max_steps}")
+
+    @sentry_sdk.trace
+    def call(  # type: ignore
+        self,
+        messages: List[Dict[str, str]],
+        response_format: Optional[Union[dict, Type[BaseModel]]] = None,
+        user_prompt: Optional[str] = None,
+        trace_span=DummySpan(),
+        tool_number_offset: int = 0,
+        request_context: Optional[Dict[str, Any]] = None,
+        cancel_event: Optional[threading.Event] = None,
+    ) -> LLMResult:
+        for event in self._run_loop(
+            messages=messages,
+            response_format=response_format,
+            trace_span=trace_span,
+            tool_number_offset=tool_number_offset,
+            request_context=request_context,
+            cancel_event=cancel_event,
+            enable_tool_approval=False,
+        ):
+            if isinstance(event, LLMResponseEvent):
+                if event.reasoning_content:
+                    logging.info(
+                        f"[italic dim]AI reasoning:\n\n{event.reasoning_content}[/italic dim]\n"
+                    )
+
+            elif isinstance(event, CompletionEvent):
+                costs_dict = event.metadata.get("costs", {})
+                return LLMResult(
+                    result=event.result,
+                    tool_calls=event.tool_calls,
+                    num_llm_calls=event.num_llm_calls,
+                    prompt=json.dumps(event.messages, indent=2),
+                    messages=event.messages,
+                    metadata=event.metadata,
+                    **costs_dict,
+                )
+
+        raise Exception("Agent loop ended without completion")
 
     def _directly_invoke_tool_call(
         self,
@@ -936,8 +1056,8 @@ class ToolCallingLLM:
         request_context: Optional[Dict[str, Any]] = None,
     ):
         """
-        This function DOES NOT call llm.completion(stream=true).
-        This function streams holmes one iteration at a time instead of waiting for all iterations to complete.
+        Streams holmes one iteration at a time by delegating to _run_loop()
+        and mapping AgentEvents to StreamMessages.
         """
         # Process tool decisions if provided
         if msgs and tool_decisions:
@@ -954,252 +1074,74 @@ class ToolCallingLLM:
             messages.append({"role": "user", "content": user_prompt})
         if msgs:
             messages.extend(msgs)
-        tool_calls: list[dict] = []
-        tools: Optional[list] = self._get_tools()
-        max_steps = self.max_steps
-        metadata: Dict[Any, Any] = {}
-        costs = LLMCosts()
-        i = 0
-        tool_number_offset = 0
 
-        while i < max_steps:
-            i += 1
-            logging.debug(f"running iteration {i}")
+        for event in self._run_loop(
+            messages=messages,
+            response_format=response_format,
+            request_context=request_context,
+            enable_tool_approval=enable_tool_approval,
+        ):
+            if isinstance(event, CompactionEvent):
+                # Forward the original StreamMessage events from the context window limiter
+                yield from event.stream_events
 
-            tools = None if i == max_steps else tools
-            tool_choice = "auto" if tools else None
+            elif isinstance(event, TokenCountEvent):
+                yield build_stream_event_token_count(metadata=event.metadata)
 
-            limit_result = limit_input_context_window(
-                llm=self.llm, messages=messages, tools=tools
-            )
-            yield from limit_result.events
-            messages = limit_result.messages
-            metadata = metadata | limit_result.metadata
-
-            # Accumulate compaction costs (mirrors call() logic)
-            compaction = limit_result.compaction_usage
-            if compaction.total_tokens > 0:
-                costs.num_compactions += 1
-                costs.total_tokens += compaction.total_tokens
-                costs.prompt_tokens += compaction.prompt_tokens
-                costs.completion_tokens += compaction.completion_tokens
-                costs.total_cost += compaction.cost
-                cost_logger.debug(
-                    f"Compaction cost (streaming): ${compaction.cost:.6f} | "
-                    f"Tokens: {compaction.prompt_tokens} prompt + {compaction.completion_tokens} completion = {compaction.total_tokens} total"
-                )
-
-            if (
-                limit_result.conversation_history_compacted
-                and RESET_REPEATED_TOOL_CALL_CHECK_AFTER_COMPACTION
-            ):
-                tool_calls = []
-
-            logging.debug(f"sending messages={messages}\n\ntools={tools}")
-
-            try:
-                full_response = self.llm.completion(
-                    messages=parse_messages_tags(messages),  # type: ignore
-                    tools=tools,
-                    tool_choice=tool_choice,
-                    response_format=response_format,
-                    temperature=TEMPERATURE,
-                    stream=False,
-                    drop_params=True,
-                )
-
-                # Accumulate cost information for this iteration
-                _process_cost_info(full_response, costs, log_prefix="LLM iteration")
-
-            # catch a known error that occurs with Azure and replace the error message with something more obvious to the user
-            except BadRequestError as e:
-                if "Unrecognized request arguments supplied: tool_choice, tools" in str(
-                    e
-                ):
-                    raise Exception(
-                        "The Azure model you chose is not supported. Model version 1106 and higher required."
-                    ) from e
+            elif isinstance(event, LLMResponseEvent):
+                if not event.has_tool_calls:
+                    # No tool calls = final answer, don't yield AI_MESSAGE here
+                    # CompletionEvent will follow and yield ANSWER_END
+                    pass
                 else:
-                    logging.error(
-                        f"LLM BadRequestError on model={self.llm.model} (streaming iteration {i}): {e}",
-                        exc_info=True,
-                    )
-                    raise
-            except Exception as e:
-                logging.error(
-                    f"LLM call failed on model={self.llm.model} (streaming iteration {i}): "
-                    f"{type(e).__name__}: {e}",
-                    exc_info=True,
+                    # Intermediate message with tool calls coming
+                    if event.content or event.reasoning_content:
+                        yield StreamMessage(
+                            event=StreamEvents.AI_MESSAGE,
+                            data={
+                                "content": event.content,
+                                "reasoning": event.reasoning_content,
+                                "metadata": {},
+                            },
+                        )
+
+            elif isinstance(event, ToolStartEvent):
+                yield StreamMessage(
+                    event=StreamEvents.START_TOOL,
+                    data={"tool_name": event.tool_name, "id": event.tool_call_id},
                 )
-                raise
 
-            response_message = full_response.choices[0].message  # type: ignore
-
-            messages.append(
-                response_message.model_dump(
-                    exclude_defaults=True, exclude_unset=True, exclude_none=True
+            elif isinstance(event, ToolResultEvent):
+                yield StreamMessage(
+                    event=StreamEvents.TOOL_RESULT,
+                    data=event.tool_call_result.as_streaming_tool_result_response(),
                 )
-            )
 
-            tokens = self.llm.count_tokens(messages=messages, tools=tools)
-            add_token_count_to_metadata(
-                tokens=tokens,
-                full_llm_response=full_response,
-                max_context_size=limit_result.max_context_size,
-                maximum_output_token=limit_result.maximum_output_token,
-                metadata=metadata,
-            )
-            metadata["costs"] = costs.model_dump()
-            yield build_stream_event_token_count(metadata=metadata)
-
-            tools_to_call = getattr(response_message, "tool_calls", None)
-            if not tools_to_call:
+            elif isinstance(event, CompletionEvent):
                 yield StreamMessage(
                     event=StreamEvents.ANSWER_END,
                     data={
-                        "content": response_message.content,
-                        "messages": messages,
-                        "metadata": metadata,
+                        "content": event.result,
+                        "messages": event.messages,
+                        "metadata": event.metadata,
                     },
                 )
                 return
 
-            reasoning = getattr(response_message, "reasoning_content", None)
-            message = response_message.content
-            if reasoning or message:
+            elif isinstance(event, ApprovalRequiredEvent):
                 yield StreamMessage(
-                    event=StreamEvents.AI_MESSAGE,
+                    event=StreamEvents.APPROVAL_REQUIRED,
                     data={
-                        "content": message,
-                        "reasoning": reasoning,
-                        "metadata": metadata,
+                        "content": None,
+                        "messages": event.messages,
+                        "pending_approvals": [
+                            approval.model_dump()
+                            for approval in event.pending_approvals
+                        ],
+                        "requires_approval": True,
                     },
                 )
-
-            # Check if any tools require approval first
-            pending_approvals = []
-            approval_required_tools = []
-
-            # Extract session approved prefixes from conversation history
-            session_prefixes = extract_bash_session_prefixes(messages)
-
-            with concurrent.futures.ThreadPoolExecutor(max_workers=16) as executor:
-                futures = []
-                for tool_index, t in enumerate(tools_to_call, 1):  # type: ignore
-                    tool_number = tool_number_offset + tool_index
-
-                    future = executor.submit(
-                        self._invoke_llm_tool_call,
-                        tool_to_call=t,  # type: ignore
-                        previous_tool_calls=tool_calls,
-                        trace_span=DummySpan(),  # Streaming mode doesn't support tracing yet
-                        tool_number=tool_number,
-                        session_approved_prefixes=session_prefixes,
-                        request_context=request_context,
-                    )
-                    futures.append(future)
-                    yield StreamMessage(
-                        event=StreamEvents.START_TOOL,
-                        data={"tool_name": t.function.name, "id": t.id},
-                    )
-
-                for future in concurrent.futures.as_completed(futures):
-                    tool_call_result: ToolCallResult = future.result()
-
-                    if (
-                        tool_call_result.result.status
-                        == StructuredToolResultStatus.APPROVAL_REQUIRED
-                    ):
-                        if enable_tool_approval:
-                            pending_approvals.append(
-                                PendingToolApproval(
-                                    tool_call_id=tool_call_result.tool_call_id,
-                                    tool_name=tool_call_result.tool_name,
-                                    description=tool_call_result.description,
-                                    params=tool_call_result.result.params or {},
-                                )
-                            )
-                            approval_required_tools.append(tool_call_result)
-
-                            yield StreamMessage(
-                                event=StreamEvents.TOOL_RESULT,
-                                data=tool_call_result.as_streaming_tool_result_response(),
-                            )
-                        else:
-                            tool_call_result.result.status = (
-                                StructuredToolResultStatus.ERROR
-                            )
-                            tool_call_result.result.error = f"Tool call rejected for security reasons: {tool_call_result.result.error}"
-
-                            tool_calls.append(
-                                tool_call_result.as_tool_result_response()
-                            )
-                            messages.append(tool_call_result.as_tool_call_message())
-
-                            yield StreamMessage(
-                                event=StreamEvents.TOOL_RESULT,
-                                data=tool_call_result.as_streaming_tool_result_response(),
-                            )
-
-                    else:
-                        tool_calls.append(tool_call_result.as_tool_result_response())
-                        messages.append(tool_call_result.as_tool_call_message())
-
-                        yield StreamMessage(
-                            event=StreamEvents.TOOL_RESULT,
-                            data=tool_call_result.as_streaming_tool_result_response(),
-                        )
-
-                # Emit updated token counts after tool results
-                tokens = self.llm.count_tokens(messages=messages, tools=tools)
-                add_token_count_to_metadata(
-                    tokens=tokens,
-                    full_llm_response=full_response,
-                    max_context_size=limit_result.max_context_size,
-                    maximum_output_token=limit_result.maximum_output_token,
-                    metadata=metadata,
-                )
-                metadata["costs"] = costs.model_dump()
-                yield build_stream_event_token_count(metadata=metadata)
-
-                # If we have approval required tools, end the stream with pending approvals
-                if pending_approvals:
-                    # Add assistant message with pending tool calls
-                    for result in approval_required_tools:
-                        tool_call = self.find_assistant_tool_call_request(
-                            tool_call_id=result.tool_call_id, messages=messages
-                        )
-                        tool_call["pending_approval"] = True
-
-                    # End stream with approvals required
-                    yield StreamMessage(
-                        event=StreamEvents.APPROVAL_REQUIRED,
-                        data={
-                            "content": None,
-                            "messages": messages,
-                            "pending_approvals": [
-                                approval.model_dump() for approval in pending_approvals
-                            ],
-                            "requires_approval": True,
-                        },
-                    )
-                    return
-
-                # Update the tool number offset for the next iteration
-                tool_number_offset += len(tools_to_call)
-
-                # Re-fetch tools if runbook was just activated (enables restricted tools)
-                if self._runbook_in_use and tools is not None:
-                    new_tools = self._get_tools()
-                    if len(new_tools) != len(tools):
-                        logging.info(
-                            f"Runbook activated - refreshing tools list ({len(tools)} -> {len(new_tools)} tools)"
-                        )
-                        tools = new_tools
-
-        raise Exception(
-            f"Too many LLM calls - exceeded max_steps: {i}/{self.max_steps}"
-        )
+                return
 
     def find_assistant_tool_call_request(
         self, tool_call_id: str, messages: list[dict[str, Any]]
