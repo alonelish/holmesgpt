@@ -367,9 +367,10 @@ class ToolCallingLLM:
         system_prompt: str,
         user_prompt: str,
         response_format: Optional[Union[dict, Type[BaseModel]]] = None,
-        trace_span=DummySpan(),
+        trace_span: Optional["DummySpan"] = None,
         request_context: Optional[Dict[str, Any]] = None,
     ) -> LLMResult:
+        trace_span = trace_span or DummySpan()
         messages = [
             {"role": "system", "content": system_prompt},
             {"role": "user", "content": user_prompt},
@@ -386,9 +387,10 @@ class ToolCallingLLM:
         self,
         messages: List[Dict[str, str]],
         response_format: Optional[Union[dict, Type[BaseModel]]] = None,
-        trace_span=DummySpan(),
+        trace_span: Optional["DummySpan"] = None,
         request_context: Optional[Dict[str, Any]] = None,
     ) -> LLMResult:
+        trace_span = trace_span or DummySpan()
         return self.call(
             messages,
             response_format=response_format,
@@ -413,11 +415,12 @@ class ToolCallingLLM:
         messages: List[Dict[str, str]],
         response_format: Optional[Union[dict, Type[BaseModel]]] = None,
         user_prompt: Optional[str] = None,
-        trace_span=DummySpan(),
+        trace_span: Optional["DummySpan"] = None,
         tool_number_offset: int = 0,
         request_context: Optional[Dict[str, Any]] = None,
         cancel_event: Optional[threading.Event] = None,
     ) -> LLMResult:
+        trace_span = trace_span or DummySpan()
         tool_calls: list[
             dict
         ] = []  # Used for preventing repeated tool calls. potentially reset after compaction
