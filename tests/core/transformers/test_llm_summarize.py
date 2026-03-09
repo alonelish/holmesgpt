@@ -2,7 +2,8 @@
 Unit tests for LLMSummarizeTransformer.
 """
 
-from unittest.mock import Mock, patch
+import asyncio
+from unittest.mock import AsyncMock, Mock, patch
 
 import pytest
 from pydantic import ValidationError
@@ -26,7 +27,7 @@ class TestLLMSummarizeTransformer:
         mock_message.content = response_content
         mock_choice.message = mock_message
         mock_response.choices = [mock_choice]
-        mock_llm.completion.return_value = mock_response
+        mock_llm.completion = AsyncMock(return_value=mock_response)
 
         return mock_llm
 
@@ -251,7 +252,7 @@ class TestLLMSummarizeTransformer:
     def test_transform_llm_exception(self, mock_default_llm):
         """Test transform handles LLM exceptions properly."""
         mock_llm = Mock()
-        mock_llm.completion.side_effect = Exception("LLM API error")
+        mock_llm.completion = AsyncMock(side_effect=Exception("LLM API error"))
         mock_default_llm.return_value = mock_llm
         transformer = LLMSummarizeTransformer(fast_model="gpt-4o-mini")
 
@@ -267,7 +268,7 @@ class TestLLMSummarizeTransformer:
         mock_llm = Mock()
         mock_response = Mock()
         mock_response.choices = []  # Empty choices
-        mock_llm.completion.return_value = mock_response
+        mock_llm.completion = AsyncMock(return_value=mock_response)
         mock_default_llm.return_value = mock_llm
         transformer = LLMSummarizeTransformer(fast_model="gpt-4o-mini")
 
@@ -324,7 +325,7 @@ class TestLLMSummarizeTransformerIntegration:
         mock_message.content = response_content
         mock_choice.message = mock_message
         mock_response.choices = [mock_choice]
-        mock_llm.completion.return_value = mock_response
+        mock_llm.completion = AsyncMock(return_value=mock_response)
 
         return mock_llm
 
@@ -386,7 +387,7 @@ service/database-service            ClusterIP   10.0.1.101   <none>        5432/
         """Test error handling in real-world scenarios."""
         # Test with failing LLM
         mock_llm = Mock()
-        mock_llm.completion.side_effect = ConnectionError("Network timeout")
+        mock_llm.completion = AsyncMock(side_effect=ConnectionError("Network timeout"))
         mock_default_llm.return_value = mock_llm
         transformer = LLMSummarizeTransformer(fast_model="gpt-4o-mini")
 

@@ -302,10 +302,11 @@ def extract_passthrough_headers(request: Request) -> dict:
     return {"headers": passthrough_headers} if passthrough_headers else {}
 
 
-def _stream_with_storage_cleanup(storage, stream_generator, req_info):
+async def _stream_with_storage_cleanup(storage, stream_generator, req_info):
     """Wrap a stream generator to clean up tool result files after streaming completes."""
     try:
-        yield from stream_generator
+        async for item in stream_generator:
+            yield item
     finally:
         logging.info(f"Stream request end: {req_info}")
         storage.__exit__(None, None, None)

@@ -63,12 +63,12 @@ def _is_rate_limit_error(e: Exception) -> bool:
     return isinstance(e, litellm.exceptions.RateLimitError) or "Model is getting throttled" in str(e)
 
 
-def stream_chat_formatter(
-    call_stream: Generator[StreamMessage, None, None],
+async def stream_chat_formatter(
+    call_stream,
     followups: Optional[List[dict]] = None,
 ):
     try:
-        for message in call_stream:
+        async for message in call_stream:
             if message.event == StreamEvents.ANSWER_END:
                 response_data = {
                     "analysis": message.data.get("content"),
