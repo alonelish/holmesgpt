@@ -143,12 +143,12 @@ class TestRunLoopSimpleQA:
         assert CompletionEvent in event_types
 
         # Check completion event
-        completion = [e for e in events if isinstance(e, CompletionEvent)][0]
+        completion = next(e for e in events if isinstance(e, CompletionEvent))
         assert completion.result == "The answer is 42"
         assert completion.num_llm_calls == 1
 
         # LLMResponseEvent should have has_tool_calls=False
-        llm_response = [e for e in events if isinstance(e, LLMResponseEvent)][0]
+        llm_response = next(e for e in events if isinstance(e, LLMResponseEvent))
         assert llm_response.has_tool_calls is False
         assert llm_response.content == "The answer is 42"
 
@@ -197,12 +197,12 @@ class TestRunLoopWithToolCalls:
         assert ToolResultEvent in event_types
 
         # Check tool start event
-        tool_start = [e for e in events if isinstance(e, ToolStartEvent)][0]
+        tool_start = next(e for e in events if isinstance(e, ToolStartEvent))
         assert tool_start.tool_name == "my_tool"
         assert tool_start.tool_call_id == "tool_1"
 
         # Check tool result event
-        tool_result = [e for e in events if isinstance(e, ToolResultEvent)][0]
+        tool_result = next(e for e in events if isinstance(e, ToolResultEvent))
         assert tool_result.tool_call_result.tool_name == "my_tool"
         assert (
             tool_result.tool_call_result.result.status
@@ -210,7 +210,7 @@ class TestRunLoopWithToolCalls:
         )
 
         # Should end with completion
-        completion = [e for e in events if isinstance(e, CompletionEvent)][0]
+        completion = next(e for e in events if isinstance(e, CompletionEvent))
         assert completion.result == "The result is X"
         assert completion.num_llm_calls == 2
 
@@ -270,9 +270,9 @@ class TestRunLoopApprovalRequired:
         # Should NOT have CompletionEvent (loop paused)
         assert CompletionEvent not in event_types
 
-        approval_event = [
+        approval_event = next(
             e for e in events if isinstance(e, ApprovalRequiredEvent)
-        ][0]
+        )
         assert len(approval_event.pending_approvals) == 1
         assert approval_event.pending_approvals[0].tool_name == "dangerous_tool"
 
@@ -339,7 +339,7 @@ class TestRunLoopApprovalRequired:
         # Should complete normally
         assert CompletionEvent in event_types
 
-        completion = [e for e in events if isinstance(e, CompletionEvent)][0]
+        completion = next(e for e in events if isinstance(e, CompletionEvent))
         assert completion.result == "Done!"
 
 
@@ -397,9 +397,9 @@ class TestCallStreamAdapter:
         assert StreamEvents.ANSWER_END in event_types
 
         # Check ANSWER_END content
-        answer_end = [
+        answer_end = next(
             m for m in stream_messages if m.event == StreamEvents.ANSWER_END
-        ][0]
+        )
         assert answer_end.data["content"] == "Streamed answer"
 
     def test_call_stream_with_tool_calls(self):

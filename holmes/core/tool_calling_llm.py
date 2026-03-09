@@ -378,7 +378,7 @@ class ToolCallingLLM:
         system_prompt: str,
         user_prompt: str,
         response_format: Optional[Union[dict, Type[BaseModel]]] = None,
-        trace_span=DummySpan(),
+        trace_span: Optional[Any] = None,
         request_context: Optional[Dict[str, Any]] = None,
     ) -> LLMResult:
         messages = [
@@ -388,7 +388,6 @@ class ToolCallingLLM:
         return self.call(
             messages,
             response_format=response_format,
-            user_prompt=user_prompt,
             trace_span=trace_span,
             request_context=request_context,
         )
@@ -397,7 +396,7 @@ class ToolCallingLLM:
         self,
         messages: List[Dict[str, str]],
         response_format: Optional[Union[dict, Type[BaseModel]]] = None,
-        trace_span=DummySpan(),
+        trace_span: Optional[Any] = None,
         request_context: Optional[Dict[str, Any]] = None,
     ) -> LLMResult:
         return self.call(
@@ -708,7 +707,6 @@ class ToolCallingLLM:
         self,
         messages: List[Dict[str, str]],
         response_format: Optional[Union[dict, Type[BaseModel]]] = None,
-        user_prompt: Optional[str] = None,
         trace_span: Optional[Any] = None,
         tool_number_offset: int = 0,
         request_context: Optional[Dict[str, Any]] = None,

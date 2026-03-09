@@ -1,7 +1,11 @@
-from dataclasses import dataclass, field
-from typing import Any, Dict, List, Optional, Union
+from __future__ import annotations
 
-from holmes.core.models import ToolCallResult
+from dataclasses import dataclass, field
+from typing import TYPE_CHECKING, Any, Dict, List, Optional, Union
+
+if TYPE_CHECKING:
+    from holmes.core.models import PendingToolApproval, ToolCallResult
+    from holmes.utils.stream import StreamMessage
 
 
 @dataclass
@@ -18,7 +22,7 @@ class CompactionEvent:
 
     metadata: Dict[str, Any]
     # The StreamMessage events from the limiter (for backwards compat with call_stream)
-    stream_events: list = field(default_factory=list)
+    stream_events: List[StreamMessage] = field(default_factory=list)
 
 
 @dataclass
@@ -69,8 +73,8 @@ class CompletionEvent:
 class ApprovalRequiredEvent:
     """Emitted when tools require user approval (streaming mode)."""
 
-    pending_approvals: list  # list[PendingToolApproval]
-    approval_required_tools: list  # list[ToolCallResult]
+    pending_approvals: List[PendingToolApproval]
+    approval_required_tools: List[ToolCallResult]
     messages: List[Dict]
     metadata: Dict[str, Any]
     tool_number_offset: int = 0
