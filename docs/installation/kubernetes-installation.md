@@ -20,15 +20,15 @@ Deploy HolmesGPT as a service in your Kubernetes cluster with an HTTP API.
 
 1. **Add the Helm repository:**
 
-    === "OCI Registry (recommended)"
-        ```bash
-        # No helm repo add needed — OCI registries are pulled directly
-        ```
-
-    === "Traditional Helm Repo"
+    === "Helm Repo"
         ```bash
         helm repo add robusta https://robusta-charts.storage.googleapis.com
         helm repo update
+        ```
+
+    === "OCI Registry"
+        ```bash
+        # No helm repo add needed — OCI registries are pulled directly
         ```
 
 2. **Create `values.yaml` file:**
@@ -137,14 +137,14 @@ Deploy HolmesGPT as a service in your Kubernetes cluster with an HTTP API.
 
 3. **Install HolmesGPT:**
 
-    === "OCI Registry (recommended)"
-        ```bash
-        helm install holmesgpt oci://ghcr.io/holmesgpt/charts/holmes -f values.yaml
-        ```
-
-    === "Traditional Helm Repo"
+    === "Helm Repo"
         ```bash
         helm install holmesgpt robusta/holmes -f values.yaml
+        ```
+
+    === "OCI Registry"
+        ```bash
+        helm install holmesgpt oci://ghcr.io/holmesgpt/charts/holmes -f values.yaml
         ```
 
 ## Usage
@@ -177,15 +177,15 @@ For complete API documentation, see the [HTTP API Reference](../reference/http-a
 
 ## Upgrading
 
-=== "OCI Registry"
-    ```bash
-    helm upgrade holmesgpt oci://ghcr.io/holmesgpt/charts/holmes -f values.yaml
-    ```
-
-=== "Traditional Helm Repo"
+=== "Helm Repo"
     ```bash
     helm repo update
     helm upgrade holmesgpt robusta/holmes -f values.yaml
+    ```
+
+=== "OCI Registry"
+    ```bash
+    helm upgrade holmesgpt oci://ghcr.io/holmesgpt/charts/holmes -f values.yaml
     ```
 
 ## Uninstalling
