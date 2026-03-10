@@ -1500,10 +1500,7 @@ class ExecuteInstantQuery(BasePrometheusTool):
                 status=StructuredToolResultStatus.ERROR,
                 error=(
                     f"Query timed out after {timeout} seconds. "
-                    f"This Prometheus instance may be slow (e.g., Thanos, Cortex, or large dataset). "
-                    f"IMPORTANT: You MUST retry the same query with a higher timeout parameter. "
-                    f"Try timeout={min(timeout * 3, max_timeout)} (maximum allowed: {max_timeout}). "
-                    f"If it still times out, try simplifying the query (e.g., shorter time range, fewer series, use topk())."
+                    f"The timeout parameter can be increased up to {max_timeout} seconds."
                 ),
                 params=params,
             )
@@ -1772,10 +1769,7 @@ class ExecuteRangeQuery(BasePrometheusTool):
                 status=StructuredToolResultStatus.ERROR,
                 error=(
                     f"Query timed out after {timeout} seconds. "
-                    f"This Prometheus instance may be slow (e.g., Thanos, Cortex, or large dataset). "
-                    f"IMPORTANT: You MUST retry the same query with a higher timeout parameter. "
-                    f"Try timeout={min(timeout * 3, max_timeout)} (maximum allowed: {max_timeout}). "
-                    f"If it still times out, try simplifying the query (e.g., shorter time range, fewer series, use topk())."
+                    f"The timeout parameter can be increased up to {max_timeout} seconds."
                 ),
                 params=params,
             )
@@ -1849,6 +1843,7 @@ class PrometheusToolset(Toolset):
                 "config": self.config,
                 "default_max_points": int(MAX_GRAPH_POINTS),
                 "hard_max_points": int(MAX_GRAPH_POINTS_HARD_LIMIT),
+                "default_query_timeout": self.config.query_timeout_seconds_default if self.config else DEFAULT_QUERY_TIMEOUT_SECONDS,
                 "max_query_timeout": self.config.query_timeout_seconds_hard_max if self.config else MAX_QUERY_TIMEOUT_SECONDS,
             },
         )
