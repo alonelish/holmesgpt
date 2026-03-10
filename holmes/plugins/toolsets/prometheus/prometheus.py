@@ -1500,6 +1500,7 @@ class ExecuteInstantQuery(BasePrometheusTool):
                 status=StructuredToolResultStatus.ERROR,
                 error=(
                     f"Query timed out after {timeout} seconds. "
+                    f"On large backends (Thanos, Cortex), timeouts usually mean the query is scanning too many series. "
                     f"The timeout parameter can be increased up to {max_timeout} seconds."
                 ),
                 params=params,
@@ -1769,6 +1770,7 @@ class ExecuteRangeQuery(BasePrometheusTool):
                 status=StructuredToolResultStatus.ERROR,
                 error=(
                     f"Query timed out after {timeout} seconds. "
+                    f"On large backends (Thanos, Cortex), timeouts usually mean the query is scanning too many series. "
                     f"The timeout parameter can be increased up to {max_timeout} seconds."
                 ),
                 params=params,
