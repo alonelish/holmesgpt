@@ -618,17 +618,9 @@ class ToolCallingLLM:
                 if tools_to_call:
                     logging.info("")
 
-        max_steps_message = f"Reached the maximum tool call limit ({max_steps}) - providing the best answer based on information gathered so far."
-        logging.warning(f"Too many LLM calls - exceeded max_steps: {i}/{max_steps}")
-        return LLMResult(
-            result=max_steps_message,
-            tool_calls=all_tool_calls,
-            num_llm_calls=i,
-            prompt=json.dumps(messages, indent=2),
-            messages=messages,
-            **costs.model_dump(),
-            metadata=metadata,
-        )
+        # Unreachable: on the last iteration (i == max_steps), tools are set to None which
+        # forces the LLM to produce a text response, causing the function to return inside the loop.
+        raise AssertionError(f"Unreachable: exceeded max_steps={max_steps} without returning")
 
     def _directly_invoke_tool_call(
         self,
@@ -976,6 +968,7 @@ class ToolCallingLLM:
             i += 1
             logging.debug(f"running iteration {i}")
 
+            # on the last step we don't allow tools - we want to force a reply, not a request to run another tool
             tools = None if i == max_steps else tools
             tool_choice = "auto" if tools else None
 
@@ -1207,20 +1200,9 @@ class ToolCallingLLM:
                         )
                         tools = new_tools
 
-        max_steps_message = f"Reached the maximum tool call limit ({self.max_steps}) - providing the best answer based on information gathered so far."
-        logging.warning(f"Too many LLM calls - exceeded max_steps: {i}/{self.max_steps}")
-        yield StreamMessage(
-            event=StreamEvents.AI_MESSAGE,
-            data={"content": max_steps_message},
-        )
-        yield StreamMessage(
-            event=StreamEvents.ANSWER_END,
-            data={
-                "content": max_steps_message,
-                "messages": messages,
-                "metadata": metadata,
-            },
-        )
+        # Unreachable: on the last iteration (i == max_steps), tools are set to None which
+        # forces the LLM to produce a text response, causing the function to return inside the loop.
+        raise AssertionError(f"Unreachable: exceeded max_steps={self.max_steps} without returning")
 
     def find_assistant_tool_call_request(
         self, tool_call_id: str, messages: list[dict[str, Any]]
