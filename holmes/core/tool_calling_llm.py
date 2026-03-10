@@ -1202,7 +1202,7 @@ class ToolCallingLLM:
 
         # Unreachable: on the last iteration (i == max_steps), tools are set to None which
         # forces the LLM to produce a text response, causing the function to return inside the loop.
-        raise AssertionError(f"Unreachable: exceeded max_steps={self.max_steps} without returning")
+        raise AssertionError(f"Unreachable: exceeded max_steps={max_steps} without returning")
 
     def find_assistant_tool_call_request(
         self, tool_call_id: str, messages: list[dict[str, Any]]
