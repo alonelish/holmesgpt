@@ -5079,20 +5079,20 @@ requests = "*"
 
 [[package]]
 name = "prometrix"
-version = "0.2.9"
+version = "0.2.10"
 description = "A Python Prometheus client for all Prometheus instances."
 optional = false
 python-versions = "<4.0,>=3.10"
 groups = ["main"]
 files = [
-    {file = "prometrix-0.2.9-py3-none-any.whl", hash = "sha256:6ba3ab8eb8e79eedece4ed365dfc85323912899d21cefcbf5bb4816cf57b81a2"},
-    {file = "prometrix-0.2.9.tar.gz", hash = "sha256:68366d50ede4dfd0a35a39b0bc0763f53db5985e0f6e53b11e9da4d0e8821605"},
+    {file = "prometrix-0.2.10-py3-none-any.whl", hash = "sha256:f019112e4ad6086cfd186b9595ee11fc1553421c35f62d7cc60cf5dd483033b6"},
+    {file = "prometrix-0.2.10.tar.gz", hash = "sha256:37c42b78c465088e8abdded277080ba201f05b17407a0fef663261f25a5f79aa"},
 ]
 
 [package.dependencies]
 boto3 = ">=1.38,<2.0"
 botocore = ">=1.38,<2.0"
-fonttools = ">=4.43.0,<5.0.0"
+fonttools = ">=4.60.2,<5.0.0"
 idna = ">=3.7,<4.0"
 pillow = ">=10.3.0,<11.0.0"
 prometheus-api-client = ">=0.5.3,<0.6.0"
@@ -8022,4 +8022,4 @@ files = [
 [metadata]
 lock-version = "2.1"
 python-versions = "^3.10"
-content-hash = "3be10fe8e9442caf7df5ca43da66dbb618788eecd0bdc93c7d8e0c7e74658f3a"
+content-hash = "0609d816ec72957a439baca6f9f353ebc36955f7e74bd1810dbce0ad167d1f0a"
