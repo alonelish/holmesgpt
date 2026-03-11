@@ -22,7 +22,6 @@ class StreamEvents(str, Enum):
     TOKEN_COUNT = "token_count"
     COMPACTION_STARTED = "compaction_started"
     COMPACTION_ENDED = "compaction_ended"
-    COMPACTION_ERROR = "compaction_error"
 
 
 class StreamMessage(BaseModel):

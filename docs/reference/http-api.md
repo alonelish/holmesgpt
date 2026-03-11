@@ -547,11 +547,12 @@ Emitted when conversation history compaction begins. This fires immediately befo
 
 #### `compaction_ended`
 
-Emitted when conversation history compaction completes successfully.
+Emitted when conversation history compaction finishes (success or error). Always follows a `compaction_started` event.
 
-**Payload:**
+**Payload (success):**
 ```json
 {
+  "status": "success",
   "content": "The conversation history has been compacted from 150000 to 8500 tokens",
   "summary": "LLM-generated summary of the compacted conversation...",
   "messages": [...],
@@ -572,29 +573,10 @@ Emitted when conversation history compaction completes successfully.
 }
 ```
 
-**Fields:**
-
-- `content` (string): Human-readable description of the compaction
-- `summary` (string): LLM-generated summary of the compacted conversation
-- `messages` (array): The compacted conversation history
-- `metadata` (object): Compaction details
-  - `initial_tokens` (integer): Token count before compaction
-  - `compacted_tokens` (integer): Token count after compaction
-  - `compression_ratio` (number): Fraction of tokens saved (0-1)
-  - `max_context_size` (integer): Model's total context window
-  - `compaction_usage` (object): Token and cost usage of the compaction LLM call
-  - `original_stats` (object): Message counts and tool usage before compaction
-  - `compacted_stats` (object): Message counts and tool usage after compaction
-
----
-
-#### `compaction_error`
-
-Emitted when conversation history compaction fails (LLM error, or compaction did not reduce token count).
-
-**Payload:**
+**Payload (error):**
 ```json
 {
+  "status": "error",
   "content": "Conversation compaction failed",
   "error": "Description of what went wrong",
   "metadata": {
@@ -606,12 +588,19 @@ Emitted when conversation history compaction fails (LLM error, or compaction did
 
 **Fields:**
 
-- `content` (string): Human-readable error summary
-- `error` (string): Detailed error description
-- `metadata` (object): Context about the failed compaction
-  - `initial_tokens` (integer): Token count before compaction was attempted
-  - `compacted_tokens` (integer, optional): Present when compaction ran but didn't reduce size
+- `status` (string): `"success"` or `"error"`
+- `content` (string): Human-readable description
+- `summary` (string, success only): LLM-generated summary of the compacted conversation
+- `messages` (array, success only): The compacted conversation history
+- `error` (string, error only): Detailed error description
+- `metadata` (object): Compaction details
+  - `initial_tokens` (integer): Token count before compaction
+  - `compacted_tokens` (integer, success or when compaction ran but didn't reduce size): Token count after compaction
+  - `compression_ratio` (number, success only): Fraction of tokens saved (0-1)
   - `max_context_size` (integer): Model's total context window
+  - `compaction_usage` (object, success only): Token and cost usage of the compaction LLM call
+  - `original_stats` (object, success only): Message counts and tool usage before compaction
+  - `compacted_stats` (object, success only): Message counts and tool usage after compaction
 
 ---
 
@@ -663,7 +652,7 @@ Emitted when an error occurs during processing.
 
 ```
 1. compaction_started
-2. compaction_ended (or compaction_error)
+2. compaction_ended (status: "success" or "error")
 3. start_tool_calling (tool 1)
 3. tool_calling_result (tool 1)
 4. token_count

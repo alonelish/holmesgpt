@@ -182,8 +182,9 @@ def limit_input_context_window(
             logging.error(f"Compaction failed with error: {e}", exc_info=True)
             events.append(
                 StreamMessage(
-                    event=StreamEvents.COMPACTION_ERROR,
+                    event=StreamEvents.COMPACTION_ENDED,
                     data={
+                        "status": "error",
                         "content": "Conversation compaction failed",
                         "error": str(e),
                         "metadata": {
@@ -208,6 +209,7 @@ def limit_input_context_window(
                     StreamMessage(
                         event=StreamEvents.COMPACTION_ENDED,
                         data={
+                            "status": "success",
                             "content": compaction_message,
                             "summary": compaction_result.summary,
                             "messages": compaction_result.messages_after_compaction,
@@ -235,8 +237,9 @@ def limit_input_context_window(
                 )
                 events.append(
                     StreamMessage(
-                        event=StreamEvents.COMPACTION_ERROR,
+                        event=StreamEvents.COMPACTION_ENDED,
                         data={
+                            "status": "error",
                             "content": "Compaction did not reduce token count",
                             "error": f"Compacted size ({compacted_total_tokens} tokens) is not smaller than original ({initial_tokens.total_tokens} tokens)",
                             "metadata": {
