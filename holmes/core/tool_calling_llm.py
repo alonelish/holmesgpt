@@ -39,10 +39,9 @@ from holmes.core.tools_utils.tool_context_window_limiter import (
 )
 from holmes.core.tools_utils.tool_executor import ToolExecutor
 from holmes.core.tracing import DummySpan
-from holmes.core.truncation.compaction import compute_conversation_stats
 from holmes.core.truncation.input_context_window_limiter import (
+    check_compaction_needed,
     limit_input_context_window,
-    should_compact,
 )
 from holmes.utils.colors import AI_COLOR
 from holmes.utils.stream import (
@@ -971,23 +970,23 @@ class ToolCallingLLM:
             tools = None if i == max_steps else tools
             tool_choice = "auto" if tools else None
 
-            if should_compact(self.llm, messages, tools):
-                pre_compaction_stats = compute_conversation_stats(messages)
-                pre_compaction_tokens = self.llm.count_tokens(messages=messages, tools=tools)  # type: ignore
+            compaction_check = check_compaction_needed(self.llm, messages, tools)
+            if compaction_check.should_compact:
                 yield StreamMessage(
                     event=StreamEvents.COMPACTION_STARTED,
                     data={
                         "content": "Compacting conversation history...",
                         "metadata": {
-                            "initial_tokens": pre_compaction_tokens.total_tokens,
-                            "max_context_size": self.llm.get_context_window_size(),
-                            "original_stats": pre_compaction_stats.model_dump(),
+                            "initial_tokens": compaction_check.initial_tokens,
+                            "max_context_size": compaction_check.max_context_size,
+                            "original_stats": compaction_check.original_stats,
                         },
                     },
                 )
 
             limit_result = limit_input_context_window(
-                llm=self.llm, messages=messages, tools=tools
+                llm=self.llm, messages=messages, tools=tools,
+                compaction_check=compaction_check,
             )
             yield from limit_result.events
             messages = limit_result.messages

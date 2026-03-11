@@ -147,21 +147,45 @@ class ContextWindowLimiterOutput(BaseModel):
     compaction_usage: CompactionUsage = CompactionUsage()
 
 
-def should_compact(llm: LLM, messages: list[dict], tools: Optional[list[dict[str, Any]]]) -> bool:
-    """Check if conversation history should be compacted (without doing it)."""
+class CompactionCheck(BaseModel):
+    """Result of checking whether compaction should run."""
+
+    should_compact: bool
+    initial_tokens: int = 0
+    max_context_size: int = 0
+    original_stats: dict = {}
+
+
+def check_compaction_needed(llm: LLM, messages: list[dict], tools: Optional[list[dict[str, Any]]]) -> CompactionCheck:
+    """Check if conversation history should be compacted (without doing it).
+
+    Returns pre-computed values so callers don't need to recompute them.
+    """
     if not ENABLE_CONVERSATION_HISTORY_COMPACTION:
-        return False
+        return CompactionCheck(should_compact=False)
     initial_tokens = llm.count_tokens(messages=messages, tools=tools)  # type: ignore
     max_context_size = llm.get_context_window_size()
     maximum_output_token = llm.get_maximum_output_token()
-    return (initial_tokens.total_tokens + maximum_output_token) > (
+    should = (initial_tokens.total_tokens + maximum_output_token) > (
         max_context_size * get_context_window_compaction_threshold_pct() / 100
+    )
+    if not should:
+        return CompactionCheck(should_compact=False)
+    stats = compute_conversation_stats(messages)
+    return CompactionCheck(
+        should_compact=True,
+        initial_tokens=initial_tokens.total_tokens,
+        max_context_size=max_context_size,
+        original_stats=stats.model_dump(),
     )
 
 
 @sentry_sdk.trace
 def limit_input_context_window(
-    llm: LLM, messages: list[dict], tools: Optional[list[dict[str, Any]]]
+    llm: LLM,
+    messages: list[dict],
+    tools: Optional[list[dict[str, Any]]],
+    compaction_check: Optional[CompactionCheck] = None,
 ) -> ContextWindowLimiterOutput:
     t0 = time.monotonic()
     events = []
@@ -171,9 +195,9 @@ def limit_input_context_window(
     maximum_output_token = llm.get_maximum_output_token()
     conversation_history_compacted = False
     compaction_usage = CompactionUsage()
-    if ENABLE_CONVERSATION_HISTORY_COMPACTION and (
-        initial_tokens.total_tokens + maximum_output_token
-    ) > (max_context_size * get_context_window_compaction_threshold_pct() / 100):
+    if compaction_check is None:
+        compaction_check = check_compaction_needed(llm, messages, tools)
+    if compaction_check.should_compact:
         try:
             compaction_result = compact_conversation_history(
                 original_conversation_history=messages, llm=llm
