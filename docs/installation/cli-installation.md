@@ -69,7 +69,7 @@ Run HolmesGPT from your terminal as a standalone CLI tool.
 
 === "Docker Container"
 
-    Run HolmesGPT using the prebuilt Docker container:
+    Run HolmesGPT using the prebuilt Docker image — no local Python installation needed:
 
     ```bash
     docker run -it --net=host \
@@ -81,7 +81,7 @@ Run HolmesGPT from your terminal as a standalone CLI tool.
       us-central1-docker.pkg.dev/genuine-flight-317411/devel/holmes ask "what pods are unhealthy and why?"
     ```
 
-    > **Note:** Use `-e` flags to pass API keys for your provider (e.g., `-e ANTHROPIC_API_KEY`, `-e GEMINI_API_KEY`). See [Environment Variables Reference](../reference/environment-variables.md) for the complete list.
+    > **Note:** Use `-e` flags to pass API keys for your provider (e.g., `-e ANTHROPIC_API_KEY`, `-e GEMINI_API_KEY`). See the [full Docker installation guide](docker-installation.md) for volume mounts, image tags, and more.
 
 ## Quick Start
 

@@ -1,5 +1,6 @@
 nav:
     - CLI: cli-installation.md
+    - Docker: docker-installation.md
     - Web UI (3rd party): ui-installation.md
     - Slack Bot (3rd party): slack-installation.md
     - Teams Bot (3rd party): teams-installation.md
