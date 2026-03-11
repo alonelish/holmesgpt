@@ -21,7 +21,8 @@ class StreamEvents(str, Enum):
     APPROVAL_REQUIRED = "approval_required"
     TOKEN_COUNT = "token_count"
     COMPACTION_STARTED = "compaction_started"
-    CONVERSATION_HISTORY_COMPACTED = "conversation_history_compacted"
+    COMPACTION_ENDED = "compaction_ended"
+    COMPACTION_ERROR = "compaction_error"
 
 
 class StreamMessage(BaseModel):

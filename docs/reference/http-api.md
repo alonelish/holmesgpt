@@ -511,18 +511,63 @@ Emitted periodically to provide token usage updates during the chat. This event 
 
 ---
 
-#### `conversation_history_compacted`
+#### `compaction_started`
 
-Emitted when the conversation history has been compacted to fit within the context window. This happens automatically when the conversation grows too large.
+Emitted when conversation history compaction begins. This fires immediately before the compaction LLM call, allowing the UI to show a loading state.
 
 **Payload:**
 ```json
 {
-  "content": "Conversation history was compacted to fit within context limits.",
+  "content": "Compacting conversation history...",
+  "metadata": {
+    "initial_tokens": 150000,
+    "max_context_size": 200000,
+    "original_stats": {
+      "total_messages": 42,
+      "user_messages": 5,
+      "assistant_messages": 12,
+      "tool_calls": 18,
+      "tool_results": 18,
+      "system_messages": 7,
+      "unique_tools_used": ["kubectl_get", "prometheus_query"]
+    }
+  }
+}
+```
+
+**Fields:**
+
+- `content` (string): Human-readable status message
+- `metadata` (object): Pre-compaction state
+  - `initial_tokens` (integer): Token count before compaction
+  - `max_context_size` (integer): Model's total context window
+  - `original_stats` (object): Message counts and tool usage before compaction
+
+---
+
+#### `compaction_ended`
+
+Emitted when conversation history compaction completes successfully.
+
+**Payload:**
+```json
+{
+  "content": "The conversation history has been compacted from 150000 to 8500 tokens",
+  "summary": "LLM-generated summary of the compacted conversation...",
   "messages": [...],
   "metadata": {
     "initial_tokens": 150000,
-    "compacted_tokens": 80000
+    "compacted_tokens": 8500,
+    "compression_ratio": 0.94,
+    "max_context_size": 200000,
+    "compaction_usage": {
+      "total_tokens": 5200,
+      "prompt_tokens": 4800,
+      "completion_tokens": 400,
+      "cost": 0.0052
+    },
+    "original_stats": { "..." : "..." },
+    "compacted_stats": { "..." : "..." }
   }
 }
 ```
@@ -530,10 +575,43 @@ Emitted when the conversation history has been compacted to fit within the conte
 **Fields:**
 
 - `content` (string): Human-readable description of the compaction
+- `summary` (string): LLM-generated summary of the compacted conversation
 - `messages` (array): The compacted conversation history
-- `metadata` (object): Token information about the compaction
+- `metadata` (object): Compaction details
   - `initial_tokens` (integer): Token count before compaction
   - `compacted_tokens` (integer): Token count after compaction
+  - `compression_ratio` (number): Fraction of tokens saved (0-1)
+  - `max_context_size` (integer): Model's total context window
+  - `compaction_usage` (object): Token and cost usage of the compaction LLM call
+  - `original_stats` (object): Message counts and tool usage before compaction
+  - `compacted_stats` (object): Message counts and tool usage after compaction
+
+---
+
+#### `compaction_error`
+
+Emitted when conversation history compaction fails (LLM error, or compaction did not reduce token count).
+
+**Payload:**
+```json
+{
+  "content": "Conversation compaction failed",
+  "error": "Description of what went wrong",
+  "metadata": {
+    "initial_tokens": 150000,
+    "max_context_size": 200000
+  }
+}
+```
+
+**Fields:**
+
+- `content` (string): Human-readable error summary
+- `error` (string): Detailed error description
+- `metadata` (object): Context about the failed compaction
+  - `initial_tokens` (integer): Token count before compaction was attempted
+  - `compacted_tokens` (integer, optional): Present when compaction ran but didn't reduce size
+  - `max_context_size` (integer): Model's total context window
 
 ---
 
@@ -584,8 +662,9 @@ Emitted when an error occurs during processing.
 ### Chat with History Compaction
 
 ```
-1. conversation_history_compacted
-2. start_tool_calling (tool 1)
+1. compaction_started
+2. compaction_ended (or compaction_error)
+3. start_tool_calling (tool 1)
 3. tool_calling_result (tool 1)
 4. token_count
 5. ai_answer_end
