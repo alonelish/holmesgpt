@@ -39,8 +39,10 @@ from holmes.core.tools_utils.tool_context_window_limiter import (
 )
 from holmes.core.tools_utils.tool_executor import ToolExecutor
 from holmes.core.tracing import DummySpan
+from holmes.core.truncation.compaction import compute_conversation_stats
 from holmes.core.truncation.input_context_window_limiter import (
     limit_input_context_window,
+    should_compact,
 )
 from holmes.utils.colors import AI_COLOR
 from holmes.utils.stream import (
@@ -968,6 +970,21 @@ class ToolCallingLLM:
 
             tools = None if i == max_steps else tools
             tool_choice = "auto" if tools else None
+
+            if should_compact(self.llm, messages, tools):
+                pre_compaction_stats = compute_conversation_stats(messages)
+                pre_compaction_tokens = self.llm.count_tokens(messages=messages, tools=tools)  # type: ignore
+                yield StreamMessage(
+                    event=StreamEvents.COMPACTION_STARTED,
+                    data={
+                        "content": "Compacting conversation history...",
+                        "metadata": {
+                            "initial_tokens": pre_compaction_tokens.total_tokens,
+                            "max_context_size": self.llm.get_context_window_size(),
+                            "original_stats": pre_compaction_stats.model_dump(),
+                        },
+                    },
+                )
 
             limit_result = limit_input_context_window(
                 llm=self.llm, messages=messages, tools=tools

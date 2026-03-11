@@ -15,7 +15,7 @@ from holmes.core.llm import (
     get_context_window_compaction_threshold_pct,
 )
 from holmes.core.models import TruncationMetadata, TruncationResult
-from holmes.core.truncation.compaction import CompactionUsage, compact_conversation_history
+from holmes.core.truncation.compaction import CompactionUsage, compact_conversation_history, compute_conversation_stats
 from holmes.utils import sentry_helper
 from holmes.utils.stream import StreamEvents, StreamMessage
 
@@ -145,6 +145,18 @@ class ContextWindowLimiterOutput(BaseModel):
     tokens: TokenCountMetadata
     conversation_history_compacted: bool
     compaction_usage: CompactionUsage = CompactionUsage()
+
+
+def should_compact(llm: LLM, messages: list[dict], tools: Optional[list[dict[str, Any]]]) -> bool:
+    """Check if conversation history should be compacted (without doing it)."""
+    if not ENABLE_CONVERSATION_HISTORY_COMPACTION:
+        return False
+    initial_tokens = llm.count_tokens(messages=messages, tools=tools)  # type: ignore
+    max_context_size = llm.get_context_window_size()
+    maximum_output_token = llm.get_maximum_output_token()
+    return (initial_tokens.total_tokens + maximum_output_token) > (
+        max_context_size * get_context_window_compaction_threshold_pct() / 100
+    )
 
 
 @sentry_sdk.trace

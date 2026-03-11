@@ -20,6 +20,7 @@ class StreamEvents(str, Enum):
     AI_MESSAGE = "ai_message"
     APPROVAL_REQUIRED = "approval_required"
     TOKEN_COUNT = "token_count"
+    COMPACTION_STARTED = "compaction_started"
     CONVERSATION_HISTORY_COMPACTED = "conversation_history_compacted"
 
 
