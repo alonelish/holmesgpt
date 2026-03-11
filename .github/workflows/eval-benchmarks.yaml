@@ -104,6 +104,7 @@ jobs:
           EOF
 
       - name: Run evaluation benchmarks
+        id: run-benchmarks
         env:
           AZURE_API_BASE: ${{ secrets.AZURE_API_BASE }}
           AZURE_API_KEY: ${{ secrets.AZURE_API_KEY }}
@@ -188,7 +189,7 @@ jobs:
           fi
 
       - name: Notify Slack on success
-        if: success()
+        if: steps.run-benchmarks.outcome == 'success'
         env:
           SLACK_TOKEN: ${{ secrets.SLACK_TOKEN }}
         run: |
@@ -199,7 +200,7 @@ jobs:
             -d "{\"channel\": \"#demo-slack-preview\", \"text\": \"Weekly eval benchmarks finished! Here is the PR: ${PR_URL}\"}"
 
       - name: Notify Slack on failure or cancellation
-        if: failure() || cancelled()
+        if: steps.run-benchmarks.outcome != 'success'
         env:
           SLACK_TOKEN: ${{ secrets.SLACK_TOKEN }}
         run: |
