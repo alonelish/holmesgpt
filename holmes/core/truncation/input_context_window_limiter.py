@@ -171,6 +171,7 @@ def limit_input_context_window(
 
         if compacted_total_tokens < initial_tokens.total_tokens:
             messages = compaction_result.messages_after_compaction
+            compression_ratio = round(1 - compacted_total_tokens / initial_tokens.total_tokens, 2) if initial_tokens.total_tokens > 0 else 0
             compaction_message = f"The conversation history has been compacted from {initial_tokens.total_tokens} to {compacted_total_tokens} tokens"
             logging.info(compaction_message)
             conversation_history_compacted = True
@@ -179,10 +180,16 @@ def limit_input_context_window(
                     event=StreamEvents.CONVERSATION_HISTORY_COMPACTED,
                     data={
                         "content": compaction_message,
+                        "summary": compaction_result.summary,
                         "messages": compaction_result.messages_after_compaction,
                         "metadata": {
                             "initial_tokens": initial_tokens.total_tokens,
                             "compacted_tokens": compacted_total_tokens,
+                            "compression_ratio": compression_ratio,
+                            "max_context_size": max_context_size,
+                            "compaction_usage": compaction_result.usage.model_dump(),
+                            "original_stats": compaction_result.original_stats.model_dump(),
+                            "compacted_stats": compaction_result.compacted_stats.model_dump(),
                         },
                     },
                 )

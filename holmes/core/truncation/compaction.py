@@ -1,4 +1,5 @@
 import logging
+from collections import Counter
 from typing import Optional
 
 from litellm.types.utils import ModelResponse
@@ -18,11 +19,70 @@ class CompactionUsage(BaseModel):
     cost: float = 0.0
 
 
+class ConversationStats(BaseModel):
+    """Statistics about a conversation's messages."""
+
+    total_messages: int = 0
+    user_messages: int = 0
+    assistant_messages: int = 0
+    tool_calls: int = 0
+    tool_results: int = 0
+    system_messages: int = 0
+    unique_tools_used: list[str] = []
+
+
+def compute_conversation_stats(messages: list[dict]) -> ConversationStats:
+    """Compute statistics about the messages in a conversation."""
+    role_counts: Counter[str] = Counter()
+    tool_call_count = 0
+    tool_names: list[str] = []
+
+    for msg in messages:
+        role = msg.get("role", "")
+        role_counts[role] += 1
+
+        # Count tool calls from assistant messages
+        if role == "assistant" and msg.get("tool_calls"):
+            for tc in msg["tool_calls"]:
+                tool_call_count += 1
+                fn = tc.get("function", {})
+                name = fn.get("name", "")
+                if name:
+                    tool_names.append(name)
+
+        # Also count tool names from tool result messages
+        if role == "tool" and msg.get("name"):
+            name = msg["name"]
+            if name not in tool_names:
+                tool_names.append(name)
+
+    # Deduplicate while preserving order
+    seen: set[str] = set()
+    unique_tools: list[str] = []
+    for name in tool_names:
+        if name not in seen:
+            seen.add(name)
+            unique_tools.append(name)
+
+    return ConversationStats(
+        total_messages=len(messages),
+        user_messages=role_counts.get("user", 0),
+        assistant_messages=role_counts.get("assistant", 0),
+        tool_calls=tool_call_count,
+        tool_results=role_counts.get("tool", 0),
+        system_messages=role_counts.get("system", 0),
+        unique_tools_used=unique_tools,
+    )
+
+
 class CompactionResult(BaseModel):
     """Result of conversation history compaction."""
 
     messages_after_compaction: list[dict]
     usage: CompactionUsage = CompactionUsage()
+    summary: str = ""
+    original_stats: ConversationStats = ConversationStats()
+    compacted_stats: ConversationStats = ConversationStats()
 
 
 def strip_system_prompt(
@@ -94,6 +154,8 @@ def compact_conversation_history(
         )
         return CompactionResult(messages_after_compaction=original_conversation_history, usage=compaction_usage)
 
+    original_stats = compute_conversation_stats(original_conversation_history)
+
     compacted_conversation_history: list[dict] = []
     if system_prompt_message:
         compacted_conversation_history.append(system_prompt_message)
@@ -102,11 +164,10 @@ def compact_conversation_history(
     if last_user_prompt:
         compacted_conversation_history.append(last_user_prompt)
 
-    compacted_conversation_history.append(
-        response_message.model_dump(
-            exclude_defaults=True, exclude_unset=True, exclude_none=True
-        )
+    response_msg_dict = response_message.model_dump(
+        exclude_defaults=True, exclude_unset=True, exclude_none=True
     )
+    compacted_conversation_history.append(response_msg_dict)
 
     compacted_conversation_history.append(
         {
@@ -114,6 +175,14 @@ def compact_conversation_history(
             "content": "The conversation history has been compacted to preserve available space in the context window. Continue.",
         }
     )
+
+    summary = response_msg_dict.get("content", "")
+    compacted_stats = compute_conversation_stats(compacted_conversation_history)
+
     return CompactionResult(
-        messages_after_compaction=compacted_conversation_history, usage=compaction_usage
+        messages_after_compaction=compacted_conversation_history,
+        usage=compaction_usage,
+        summary=summary,
+        original_stats=original_stats,
+        compacted_stats=compacted_stats,
     )
