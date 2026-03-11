@@ -189,3 +189,4 @@ if __name__ == "__main__":
     body = generate_page_body()
     # Output as JSON string for easy embedding
     print(json.dumps(body))
+# trigger CI
