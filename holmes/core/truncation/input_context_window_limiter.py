@@ -1,6 +1,6 @@
 import logging
 import time
-from typing import Any, Optional
+from typing import Any, Generator, Optional
 
 import sentry_sdk
 from pydantic import BaseModel
@@ -136,6 +136,166 @@ def truncate_messages_to_fit_context(
     return TruncationResult(truncated_messages=messages, truncations=truncations)
 
 
+class CompactionOutput(BaseModel):
+    """Mutable result populated by compact_if_needed."""
+
+    messages: list[dict] = []
+    compacted: bool = False
+    usage: CompactionUsage = CompactionUsage()
+
+
+def compact_if_needed(
+    llm: LLM,
+    messages: list[dict],
+    tools: Optional[list[dict[str, Any]]],
+    initial_tokens: TokenCountMetadata,
+    max_context_size: int,
+    maximum_output_token: int,
+) -> Generator[StreamMessage, None, CompactionOutput]:
+    """Check if compaction is needed and perform it if so.
+
+    Yields COMPACTION_STARTED before the LLM call and COMPACTION_ENDED after.
+    Returns CompactionOutput via generator return value.
+    """
+    output = CompactionOutput(messages=messages)
+
+    if not ENABLE_CONVERSATION_HISTORY_COMPACTION:
+        return output
+
+    threshold = max_context_size * get_context_window_compaction_threshold_pct() / 100
+    if (initial_tokens.total_tokens + maximum_output_token) <= threshold:
+        return output
+
+    # Emit started event with pre-compaction stats
+    original_stats = compute_conversation_stats(messages)
+    yield StreamMessage(
+        event=StreamEvents.COMPACTION_STARTED,
+        data={
+            "content": "Compacting conversation history...",
+            "metadata": {
+                "initial_tokens": initial_tokens.total_tokens,
+                "max_context_size": max_context_size,
+                "original_stats": original_stats.model_dump(),
+            },
+        },
+    )
+
+    # Run compaction
+    try:
+        compaction_result = compact_conversation_history(
+            original_conversation_history=messages, llm=llm
+        )
+    except Exception as e:
+        logging.error(f"Compaction failed with error: {e}", exc_info=True)
+        yield StreamMessage(
+            event=StreamEvents.COMPACTION_ENDED,
+            data={
+                "status": "error",
+                "content": "Conversation compaction failed",
+                "error": str(e),
+                "metadata": {
+                    "initial_tokens": initial_tokens.total_tokens,
+                    "max_context_size": max_context_size,
+                },
+            },
+        )
+        return output
+
+    output.usage = compaction_result.usage
+    compacted_tokens = llm.count_tokens(compaction_result.messages_after_compaction, tools=tools)
+    compacted_total_tokens = compacted_tokens.total_tokens
+
+    if compacted_total_tokens >= initial_tokens.total_tokens:
+        logging.debug(
+            f"Failed to reduce token count when compacting conversation history. "
+            f"Original tokens:{initial_tokens.total_tokens}. Compacted tokens:{compacted_total_tokens}"
+        )
+        yield StreamMessage(
+            event=StreamEvents.COMPACTION_ENDED,
+            data={
+                "status": "error",
+                "content": "Compaction did not reduce token count",
+                "error": f"Compacted size ({compacted_total_tokens} tokens) is not smaller than original ({initial_tokens.total_tokens} tokens)",
+                "metadata": {
+                    "initial_tokens": initial_tokens.total_tokens,
+                    "compacted_tokens": compacted_total_tokens,
+                    "max_context_size": max_context_size,
+                },
+            },
+        )
+        return output
+
+    # Success
+    output.messages = compaction_result.messages_after_compaction
+    output.compacted = True
+    compression_ratio = round(1 - compacted_total_tokens / initial_tokens.total_tokens, 2) if initial_tokens.total_tokens > 0 else 0
+    compaction_message = f"The conversation history has been compacted from {initial_tokens.total_tokens} to {compacted_total_tokens} tokens"
+    logging.info(compaction_message)
+
+    yield StreamMessage(
+        event=StreamEvents.COMPACTION_ENDED,
+        data={
+            "status": "success",
+            "content": compaction_message,
+            "summary": compaction_result.summary,
+            "messages": compaction_result.messages_after_compaction,
+            "metadata": {
+                "initial_tokens": initial_tokens.total_tokens,
+                "compacted_tokens": compacted_total_tokens,
+                "compression_ratio": compression_ratio,
+                "max_context_size": max_context_size,
+                "compaction_usage": compaction_result.usage.model_dump(),
+                "original_stats": compaction_result.original_stats.model_dump(),
+                "compacted_stats": compaction_result.compacted_stats.model_dump(),
+            },
+        },
+    )
+    yield StreamMessage(
+        event=StreamEvents.AI_MESSAGE,
+        data={"content": compaction_message},
+    )
+    return output
+
+
+class TruncationOutput(BaseModel):
+    messages: list[dict]
+    metadata: dict
+    tokens: TokenCountMetadata
+    max_context_size: int
+    maximum_output_token: int
+
+
+def truncate_if_needed(
+    llm: LLM, messages: list[dict], tools: Optional[list[dict[str, Any]]]
+) -> TruncationOutput:
+    """Truncate tool messages if conversation exceeds context window."""
+    tokens = llm.count_tokens(messages=messages, tools=tools)  # type: ignore
+    max_context_size = llm.get_context_window_size()
+    maximum_output_token = llm.get_maximum_output_token()
+    metadata: dict = {}
+
+    if (tokens.total_tokens + maximum_output_token) > max_context_size:
+        truncated_res = truncate_messages_to_fit_context(
+            messages=messages,
+            max_context_size=max_context_size,
+            maximum_output_token=maximum_output_token,
+            count_tokens_fn=llm.count_tokens,
+        )
+        metadata["truncations"] = [t.model_dump() for t in truncated_res.truncations]
+        messages = truncated_res.truncated_messages
+        tokens = llm.count_tokens(messages=messages, tools=tools)  # type: ignore
+    else:
+        metadata["truncations"] = []
+
+    return TruncationOutput(
+        messages=messages,
+        metadata=metadata,
+        tokens=tokens,
+        max_context_size=max_context_size,
+        maximum_output_token=maximum_output_token,
+    )
+
+
 class ContextWindowLimiterOutput(BaseModel):
     metadata: dict
     messages: list[dict]
@@ -147,161 +307,39 @@ class ContextWindowLimiterOutput(BaseModel):
     compaction_usage: CompactionUsage = CompactionUsage()
 
 
-class CompactionCheck(BaseModel):
-    """Result of checking whether compaction should run."""
-
-    should_compact: bool
-    initial_tokens: int = 0
-    max_context_size: int = 0
-    original_stats: dict = {}
-
-
-def check_compaction_needed(llm: LLM, messages: list[dict], tools: Optional[list[dict[str, Any]]]) -> CompactionCheck:
-    """Check if conversation history should be compacted (without doing it).
-
-    Returns pre-computed values so callers don't need to recompute them.
-    """
-    if not ENABLE_CONVERSATION_HISTORY_COMPACTION:
-        return CompactionCheck(should_compact=False)
-    initial_tokens = llm.count_tokens(messages=messages, tools=tools)  # type: ignore
-    max_context_size = llm.get_context_window_size()
-    maximum_output_token = llm.get_maximum_output_token()
-    should = (initial_tokens.total_tokens + maximum_output_token) > (
-        max_context_size * get_context_window_compaction_threshold_pct() / 100
-    )
-    if not should:
-        return CompactionCheck(should_compact=False)
-    stats = compute_conversation_stats(messages)
-    return CompactionCheck(
-        should_compact=True,
-        initial_tokens=initial_tokens.total_tokens,
-        max_context_size=max_context_size,
-        original_stats=stats.model_dump(),
-    )
-
-
 @sentry_sdk.trace
 def limit_input_context_window(
-    llm: LLM,
-    messages: list[dict],
-    tools: Optional[list[dict[str, Any]]],
-    compaction_check: Optional[CompactionCheck] = None,
+    llm: LLM, messages: list[dict], tools: Optional[list[dict[str, Any]]]
 ) -> ContextWindowLimiterOutput:
+    """Non-streaming path: compact + truncate, collecting all events."""
     t0 = time.monotonic()
-    events = []
-    metadata = {}
     initial_tokens = llm.count_tokens(messages=messages, tools=tools)  # type: ignore
     max_context_size = llm.get_context_window_size()
     maximum_output_token = llm.get_maximum_output_token()
-    conversation_history_compacted = False
-    compaction_usage = CompactionUsage()
-    if compaction_check is None:
-        compaction_check = check_compaction_needed(llm, messages, tools)
-    if compaction_check.should_compact:
-        try:
-            compaction_result = compact_conversation_history(
-                original_conversation_history=messages, llm=llm
-            )
-        except Exception as e:
-            logging.error(f"Compaction failed with error: {e}", exc_info=True)
-            events.append(
-                StreamMessage(
-                    event=StreamEvents.COMPACTION_ENDED,
-                    data={
-                        "status": "error",
-                        "content": "Conversation compaction failed",
-                        "error": str(e),
-                        "metadata": {
-                            "initial_tokens": initial_tokens.total_tokens,
-                            "max_context_size": max_context_size,
-                        },
-                    },
-                )
-            )
-        else:
-            compaction_usage = compaction_result.usage
-            compacted_tokens = llm.count_tokens(compaction_result.messages_after_compaction, tools=tools)
-            compacted_total_tokens = compacted_tokens.total_tokens
 
-            if compacted_total_tokens < initial_tokens.total_tokens:
-                messages = compaction_result.messages_after_compaction
-                compression_ratio = round(1 - compacted_total_tokens / initial_tokens.total_tokens, 2) if initial_tokens.total_tokens > 0 else 0
-                compaction_message = f"The conversation history has been compacted from {initial_tokens.total_tokens} to {compacted_total_tokens} tokens"
-                logging.info(compaction_message)
-                conversation_history_compacted = True
-                events.append(
-                    StreamMessage(
-                        event=StreamEvents.COMPACTION_ENDED,
-                        data={
-                            "status": "success",
-                            "content": compaction_message,
-                            "summary": compaction_result.summary,
-                            "messages": compaction_result.messages_after_compaction,
-                            "metadata": {
-                                "initial_tokens": initial_tokens.total_tokens,
-                                "compacted_tokens": compacted_total_tokens,
-                                "compression_ratio": compression_ratio,
-                                "max_context_size": max_context_size,
-                                "compaction_usage": compaction_result.usage.model_dump(),
-                                "original_stats": compaction_result.original_stats.model_dump(),
-                                "compacted_stats": compaction_result.compacted_stats.model_dump(),
-                            },
-                        },
-                    )
-                )
-                events.append(
-                    StreamMessage(
-                        event=StreamEvents.AI_MESSAGE,
-                        data={"content": compaction_message},
-                    )
-                )
-            else:
-                logging.debug(
-                    f"Failed to reduce token count when compacting conversation history. Original tokens:{initial_tokens.total_tokens}. Compacted tokens:{compacted_total_tokens}"
-                )
-                events.append(
-                    StreamMessage(
-                        event=StreamEvents.COMPACTION_ENDED,
-                        data={
-                            "status": "error",
-                            "content": "Compaction did not reduce token count",
-                            "error": f"Compacted size ({compacted_total_tokens} tokens) is not smaller than original ({initial_tokens.total_tokens} tokens)",
-                            "metadata": {
-                                "initial_tokens": initial_tokens.total_tokens,
-                                "compacted_tokens": compacted_total_tokens,
-                                "max_context_size": max_context_size,
-                            },
-                        },
-                    )
-                )
+    # Compact if needed (drain generator, collect events)
+    compaction_gen = compact_if_needed(llm, messages, tools, initial_tokens, max_context_size, maximum_output_token)
+    events: list[StreamMessage] = []
+    compaction_output = CompactionOutput(messages=messages)
+    try:
+        while True:
+            events.append(next(compaction_gen))
+    except StopIteration as e:
+        compaction_output = e.value
 
-    tokens = llm.count_tokens(messages=messages, tools=tools)  # type: ignore
-    if (tokens.total_tokens + maximum_output_token) > max_context_size:
-        # Compaction was not sufficient. Truncating messages.
-        truncated_res = truncate_messages_to_fit_context(
-            messages=messages,
-            max_context_size=max_context_size,
-            maximum_output_token=maximum_output_token,
-            count_tokens_fn=llm.count_tokens,
-        )
-        metadata["truncations"] = [t.model_dump() for t in truncated_res.truncations]
-        messages = truncated_res.truncated_messages
-
-        # recount after truncation
-        tokens = llm.count_tokens(messages=messages, tools=tools)  # type: ignore
-    else:
-        metadata["truncations"] = []
+    # Truncate if still over limit
+    trunc = truncate_if_needed(llm, compaction_output.messages, tools)
 
     elapsed_ms = (time.monotonic() - t0) * 1000
-    logging.debug(f"limit_input_context_window: {elapsed_ms:.1f}ms total | {tokens.total_tokens} tokens")
+    logging.debug(f"limit_input_context_window: {elapsed_ms:.1f}ms total | {trunc.tokens.total_tokens} tokens")
 
     return ContextWindowLimiterOutput(
         events=events,
-        messages=messages,
-        metadata=metadata,
-        max_context_size=max_context_size,
-        maximum_output_token=maximum_output_token,
-        tokens=tokens,
-        conversation_history_compacted=conversation_history_compacted,
-        compaction_usage=compaction_usage,
+        messages=trunc.messages,
+        metadata=trunc.metadata,
+        max_context_size=trunc.max_context_size,
+        maximum_output_token=trunc.maximum_output_token,
+        tokens=trunc.tokens,
+        conversation_history_compacted=compaction_output.compacted,
+        compaction_usage=compaction_output.usage,
     )

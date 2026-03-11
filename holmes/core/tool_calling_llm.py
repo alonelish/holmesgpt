@@ -40,8 +40,9 @@ from holmes.core.tools_utils.tool_context_window_limiter import (
 from holmes.core.tools_utils.tool_executor import ToolExecutor
 from holmes.core.tracing import DummySpan
 from holmes.core.truncation.input_context_window_limiter import (
-    check_compaction_needed,
+    compact_if_needed,
     limit_input_context_window,
+    truncate_if_needed,
 )
 from holmes.utils.colors import AI_COLOR
 from holmes.utils.stream import (
@@ -970,30 +971,27 @@ class ToolCallingLLM:
             tools = None if i == max_steps else tools
             tool_choice = "auto" if tools else None
 
-            compaction_check = check_compaction_needed(self.llm, messages, tools)
-            if compaction_check.should_compact:
-                yield StreamMessage(
-                    event=StreamEvents.COMPACTION_STARTED,
-                    data={
-                        "content": "Compacting conversation history...",
-                        "metadata": {
-                            "initial_tokens": compaction_check.initial_tokens,
-                            "max_context_size": compaction_check.max_context_size,
-                            "original_stats": compaction_check.original_stats,
-                        },
-                    },
-                )
-
-            limit_result = limit_input_context_window(
-                llm=self.llm, messages=messages, tools=tools,
-                compaction_check=compaction_check,
+            # Compact if needed — yields COMPACTION_STARTED before LLM call, COMPACTION_ENDED after
+            initial_tokens = self.llm.count_tokens(messages=messages, tools=tools)  # type: ignore
+            compaction_gen = compact_if_needed(
+                self.llm, messages, tools, initial_tokens,
+                self.llm.get_context_window_size(), self.llm.get_maximum_output_token(),
             )
-            yield from limit_result.events
-            messages = limit_result.messages
-            metadata = metadata | limit_result.metadata
+            compaction_output = None
+            try:
+                while True:
+                    yield next(compaction_gen)
+            except StopIteration as e:
+                compaction_output = e.value
+            messages = compaction_output.messages
 
-            # Accumulate compaction costs (mirrors call() logic)
-            compaction = limit_result.compaction_usage
+            # Truncate if still over limit
+            trunc = truncate_if_needed(self.llm, messages, tools)
+            messages = trunc.messages
+            metadata = metadata | trunc.metadata
+
+            # Accumulate compaction costs
+            compaction = compaction_output.usage
             if compaction.total_tokens > 0:
                 costs.num_compactions += 1
                 costs.total_tokens += compaction.total_tokens
@@ -1006,7 +1004,7 @@ class ToolCallingLLM:
                 )
 
             if (
-                limit_result.conversation_history_compacted
+                compaction_output.compacted
                 and RESET_REPEATED_TOOL_CALL_CHECK_AFTER_COMPACTION
             ):
                 tool_calls = []
@@ -1061,8 +1059,8 @@ class ToolCallingLLM:
             add_token_count_to_metadata(
                 tokens=tokens,
                 full_llm_response=full_response,
-                max_context_size=limit_result.max_context_size,
-                maximum_output_token=limit_result.maximum_output_token,
+                max_context_size=trunc.max_context_size,
+                maximum_output_token=trunc.maximum_output_token,
                 metadata=metadata,
             )
             metadata["costs"] = costs.model_dump()
@@ -1171,8 +1169,8 @@ class ToolCallingLLM:
                 add_token_count_to_metadata(
                     tokens=tokens,
                     full_llm_response=full_response,
-                    max_context_size=limit_result.max_context_size,
-                    maximum_output_token=limit_result.maximum_output_token,
+                    max_context_size=trunc.max_context_size,
+                    maximum_output_token=trunc.maximum_output_token,
                     metadata=metadata,
                 )
                 metadata["costs"] = costs.model_dump()
