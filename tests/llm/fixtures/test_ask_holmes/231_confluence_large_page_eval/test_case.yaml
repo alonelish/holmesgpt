@@ -30,10 +30,24 @@ before_test: |
   SPACE_NAME="Holmes Test Space 231"
   PAGE_TITLE="Platform Incident Post-Mortem Catalogue 2023-2025"
   VERIFICATION_CODE="HOLMES-EVAL-vK7w3nR9pL"
-  TEST_DIR="$(cd "$(dirname "$0")" && pwd)"
+  TMPFILE=$(mktemp /tmp/holmes231_page_XXXXXX.json)
+  trap "rm -f $TMPFILE" EXIT
 
   echo "Generating large page body (~380K tokens)..."
-  PAGE_BODY_JSON=$(python3 "${TEST_DIR}/generate_large_page.py")
+  PAGE_BODY_JSON=$(python3 ./generate_large_page.py)
+
+  echo "Building request payload..."
+  python3 -c "
+  import json, sys
+  body_json = sys.stdin.read()
+  payload = {
+    'type': 'page',
+    'title': '${PAGE_TITLE}',
+    'space': {'key': '${SPACE_KEY}'},
+    'body': {'storage': {'value': json.loads(body_json), 'representation': 'storage'}}
+  }
+  json.dump(payload, open('$TMPFILE', 'w'))
+  " <<< "$PAGE_BODY_JSON"
 
   echo "Creating Confluence space ${SPACE_KEY}..."
   RESPONSE=$(curl -L -s -w "\n%{http_code}" -X POST \
@@ -56,7 +70,7 @@ before_test: |
 
   if [ "$HTTP_CODE" -eq 200 ]; then
     echo "Space created."
-  elif [ "$HTTP_CODE" -eq 409 ]; then
+  elif [ "$HTTP_CODE" -eq 409 ] || [ "$HTTP_CODE" -eq 400 ]; then
     echo "Space already exists, reusing."
   else
     echo "Failed to create space. HTTP ${HTTP_CODE}: ${BODY}"
@@ -69,19 +83,7 @@ before_test: |
     "${CONFLUENCE_SA_BASE_URL}/wiki/rest/api/content" \
     -H "Authorization: Bearer ${CONFLUENCE_SA_API_KEY}" \
     -H "Content-Type: application/json" \
-    -d "{
-      \"type\": \"page\",
-      \"title\": \"${PAGE_TITLE}\",
-      \"space\": {
-        \"key\": \"${SPACE_KEY}\"
-      },
-      \"body\": {
-        \"storage\": {
-          \"value\": ${PAGE_BODY_JSON},
-          \"representation\": \"storage\"
-        }
-      }
-    }")
+    -d @"$TMPFILE")
 
   PAGE_HTTP_CODE=$(echo "$PAGE_RESPONSE" | tail -n1)
   PAGE_BODY_RESP=$(echo "$PAGE_RESPONSE" | sed '$d')
