@@ -67,13 +67,7 @@ investigate_app = typer.Typer(
     help="Investigate firing alerts or tickets",
 )
 app.add_typer(investigate_app, name="investigate")
-generate_app = typer.Typer(
-    add_completion=False,
-    name="generate",
-    no_args_is_help=True,
-    help="Generate new integrations or test data",
-)
-app.add_typer(generate_app, name="generate")
+
 toolset_app = typer.Typer(
     add_completion=False,
     name="toolset",
@@ -502,38 +496,6 @@ def alertmanager(
             write_json_file(json_output_file, results)
 
 
-@generate_app.command("alertmanager-tests")
-def generate_alertmanager_tests(
-    alertmanager_url: Optional[str] = typer.Option(None, help="AlertManager url"),
-    alertmanager_username: Optional[str] = typer.Option(
-        None, help="Username to use for basic auth"
-    ),
-    alertmanager_password: Optional[str] = typer.Option(
-        None, help="Password to use for basic auth"
-    ),
-    output: Optional[Path] = typer.Option(
-        None,
-        help="Path to dump alertmanager alerts as json (if not given, output curl commands instead)",
-    ),
-    config_file: Optional[Path] = opt_config_file,  # type: ignore
-    verbose: Optional[List[bool]] = opt_verbose,
-):
-    """
-    Connect to alertmanager and dump all alerts as either a json file or curl commands to simulate the alert (depending on --output flag)
-    """
-    console = init_logging(verbose)  # type: ignore
-    config = Config.load_from_file(
-        config_file,
-        alertmanager_url=alertmanager_url,
-        alertmanager_username=alertmanager_username,
-        alertmanager_password=alertmanager_password,
-    )
-
-    source = config.create_alertmanager_source()
-    if output is None:
-        source.output_curl_commands(console)
-    else:
-        source.dump_raw_alerts_to_file(output)
 
 
 @investigate_app.command()
