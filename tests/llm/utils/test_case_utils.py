@@ -347,6 +347,9 @@ class TestCaseLoader:
                             test_case = TypeAdapter(AskHolmesTestCase).validate_python(
                                 variant_config
                             )
+                            if test_case.skip:
+                                logging.debug(f"Skipping test case {test_case_id}[{i}] - skip=true")
+                                continue
                             self._add_port_forward_tag(test_case)
                             test_cases.append(test_case)
                         continue  # Skip the normal append at the end
@@ -376,6 +379,10 @@ class TestCaseLoader:
                     logging.debug(
                         f"Skipping test case {test_case_id} - unknown test type"
                     )
+                    continue
+
+                if test_case.skip:
+                    logging.debug(f"Skipping test case {test_case_id} - skip=true")
                     continue
 
                 self._add_port_forward_tag(test_case)
