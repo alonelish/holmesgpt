@@ -14,6 +14,8 @@ from typing import List, Optional, Tuple
 import bashlex
 from bashlex import ast
 
+from holmes.common.env_vars import HOLMES_TOOL_RESULT_STORAGE_PATH
+
 from holmes.plugins.toolsets.bash.common.config import (
     HARDCODED_BLOCKS,
     BashExecutorConfig,
@@ -269,6 +271,18 @@ def validate_segment(
     # Step 3: Check allow list
     for allow_prefix in allow_list:
         if match_prefix(segment, allow_prefix):
+            return ValidationResult(status=ValidationStatus.ALLOWED)
+
+    # Step 3b: Auto-allow read-only commands targeting the tool result storage directory.
+    # Large tool results are saved to disk and the LLM is instructed to read them with
+    # bash commands (cat, grep, head, tail, jq).  These commands may include flags before
+    # the path (e.g. "grep -i pattern /tmp/.holmes/...") which prefix matching can't handle,
+    # so we check if the segment references the storage path directly.
+    _TOOL_RESULT_READ_COMMANDS = {"cat", "head", "tail", "grep", "jq", "wc", "less"}
+    segment_parts = segment.split()
+    if segment_parts and segment_parts[0] in _TOOL_RESULT_READ_COMMANDS:
+        storage_prefix = HOLMES_TOOL_RESULT_STORAGE_PATH
+        if any(arg.startswith(storage_prefix) for arg in segment_parts[1:]):
             return ValidationResult(status=ValidationStatus.ALLOWED)
 
     # Step 4: Not in any list -> needs approval
