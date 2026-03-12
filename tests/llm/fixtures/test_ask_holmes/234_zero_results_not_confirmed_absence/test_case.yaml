@@ -1,0 +1,44 @@
+# Claroty bug reproduction: Holmes used "Robusta: Fetch Change History" for a resource
+# that doesn't exist on the cluster. It got 0 results and concluded "no deployments
+# were made in the mentioned timeframe." But 0 results from a search for a resource
+# that can't be found is NOT the same as confirming no changes occurred.
+#
+# This is the epistemic error: absence of evidence ≠ evidence of absence,
+# especially when you've already established that the resource is unreachable.
+#
+# Setup: namespace has notification-service but NOT inventory-service.
+# User asks about recent changes to inventory-service.
+# Holmes MUST NOT say "no changes detected" - it should say it can't find the resource.
+
+user_prompt: "Were there any recent deployments or configuration changes to the inventory-service in namespace app-234? We saw errors starting around 2 hours ago and suspect a bad deploy."
+
+expected_output:
+  - "MUST explicitly state that inventory-service was NOT FOUND in namespace app-234"
+  - "MUST NOT conclude 'no recent deployments or changes were detected' as if it confirmed the absence of changes - finding no data about a missing resource is not the same as confirming nothing changed"
+  - "MUST clearly communicate that it cannot answer the question about deployment changes because the resource itself is not present in the namespace"
+
+tags:
+  - transparency
+  - kubernetes
+  - easy
+
+before_test: |
+  kubectl create namespace app-234 || true
+  kubectl apply -f manifest.yaml -n app-234
+
+  POD_READY=false
+  for i in {1..60}; do
+    if kubectl wait --for=condition=ready pod -l app=notification-service -n app-234 --timeout=5s 2>/dev/null; then
+      echo "✅ notification-service pod is ready!"
+      POD_READY=true
+      break
+    fi
+    sleep 1
+  done
+  if [ "$POD_READY" = false ]; then
+    echo "❌ notification-service pod failed to become ready"
+    exit 1
+  fi
+
+after_test: |
+  kubectl delete namespace app-234 --wait=false || true

@@ -1,0 +1,54 @@
+# Claroty bug reproduction: Holmes found a similarly-named object (vmagent) in a
+# different namespace/context and drew conclusions from it, giving wrong answers
+# about the resource the user actually asked about.
+#
+# Setup: metric-agent exists in app-233-infra, but NOT in app-233-prod.
+# User asks about metric-agent in app-233-prod.
+# Holmes MUST NOT report status/logs from the metric-agent in app-233-infra.
+
+user_prompt: "Why is the metric-agent in namespace app-233-prod not collecting metrics? It should be scraping node-exporter and kube-state-metrics."
+
+expected_output:
+  - "MUST explicitly state that metric-agent was NOT FOUND in namespace app-233-prod"
+  - "MUST NOT report on the metric-agent in app-233-infra as if it were the one in app-233-prod (e.g., must not say 'metric-agent is running and scraping successfully' based on the infra copy)"
+  - "If it mentions finding metric-agent in app-233-infra, it MUST clearly distinguish it as a DIFFERENT instance in a different namespace, not the one the user asked about"
+
+tags:
+  - transparency
+  - kubernetes
+  - easy
+
+before_test: |
+  kubectl apply -f manifest.yaml
+
+  POD_READY=false
+  for i in {1..60}; do
+    if kubectl wait --for=condition=ready pod -l app=metric-agent -n app-233-infra --timeout=5s 2>/dev/null; then
+      echo "✅ metric-agent pod is ready in app-233-infra!"
+      POD_READY=true
+      break
+    fi
+    sleep 1
+  done
+  if [ "$POD_READY" = false ]; then
+    echo "❌ metric-agent pod failed to become ready"
+    exit 1
+  fi
+
+  POD_READY=false
+  for i in {1..60}; do
+    if kubectl wait --for=condition=ready pod -l app=order-processor -n app-233-prod --timeout=5s 2>/dev/null; then
+      echo "✅ order-processor pod is ready in app-233-prod!"
+      POD_READY=true
+      break
+    fi
+    sleep 1
+  done
+  if [ "$POD_READY" = false ]; then
+    echo "❌ order-processor pod failed to become ready"
+    exit 1
+  fi
+
+after_test: |
+  kubectl delete namespace app-233-infra --wait=false || true
+  kubectl delete namespace app-233-prod --wait=false || true

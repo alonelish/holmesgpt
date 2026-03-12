@@ -1,0 +1,89 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: app-233-infra
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: app-233-prod
+---
+# metric-agent exists in infra namespace - this is the WRONG one
+apiVersion: v1
+kind: Secret
+metadata:
+  name: metric-agent-script
+  namespace: app-233-infra
+type: Opaque
+stringData:
+  app.sh: |
+    #!/bin/sh
+    echo "Metric agent v2.4.1 starting on infra cluster..."
+    while true; do
+      echo "$(date -u +%Y-%m-%dT%H:%M:%SZ) INFO  metric-agent - Scraping target: node-exporter:9100 [success, 142 samples]"
+      echo "$(date -u +%Y-%m-%dT%H:%M:%SZ) INFO  metric-agent - Scraping target: kube-state-metrics:8080 [success, 891 samples]"
+      echo "$(date -u +%Y-%m-%dT%H:%M:%SZ) WARN  metric-agent - High cardinality detected on metric http_requests_total: 4521 series"
+      echo "$(date -u +%Y-%m-%dT%H:%M:%SZ) INFO  metric-agent - Remote write to Cortex: 1033 samples sent in 245ms"
+      sleep 5
+    done
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: metric-agent
+  namespace: app-233-infra
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: metric-agent
+  template:
+    metadata:
+      labels:
+        app: metric-agent
+    spec:
+      containers:
+      - name: metric-agent
+        image: busybox:1.36
+        command: ["sh", "/scripts/app.sh"]
+        resources:
+          requests:
+            memory: "32Mi"
+            cpu: "10m"
+          limits:
+            memory: "64Mi"
+        volumeMounts:
+        - name: app-code
+          mountPath: /scripts
+      volumes:
+      - name: app-code
+        secret:
+          secretName: metric-agent-script
+          defaultMode: 0755
+---
+# A decoy pod in the prod namespace - NOT metric-agent
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: order-processor
+  namespace: app-233-prod
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: order-processor
+  template:
+    metadata:
+      labels:
+        app: order-processor
+    spec:
+      containers:
+      - name: order-processor
+        image: busybox:1.36
+        command: ["sh", "-c", "while true; do echo \"$(date -u +%Y-%m-%dT%H:%M:%SZ) INFO order-processor - Processing batch 42\"; sleep 10; done"]
+        resources:
+          requests:
+            memory: "32Mi"
+            cpu: "10m"
+          limits:
+            memory: "64Mi"
