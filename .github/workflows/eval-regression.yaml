@@ -397,7 +397,7 @@ jobs:
               }
             } else {
               model = '';
-              markers = 'regression';
+              markers = null;
               filter = '';
               iterations = '1';
               branch = '';
@@ -459,11 +459,12 @@ jobs:
             // Apply defaults
             if (!model) model = ${{ toJSON(vars.MODEL) }} || '';
             // Only apply regression default for automatic triggers, not for manual /eval or workflow_dispatch
-            if (!markers && !isManual) markers = 'regression';
+            // Note: markers may be '' (explicitly cleared by evals-id-* label parsing to broaden to all LLM tests)
+            if (markers == null && !isManual) markers = 'regression';
             let iterNum = Math.min(Math.max(parseInt(iterations, 10) || 1, 1), 10);
 
             core.setOutput('model', model);
-            core.setOutput('markers', markers);
+            core.setOutput('markers', markers || '');
             core.setOutput('filter', filter);
             core.setOutput('iterations', iterNum.toString());
             core.setOutput('is_manual', isManual.toString());
