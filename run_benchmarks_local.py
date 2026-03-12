@@ -30,7 +30,7 @@ class BenchmarkRunner:
         markers: str = "regression or benchmark",
         iterations: int = 1,
         filter_tests: Optional[str] = None,
-        parallel_workers: Optional[str] = "auto",
+        parallel_workers: Optional[str] = "2",
         strict_setup: bool = True,
         no_braintrust: bool = False,
         benchmark_type: Optional[str] = None,
@@ -152,7 +152,7 @@ class BenchmarkRunner:
             cmd.extend(["-k", self.filter_tests])
 
         if self.parallel_workers:
-            cmd.extend(["-n", self.parallel_workers])
+            cmd.extend(["-n", self.parallel_workers, "--max-worker-restart=100"])
 
         # Add strict setup mode handling
         if self.strict_setup:
@@ -391,7 +391,7 @@ Environment variables:
     parser.add_argument(
         "--parallel",
         type=str,
-        default="auto",
+        default="2",
         dest="parallel_workers",
         help="Number of parallel workers or 'auto' for automatic detection (pytest -n equivalent) (default: %(default)s)",
     )
