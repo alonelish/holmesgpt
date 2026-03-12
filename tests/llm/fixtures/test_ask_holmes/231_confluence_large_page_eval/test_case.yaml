@@ -21,6 +21,8 @@ expected_output:
 tags:
   - confluence
   - question-answer
+  - context_window
+  - fast
   - hard
 
 before_test: |
