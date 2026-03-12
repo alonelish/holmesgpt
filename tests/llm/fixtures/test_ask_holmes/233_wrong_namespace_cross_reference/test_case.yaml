@@ -1,5 +1,5 @@
-# Claroty bug reproduction: Holmes found a similarly-named object (vmagent) in a
-# different namespace/context and drew conclusions from it, giving wrong answers
+# Bug reproduction: Holmes found a similarly-named object in a different
+# namespace/context and drew conclusions from it, giving wrong answers
 # about the resource the user actually asked about.
 #
 # Setup: metric-agent exists in app-233-infra, but NOT in app-233-prod.

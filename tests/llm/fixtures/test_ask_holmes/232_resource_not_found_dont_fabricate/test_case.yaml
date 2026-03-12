@@ -1,4 +1,4 @@
-# Claroty bug reproduction: Holmes was asked about an app that doesn't exist on the cluster.
+# Bug reproduction: Holmes was asked about an app that doesn't exist on the cluster.
 # Instead of clearly reporting it couldn't find the resource, Holmes kept investigating
 # and fabricated conclusions from unrelated data.
 #

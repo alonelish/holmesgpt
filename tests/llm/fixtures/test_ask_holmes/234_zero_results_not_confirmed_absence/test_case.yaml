@@ -1,4 +1,4 @@
-# Claroty bug reproduction: Holmes used "Robusta: Fetch Change History" for a resource
+# Bug reproduction: Holmes used "Robusta: Fetch Change History" for a resource
 # that doesn't exist on the cluster. It got 0 results and concluded "no deployments
 # were made in the mentioned timeframe." But 0 results from a search for a resource
 # that can't be found is NOT the same as confirming no changes occurred.
