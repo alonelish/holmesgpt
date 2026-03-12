@@ -456,6 +456,12 @@ class ToolCallingLLM:
                 costs.prompt_tokens += compaction.prompt_tokens
                 costs.completion_tokens += compaction.completion_tokens
                 costs.total_cost += compaction.cost
+                costs.max_prompt_tokens_per_call = max(
+                    costs.max_prompt_tokens_per_call, compaction.prompt_tokens
+                )
+                costs.max_completion_tokens_per_call = max(
+                    costs.max_completion_tokens_per_call, compaction.completion_tokens
+                )
 
             if (
                 limit_result.conversation_history_compacted
@@ -988,6 +994,12 @@ class ToolCallingLLM:
                 costs.prompt_tokens += compaction.prompt_tokens
                 costs.completion_tokens += compaction.completion_tokens
                 costs.total_cost += compaction.cost
+                costs.max_prompt_tokens_per_call = max(
+                    costs.max_prompt_tokens_per_call, compaction.prompt_tokens
+                )
+                costs.max_completion_tokens_per_call = max(
+                    costs.max_completion_tokens_per_call, compaction.completion_tokens
+                )
                 cost_logger.debug(
                     f"Compaction cost (streaming): ${compaction.cost:.6f} | "
                     f"Tokens: {compaction.prompt_tokens} prompt + {compaction.completion_tokens} completion = {compaction.total_tokens} total"
