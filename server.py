@@ -398,7 +398,7 @@ def chat(chat_request: ChatRequest, http_request: Request):
             )
         else:
             try:
-                llm_call = ai.call(
+                llm_call = ai.messages_call(
                     messages=messages,
                     trace_span=chat_request.trace_span,
                     response_format=chat_request.response_format,
