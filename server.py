@@ -21,7 +21,7 @@ import litellm
 import sentry_sdk
 import uvicorn
 from fastapi import FastAPI, HTTPException, Request
-from fastapi.responses import JSONResponse, StreamingResponse
+from fastapi.responses import StreamingResponse
 from litellm.exceptions import AuthenticationError
 
 from holmes import get_version, is_official_release
@@ -427,15 +427,6 @@ def chat(chat_request: ChatRequest, http_request: Request):
 scheduled_prompts_executor = ScheduledPromptsExecutor(
     dal=dal, config=config, chat_function=chat
 )
-
-
-DATASOURCE_CATALOG_PATH = Path(__file__).parent / "datasource-catalog.json"
-_datasource_catalog = json.loads(DATASOURCE_CATALOG_PATH.read_text())
-
-
-@app.get("/api/datasources")
-def get_datasources():
-    return JSONResponse(content=_datasource_catalog)
 
 
 @app.get("/api/model")
