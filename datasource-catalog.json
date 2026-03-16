@@ -120,16 +120,6 @@
     "backendToolsetNames": ["grafana/loki"]
   },
   {
-    "id": "coralogix/logs",
-    "name": "Coralogix Logs",
-    "description": "Log analytics and observability",
-    "categories": ["Logs"],
-    "iconUrl": "https://cdn.jsdelivr.net/npm/simple-icons@latest/icons/coralogix.svg",
-    "docsUrl": "https://holmesgpt.dev/data-sources/builtin-toolsets/coralogix-logs/?tab=robusta-helm-chart",
-    "configType": "native",
-    "backendToolsetNames": ["coralogix/logs", "coralogix"]
-  },
-  {
     "id": "opensearch/logs",
     "name": "OpenSearch Logs",
     "description": "Search and log analytics",
@@ -137,7 +127,7 @@
     "iconUrl": "https://cdn.jsdelivr.net/npm/simple-icons@latest/icons/opensearch.svg",
     "docsUrl": "https://holmesgpt.dev/data-sources/builtin-toolsets/elasticsearch/?tab=robusta-helm-chart",
     "configType": "native",
-    "backendToolsetNames": ["opensearch/logs"]
+    "backendToolsetNames": ["opensearch/logs", "elasticsearch/data", "opensearch/query_assist"]
   },
   {
     "id": "elasticsearch/data",
@@ -170,16 +160,6 @@
     "backendToolsetNames": ["datadog/metrics"]
   },
   {
-    "id": "coralogix/metrics",
-    "name": "Coralogix Metrics",
-    "description": "Metrics observability",
-    "categories": ["Metrics"],
-    "iconUrl": "https://cdn.jsdelivr.net/npm/simple-icons@latest/icons/coralogix.svg",
-    "docsUrl": "https://holmesgpt.dev/data-sources/builtin-toolsets/coralogix-logs/?tab=robusta-helm-chart",
-    "configType": "native",
-    "backendToolsetNames": ["coralogix/metrics"]
-  },
-  {
     "id": "opensearch/metrics",
     "name": "OpenSearch Metrics",
     "description": "Metrics analytics",
@@ -187,7 +167,7 @@
     "iconUrl": "https://cdn.jsdelivr.net/npm/simple-icons@latest/icons/opensearch.svg",
     "docsUrl": "https://holmesgpt.dev/data-sources/builtin-toolsets/elasticsearch/?tab=robusta-helm-chart",
     "configType": "native",
-    "backendToolsetNames": ["opensearch/metrics"]
+    "backendToolsetNames": ["opensearch/metrics", "elasticsearch/data"]
   },
   {
     "id": "grafana/tempo",
@@ -210,16 +190,6 @@
     "backendToolsetNames": ["datadog/traces"]
   },
   {
-    "id": "coralogix/traces",
-    "name": "Coralogix Traces",
-    "description": "Distributed tracing",
-    "categories": ["Traces"],
-    "iconUrl": "https://cdn.jsdelivr.net/npm/simple-icons@latest/icons/coralogix.svg",
-    "docsUrl": "https://holmesgpt.dev/data-sources/builtin-toolsets/coralogix-logs/?tab=robusta-helm-chart",
-    "configType": "native",
-    "backendToolsetNames": ["coralogix/traces"]
-  },
-  {
     "id": "opensearch/traces",
     "name": "OpenSearch Traces",
     "description": "Trace analytics",
@@ -227,7 +197,7 @@
     "iconUrl": "https://cdn.jsdelivr.net/npm/simple-icons@latest/icons/opensearch.svg",
     "docsUrl": "https://holmesgpt.dev/data-sources/builtin-toolsets/elasticsearch/?tab=robusta-helm-chart",
     "configType": "native",
-    "backendToolsetNames": ["opensearch/traces"]
+    "backendToolsetNames": ["opensearch/traces", "elasticsearch/data"]
   },
   {
     "id": "newrelic",
@@ -309,7 +279,7 @@
     "configType": "native-mcp",
     "helmPath": "holmes.mcpAddons.confluenceMcp",
     "minRobustaVersion": "0.33.0",
-    "backendToolsetNames": ["confluence-mcp"]
+    "backendToolsetNames": ["confluence-mcp", "confluence_mcp"]
   },
   {
     "id": "sentry-mcp",
