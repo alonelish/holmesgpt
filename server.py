@@ -507,7 +507,7 @@ def validate_toolset(request: ValidateToolsetRequest):
                 for name in builtin_overrides:
                     results.append(ValidateToolsetResult(
                         toolset_name=name,
-                        status=ToolsetStatusEnum.FAILED.value,
+                        status="invalid",
                         error=f"Failed to load toolset config: {e}",
                     ))
 
@@ -524,7 +524,7 @@ def validate_toolset(request: ValidateToolsetRequest):
                 for name in custom_dict:
                     results.append(ValidateToolsetResult(
                         toolset_name=name,
-                        status=ToolsetStatusEnum.FAILED.value,
+                        status="invalid",
                         error=f"Failed to load toolset config: {e}",
                     ))
 
@@ -534,11 +534,13 @@ def validate_toolset(request: ValidateToolsetRequest):
             ToolsetManager.check_toolset_prerequisites(toolsets_to_check, silent=True)
 
         # 9. Build results from checked toolsets
+        #    Map internal statuses: ENABLED -> "valid", FAILED/DISABLED -> "invalid"
         for ts in toolsets_to_check:
-            logging.info(f"Toolset '{ts.name}': status={ts.status.value}, error={ts.error}")
+            status = "valid" if ts.status == ToolsetStatusEnum.ENABLED else "invalid"
+            logging.info(f"Toolset '{ts.name}': status={status}, error={ts.error}")
             results.append(ValidateToolsetResult(
                 toolset_name=ts.name,
-                status=ts.status.value,
+                status=status,
                 error=ts.error,
                 description=ts.description,
             ))
