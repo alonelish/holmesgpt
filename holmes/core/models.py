@@ -193,3 +193,20 @@ class ChatResponse(BaseModel):
     follow_up_actions: Optional[List[FollowUpAction]] = []
     pending_approvals: Optional[List[PendingToolApproval]] = None
     metadata: Optional[Dict[Any, Any]] = None
+
+
+class ValidateToolsetRequest(BaseModel):
+    yaml_config: str = Field(
+        description="Raw YAML string containing the toolset configuration, including the 'holmes:' wrapper."
+    )
+
+
+class ValidateToolsetResult(BaseModel):
+    toolset_name: str
+    status: str = Field(description="Toolset status: 'enabled' or 'failed'")
+    error: Optional[str] = None
+    description: Optional[str] = None
+
+
+class ValidateToolsetResponse(BaseModel):
+    results: List[ValidateToolsetResult]
