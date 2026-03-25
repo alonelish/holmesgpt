@@ -451,19 +451,17 @@ def validate_toolset(request: ValidateToolsetRequest):
             parsed = yaml.safe_load(request.yaml_config)
         except yaml.YAMLError as e:
             logging.error(f"Failed to parse YAML config: {e}")
-            raise HTTPException(status_code=400, detail=f"Invalid YAML: {e}")
+            raise HTTPException(status_code=400, detail=f"Invalid YAML: {e}") from e
 
         if not isinstance(parsed, dict):
             raise HTTPException(status_code=400, detail="YAML must parse to a dictionary")
-
-        logging.info(f"Parsed YAML config: {parsed}")
 
         # 2. Extract toolsets and mcp_servers from under the 'holmes' key
         holmes_config = parsed.get("holmes", parsed)
         toolsets_config = holmes_config.get("toolsets") or {}
         mcp_servers_config = holmes_config.get("mcp_servers") or {}
 
-        logging.info(f"Extracted toolsets: {list(toolsets_config.keys())}, mcp_servers: {list(mcp_servers_config.keys())}")
+        logging.info(f"Validating toolsets: {list(toolsets_config.keys())}, mcp_servers: {list(mcp_servers_config.keys())}")
 
         # 3. Merge MCP servers into the combined dict with type: "mcp"
         combined = dict(toolsets_config)
@@ -557,7 +555,7 @@ def validate_toolset(request: ValidateToolsetRequest):
         raise
     except Exception as e:
         logging.error(f"Unexpected error in /api/toolsets/validate: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=str(e)) from e
 
 
 @app.post("/api/toolsets/refresh")
