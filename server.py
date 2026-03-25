@@ -172,6 +172,9 @@ def _get_next_refresh_interval(
     return default_interval, 0
 
 
+_refresh_event = threading.Event()
+
+
 def _toolset_status_refresh_loop():
     interval = TOOLSET_STATUS_REFRESH_INTERVAL_SECONDS
     if interval <= 0:
@@ -195,7 +198,10 @@ def _toolset_status_refresh_loop():
                     f"Failed MCP server(s) detected, retrying in {sleep_time} seconds"
                 )
 
-            time.sleep(sleep_time)
+            triggered = _refresh_event.wait(timeout=sleep_time)
+            _refresh_event.clear()
+            if triggered:
+                logging.info("Toolset refresh triggered via API call")
             try:
                 changes = config.refresh_server_tool_executor(dal)
                 if changes:
@@ -552,6 +558,14 @@ def validate_toolset(request: ValidateToolsetRequest):
     except Exception as e:
         logging.error(f"Unexpected error in /api/toolsets/validate: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/toolsets/refresh")
+def trigger_toolset_refresh():
+    """Signal the refresh thread to re-check all toolsets now and sync statuses to DB."""
+    logging.info("Received request to trigger toolset refresh")
+    _refresh_event.set()
+    return {"status": "refresh_triggered"}
 
 
 @app.get("/api/model")
