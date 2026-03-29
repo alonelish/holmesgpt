@@ -46,8 +46,16 @@ def validate_toolset(request: ValidateToolsetRequest) -> ValidateToolsetResponse
 
         # 2. Extract toolsets and mcp_servers from under the 'holmes' key
         holmes_config = parsed.get("holmes", parsed)
+        if not isinstance(holmes_config, dict):
+            raise HTTPException(status_code=400, detail="'holmes' value must be a mapping")
+
         toolsets_config = holmes_config.get("toolsets") or {}
         mcp_servers_config = holmes_config.get("mcp_servers") or {}
+
+        if not isinstance(toolsets_config, dict):
+            raise HTTPException(status_code=400, detail="'toolsets' must be a mapping of toolset name to config")
+        if not isinstance(mcp_servers_config, dict):
+            raise HTTPException(status_code=400, detail="'mcp_servers' must be a mapping of server name to config")
 
         logging.info(f"Validating toolsets: {list(toolsets_config.keys())}, mcp_servers: {list(mcp_servers_config.keys())}")
 
@@ -69,6 +77,8 @@ def validate_toolset(request: ValidateToolsetRequest) -> ValidateToolsetResponse
         known_overrides = {}
         custom_dict = {}
         for name, cfg in combined.items():
+            if not isinstance(cfg, dict):
+                raise HTTPException(status_code=400, detail=f"Config for '{name}' must be a mapping, got {type(cfg).__name__}")
             resolved_name = handle_deprecated_toolset_name(name, loaded_names)
             if resolved_name in loaded_by_name:
                 known_overrides[resolved_name] = cfg
