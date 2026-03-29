@@ -22,7 +22,7 @@ _CONFIG: Config
 _REFRESH_EVENT: threading.Event
 
 
-def init_toolsets_app(main_app: FastAPI, config: Config, refresh_event: threading.Event):
+def init_toolsets_app(main_app: FastAPI, config: Config, refresh_event: threading.Event) -> None:
     global _CONFIG, _REFRESH_EVENT
     _CONFIG = config
     _REFRESH_EVENT = refresh_event
@@ -31,7 +31,7 @@ def init_toolsets_app(main_app: FastAPI, config: Config, refresh_event: threadin
 
 
 @toolsets_app.post("/validate")
-def validate_toolset(request: ValidateToolsetRequest):
+def validate_toolset(request: ValidateToolsetRequest) -> ValidateToolsetResponse:
     """Validate a toolset configuration by running check_prerequisites without deploying."""
     try:
         # 1. Parse the YAML string
@@ -147,7 +147,7 @@ def validate_toolset(request: ValidateToolsetRequest):
 
 
 @toolsets_app.post("/refresh")
-def trigger_toolset_refresh():
+def trigger_toolset_refresh() -> dict[str, str]:
     """Signal the refresh thread to re-check all toolsets now and sync statuses to DB."""
     logging.info("Received request to trigger toolset refresh")
     _REFRESH_EVENT.set()
