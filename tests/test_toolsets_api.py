@@ -24,6 +24,13 @@ def _make_fake_toolset(name: str, status: ToolsetStatusEnum = ToolsetStatusEnum.
     )
 
 
+def _mock_executor_with_toolsets(toolsets):
+    """Create a mock ToolExecutor with the given toolsets."""
+    executor = MagicMock()
+    executor.toolsets = toolsets
+    return executor
+
+
 class TestValidateToolset:
     def test_invalid_yaml_returns_400(self, client):
         response = client.post(
@@ -50,10 +57,10 @@ class TestValidateToolset:
         assert "No toolsets or mcp_servers" in response.json()["detail"]
 
     @patch("holmes.toolsets.toolsets_api.ToolsetManager.check_toolset_prerequisites")
-    @patch("holmes.toolsets.toolsets_api.load_builtin_toolsets")
-    def test_builtin_toolset_valid(self, mock_load_builtins, mock_check_prereqs, client):
+    @patch("holmes.toolsets.toolsets_api._CONFIG")
+    def test_builtin_toolset_valid(self, mock_config, mock_check_prereqs, client):
         fake_toolset = _make_fake_toolset("elasticsearch/data")
-        mock_load_builtins.return_value = [fake_toolset]
+        mock_config._server_tool_executor = _mock_executor_with_toolsets([fake_toolset])
 
         def set_enabled(toolsets, silent=False):
             for ts in toolsets:
@@ -81,10 +88,10 @@ holmes:
         assert data["results"][0]["error"] is None
 
     @patch("holmes.toolsets.toolsets_api.ToolsetManager.check_toolset_prerequisites")
-    @patch("holmes.toolsets.toolsets_api.load_builtin_toolsets")
-    def test_builtin_toolset_invalid(self, mock_load_builtins, mock_check_prereqs, client):
+    @patch("holmes.toolsets.toolsets_api._CONFIG")
+    def test_builtin_toolset_invalid(self, mock_config, mock_check_prereqs, client):
         fake_toolset = _make_fake_toolset("elasticsearch/data")
-        mock_load_builtins.return_value = [fake_toolset]
+        mock_config._server_tool_executor = _mock_executor_with_toolsets([fake_toolset])
 
         def set_failed(toolsets, silent=False):
             for ts in toolsets:
@@ -113,9 +120,9 @@ holmes:
 
     @patch("holmes.toolsets.toolsets_api.ToolsetManager.check_toolset_prerequisites")
     @patch("holmes.toolsets.toolsets_api.load_toolsets_from_config")
-    @patch("holmes.toolsets.toolsets_api.load_builtin_toolsets")
-    def test_mcp_server(self, mock_load_builtins, mock_load_from_config, mock_check_prereqs, client):
-        mock_load_builtins.return_value = []
+    @patch("holmes.toolsets.toolsets_api._CONFIG")
+    def test_mcp_server(self, mock_config, mock_load_from_config, mock_check_prereqs, client):
+        mock_config._server_tool_executor = _mock_executor_with_toolsets([])
 
         mcp_toolset = _make_fake_toolset("my-mcp-server")
         mcp_toolset.type = ToolsetType.MCP

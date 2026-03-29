@@ -1,3 +1,4 @@
+import copy
 import logging
 import threading
 from typing import Optional
@@ -13,7 +14,7 @@ from holmes.core.models import (
 )
 from holmes.core.tools import ToolsetStatusEnum, ToolsetType
 from holmes.core.toolset_manager import ToolsetManager, handle_deprecated_toolset_name
-from holmes.plugins.toolsets import load_builtin_toolsets, load_toolsets_from_config
+from holmes.plugins.toolsets import load_toolsets_from_config
 
 toolsets_app = FastAPI()
 
@@ -59,19 +60,19 @@ def validate_toolset(request: ValidateToolsetRequest):
         if not combined:
             raise HTTPException(status_code=400, detail="No toolsets or mcp_servers found in the YAML config")
 
-        # 4. Load all builtin toolset definitions
-        builtin_toolsets = load_builtin_toolsets(dal=None)
-        builtin_names = [t.name for t in builtin_toolsets]
-        builtins_by_name = {t.name: t for t in builtin_toolsets}
+        # 4. Get already-loaded toolsets from the server executor (avoids reloading all builtins)
+        executor = _CONFIG._server_tool_executor
+        loaded_by_name = {t.name: t for t in executor.toolsets} if executor else {}
+        loaded_names = list(loaded_by_name.keys())
 
-        # 5. Split into builtin overrides vs custom/MCP toolsets
-        builtin_overrides = {}
+        # 5. Split into known (already-loaded) toolsets vs custom/MCP toolsets
+        known_overrides = {}
         custom_dict = {}
         for name, cfg in combined.items():
-            resolved_name = handle_deprecated_toolset_name(name, builtin_names)
-            if resolved_name in builtin_names:
-                builtin_overrides[resolved_name] = cfg
-                logging.info(f"Toolset '{name}' (resolved: '{resolved_name}') is a builtin override")
+            resolved_name = handle_deprecated_toolset_name(name, loaded_names)
+            if resolved_name in loaded_by_name:
+                known_overrides[resolved_name] = cfg
+                logging.info(f"Toolset '{name}' (resolved: '{resolved_name}') found in loaded toolsets")
             else:
                 if cfg.get("type") is None:
                     cfg["type"] = ToolsetType.CUSTOMIZED.value
@@ -82,20 +83,20 @@ def validate_toolset(request: ValidateToolsetRequest):
         toolsets_to_check = []
         results = []
 
-        # 6. Handle builtin overrides — merge user config onto the full builtin definition
-        if builtin_overrides:
+        # 6. Handle known toolset overrides — deep copy only the matched toolsets, then apply config
+        if known_overrides:
             try:
-                override_toolsets = load_toolsets_from_config(builtin_overrides, strict_check=False)
+                override_toolsets = load_toolsets_from_config(known_overrides, strict_check=False)
                 for override in override_toolsets:
-                    if override.name in builtins_by_name:
-                        full_toolset = builtins_by_name[override.name]
-                        full_toolset.override_with(override)
-                        full_toolset.enabled = True
-                        toolsets_to_check.append(full_toolset)
-                        logging.info(f"Merged config for builtin toolset '{override.name}'")
+                    if override.name in loaded_by_name:
+                        toolset_copy = copy.copy(loaded_by_name[override.name])
+                        toolset_copy.override_with(override)
+                        toolset_copy.enabled = True
+                        toolsets_to_check.append(toolset_copy)
+                        logging.info(f"Merged config for toolset '{override.name}'")
             except Exception as e:
-                logging.error(f"Failed to load builtin override toolsets: {e}", exc_info=True)
-                for name in builtin_overrides:
+                logging.error(f"Failed to load toolset overrides: {e}", exc_info=True)
+                for name in known_overrides:
                     results.append(ValidateToolsetResult(
                         toolset_name=name,
                         status="invalid",
