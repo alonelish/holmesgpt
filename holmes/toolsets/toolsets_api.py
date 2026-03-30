@@ -13,7 +13,7 @@ from holmes.core.models import (
     ValidateToolsetResult,
 )
 from holmes.core.tools import ToolsetStatusEnum, ToolsetType
-from holmes.core.toolset_manager import ToolsetManager, handle_deprecated_toolset_name
+from holmes.core.toolset_manager import ToolsetManager
 from holmes.plugins.toolsets import load_toolsets_from_config
 
 toolsets_app = FastAPI()
@@ -54,6 +54,7 @@ def validate_toolset(request: ValidateToolsetRequest) -> ValidateToolsetResponse
 
         if not isinstance(toolsets_config, dict):
             raise HTTPException(status_code=400, detail="'toolsets' must be a mapping of toolset name to config")
+        
         if not isinstance(mcp_servers_config, dict):
             raise HTTPException(status_code=400, detail="'mcp_servers' must be a mapping of server name to config")
 
@@ -71,7 +72,6 @@ def validate_toolset(request: ValidateToolsetRequest) -> ValidateToolsetResponse
         # 4. Get already-loaded toolsets from the server executor (avoids reloading all builtins)
         executor = _CONFIG._server_tool_executor
         loaded_by_name = {t.name: t for t in executor.toolsets} if executor else {}
-        loaded_names = list(loaded_by_name.keys())
 
         # 5. Split into known (already-loaded) toolsets vs custom/MCP toolsets
         known_overrides = {}
@@ -79,10 +79,9 @@ def validate_toolset(request: ValidateToolsetRequest) -> ValidateToolsetResponse
         for name, cfg in combined.items():
             if not isinstance(cfg, dict):
                 raise HTTPException(status_code=400, detail=f"Config for '{name}' must be a mapping, got {type(cfg).__name__}")
-            resolved_name = handle_deprecated_toolset_name(name, loaded_names)
-            if resolved_name in loaded_by_name:
-                known_overrides[resolved_name] = cfg
-                logging.info(f"Toolset '{name}' (resolved: '{resolved_name}') found in loaded toolsets")
+            if name in loaded_by_name:
+                known_overrides[name] = cfg
+                logging.info(f"Toolset '{name}' found in loaded toolsets")
             else:
                 if cfg.get("type") is None:
                     cfg["type"] = ToolsetType.CUSTOMIZED.value
