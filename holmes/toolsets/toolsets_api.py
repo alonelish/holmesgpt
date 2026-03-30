@@ -1,6 +1,5 @@
 import logging
 import threading
-from typing import Optional
 
 import yaml
 from fastapi import FastAPI, HTTPException
