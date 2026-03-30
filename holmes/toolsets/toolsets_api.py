@@ -63,6 +63,8 @@ def validate_toolset(request: ValidateToolsetRequest) -> ValidateToolsetResponse
         # 3. Merge MCP servers into the combined dict with type: "mcp"
         combined = dict(toolsets_config)
         for name, mcp_config in mcp_servers_config.items():
+            if not isinstance(mcp_config, dict):
+                raise HTTPException(status_code=400, detail=f"Config for MCP server '{name}' must be a mapping, got {type(mcp_config).__name__}")
             mcp_config["type"] = ToolsetType.MCP.value
             combined[name] = mcp_config
 
