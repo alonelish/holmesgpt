@@ -72,7 +72,6 @@ def validate_toolset(request: ValidateToolsetRequest) -> ValidateToolsetResponse
 
         # 4. Load fresh builtin toolset definitions (safe to mutate, no shared state with server)
         builtin_toolsets = load_builtin_toolsets(dal=None)
-        builtin_names = [t.name for t in builtin_toolsets]
         builtins_by_name = {t.name: t for t in builtin_toolsets}
 
         # 5. Split into builtin overrides vs custom/MCP toolsets
