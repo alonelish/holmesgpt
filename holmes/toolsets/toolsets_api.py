@@ -1,4 +1,3 @@
-import copy
 import logging
 import threading
 from typing import Optional
@@ -14,7 +13,7 @@ from holmes.core.models import (
 )
 from holmes.core.tools import ToolsetStatusEnum, ToolsetType
 from holmes.core.toolset_manager import ToolsetManager
-from holmes.plugins.toolsets import load_toolsets_from_config
+from holmes.plugins.toolsets import load_builtin_toolsets, load_toolsets_from_config
 
 toolsets_app = FastAPI()
 
@@ -71,19 +70,20 @@ def validate_toolset(request: ValidateToolsetRequest) -> ValidateToolsetResponse
         if not combined:
             raise HTTPException(status_code=400, detail="No toolsets or mcp_servers found in the YAML config")
 
-        # 4. Get already-loaded toolsets from the server executor (avoids reloading all builtins)
-        executor = _CONFIG._server_tool_executor
-        loaded_by_name = {t.name: t for t in executor.toolsets} if executor else {}
+        # 4. Load fresh builtin toolset definitions (safe to mutate, no shared state with server)
+        builtin_toolsets = load_builtin_toolsets(dal=None)
+        builtin_names = [t.name for t in builtin_toolsets]
+        builtins_by_name = {t.name: t for t in builtin_toolsets}
 
-        # 5. Split into known (already-loaded) toolsets vs custom/MCP toolsets
-        known_overrides = {}
+        # 5. Split into builtin overrides vs custom/MCP toolsets
+        builtin_overrides = {}
         custom_dict = {}
         for name, cfg in combined.items():
             if not isinstance(cfg, dict):
                 raise HTTPException(status_code=400, detail=f"Config for '{name}' must be a mapping, got {type(cfg).__name__}")
-            if name in loaded_by_name:
-                known_overrides[name] = cfg
-                logging.info(f"Toolset '{name}' found in loaded toolsets")
+            if name in builtins_by_name:
+                builtin_overrides[name] = cfg
+                logging.info(f"Toolset '{name}' is a builtin override")
             else:
                 if cfg.get("type") is None:
                     cfg["type"] = ToolsetType.CUSTOMIZED.value
@@ -94,20 +94,20 @@ def validate_toolset(request: ValidateToolsetRequest) -> ValidateToolsetResponse
         toolsets_to_check = []
         results = []
 
-        # 6. Handle known toolset overrides — deep copy only the matched toolsets, then apply config
-        if known_overrides:
+        # 6. Handle builtin overrides — merge user config onto the fresh builtin definition
+        if builtin_overrides:
             try:
-                override_toolsets = load_toolsets_from_config(known_overrides, strict_check=False)
+                override_toolsets = load_toolsets_from_config(builtin_overrides, strict_check=False)
                 for override in override_toolsets:
-                    if override.name in loaded_by_name:
-                        toolset_copy = copy.copy(loaded_by_name[override.name])
-                        toolset_copy.override_with(override)
-                        toolset_copy.enabled = True
-                        toolsets_to_check.append(toolset_copy)
-                        logging.info(f"Merged config for toolset '{override.name}'")
+                    if override.name in builtins_by_name:
+                        full_toolset = builtins_by_name[override.name]
+                        full_toolset.override_with(override)
+                        full_toolset.enabled = True
+                        toolsets_to_check.append(full_toolset)
+                        logging.info(f"Merged config for builtin toolset '{override.name}'")
             except Exception as e:
-                logging.error(f"Failed to load toolset overrides: {e}", exc_info=True)
-                for name in known_overrides:
+                logging.error(f"Failed to load builtin override toolsets: {e}", exc_info=True)
+                for name in builtin_overrides:
                     results.append(ValidateToolsetResult(
                         toolset_name=name,
                         status="invalid",
