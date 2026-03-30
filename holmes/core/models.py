@@ -195,6 +195,12 @@ class ChatResponse(BaseModel):
     metadata: Optional[Dict[Any, Any]] = None
 
 
+class HolmesToolsetConfig(BaseModel):
+    """Parsed and validated structure of the toolset YAML config."""
+    toolsets: Dict[str, Dict[str, Any]] = Field(default_factory=dict)
+    mcp_servers: Dict[str, Dict[str, Any]] = Field(default_factory=dict)
+
+
 class ValidateToolsetRequest(BaseModel):
     yaml_config: str = Field(
         description="Raw YAML string containing the toolset configuration, including the 'holmes:' wrapper."

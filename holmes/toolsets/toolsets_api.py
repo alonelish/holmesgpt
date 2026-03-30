@@ -6,6 +6,7 @@ from fastapi import FastAPI, HTTPException
 
 from holmes.config import Config
 from holmes.core.models import (
+    HolmesToolsetConfig,
     ValidateToolsetRequest,
     ValidateToolsetResponse,
     ValidateToolsetResult,
@@ -32,7 +33,7 @@ def init_toolsets_app(main_app: FastAPI, config: Config, refresh_event: threadin
 def validate_toolset(request: ValidateToolsetRequest) -> ValidateToolsetResponse:
     """Validate a toolset configuration by running check_prerequisites without deploying."""
     try:
-        # 1. Parse the YAML string
+        # 1. Parse YAML and validate structure via Pydantic model
         try:
             parsed = yaml.safe_load(request.yaml_config)
         except yaml.YAMLError as e:
@@ -42,27 +43,24 @@ def validate_toolset(request: ValidateToolsetRequest) -> ValidateToolsetResponse
         if not isinstance(parsed, dict):
             raise HTTPException(status_code=400, detail="YAML must parse to a dictionary")
 
-        # 2. Extract toolsets and mcp_servers from under the 'holmes' key
-        holmes_config = parsed.get("holmes", parsed)
-        if not isinstance(holmes_config, dict):
+        # Support both "holmes: {toolsets: ...}" and direct "{toolsets: ...}" formats
+        holmes_raw = parsed.get("holmes", parsed)
+        if not isinstance(holmes_raw, dict):
             raise HTTPException(status_code=400, detail="'holmes' value must be a mapping")
 
-        toolsets_config = holmes_config.get("toolsets") or {}
-        mcp_servers_config = holmes_config.get("mcp_servers") or {}
+        try:
+            config = HolmesToolsetConfig(**holmes_raw)
+        except Exception as e:
+            raise HTTPException(status_code=400, detail=f"Invalid config structure: {e}") from e
 
-        if not isinstance(toolsets_config, dict):
-            raise HTTPException(status_code=400, detail="'toolsets' must be a mapping of toolset name to config")
-        
-        if not isinstance(mcp_servers_config, dict):
-            raise HTTPException(status_code=400, detail="'mcp_servers' must be a mapping of server name to config")
+        toolsets_config = config.toolsets
+        mcp_servers_config = config.mcp_servers
 
         logging.info(f"Validating toolsets: {list(toolsets_config.keys())}, mcp_servers: {list(mcp_servers_config.keys())}")
 
-        # 3. Merge MCP servers into the combined dict with type: "mcp"
+        # 2. Merge MCP servers into the combined dict with type: "mcp"
         combined = dict(toolsets_config)
         for name, mcp_config in mcp_servers_config.items():
-            if not isinstance(mcp_config, dict):
-                raise HTTPException(status_code=400, detail=f"Config for MCP server '{name}' must be a mapping, got {type(mcp_config).__name__}")
             mcp_config["type"] = ToolsetType.MCP.value
             combined[name] = mcp_config
 
@@ -77,8 +75,6 @@ def validate_toolset(request: ValidateToolsetRequest) -> ValidateToolsetResponse
         builtin_overrides = {}
         custom_dict = {}
         for name, cfg in combined.items():
-            if not isinstance(cfg, dict):
-                raise HTTPException(status_code=400, detail=f"Config for '{name}' must be a mapping, got {type(cfg).__name__}")
             if name in builtins_by_name:
                 builtin_overrides[name] = cfg
                 logging.info(f"Toolset '{name}' is a builtin override")
