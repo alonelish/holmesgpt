@@ -1,5 +1,6 @@
 import json
 import logging
+from enum import Enum
 from typing import Any, Dict, List, Optional, Union
 
 from pydantic import BaseModel, Field, model_validator
@@ -207,9 +208,14 @@ class ValidateToolsetRequest(BaseModel):
     )
 
 
+class ValidationStatus(str, Enum):
+    VALID = "valid"
+    INVALID = "invalid"
+
+
 class ValidateToolsetResult(BaseModel):
     toolset_name: str
-    status: str = Field(description="Toolset status: 'valid' or 'invalid'")
+    status: ValidationStatus
     error: Optional[str] = None
     description: Optional[str] = None
 

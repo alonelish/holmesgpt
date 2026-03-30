@@ -7,6 +7,7 @@ from fastapi import FastAPI, HTTPException
 from holmes.config import Config
 from holmes.core.models import (
     HolmesToolsetConfig,
+    ValidationStatus,
     ValidateToolsetRequest,
     ValidateToolsetResponse,
     ValidateToolsetResult,
@@ -104,7 +105,7 @@ def validate_toolset(request: ValidateToolsetRequest) -> ValidateToolsetResponse
                 for name in builtin_overrides:
                     results.append(ValidateToolsetResult(
                         toolset_name=name,
-                        status="invalid",
+                        status=ValidationStatus.INVALID,
                         error=f"Failed to load toolset config: {e}",
                     ))
 
@@ -121,7 +122,7 @@ def validate_toolset(request: ValidateToolsetRequest) -> ValidateToolsetResponse
                 for name in custom_dict:
                     results.append(ValidateToolsetResult(
                         toolset_name=name,
-                        status="invalid",
+                        status=ValidationStatus.INVALID,
                         error=f"Failed to load toolset config: {e}",
                     ))
 
@@ -133,7 +134,7 @@ def validate_toolset(request: ValidateToolsetRequest) -> ValidateToolsetResponse
         # 9. Build results from checked toolsets
         #    Map internal statuses: ENABLED -> "valid", FAILED/DISABLED -> "invalid"
         for ts in toolsets_to_check:
-            status = "valid" if ts.status == ToolsetStatusEnum.ENABLED else "invalid"
+            status = ValidationStatus.VALID if ts.status == ToolsetStatusEnum.ENABLED else ValidationStatus.INVALID
             logging.info(f"Toolset '{ts.name}': status={status}, error={ts.error}")
             results.append(ValidateToolsetResult(
                 toolset_name=ts.name,
