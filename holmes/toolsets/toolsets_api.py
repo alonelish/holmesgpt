@@ -89,42 +89,39 @@ def validate_toolset(request: ValidateToolsetRequest) -> ValidateToolsetResponse
         toolsets_to_check = []
         results = []
 
-        # 6. Handle builtin overrides — merge user config onto the fresh builtin definition
-        if builtin_overrides:
+        # 6. Handle builtin overrides — load and merge each individually
+        for name, cfg in builtin_overrides.items():
             try:
-                override_toolsets = load_toolsets_from_config(builtin_overrides, strict_check=False)
-                for override in override_toolsets:
-                    if override.name in builtins_by_name:
-                        full_toolset = builtins_by_name[override.name]
-                        full_toolset.override_with(override)
-                        full_toolset.enabled = True
-                        toolsets_to_check.append(full_toolset)
-                        logging.info(f"Merged config for builtin toolset '{override.name}'")
+                loaded = load_toolsets_from_config({name: cfg}, strict_check=False)
+                if loaded and loaded[0].name in builtins_by_name:
+                    full_toolset = builtins_by_name[loaded[0].name]
+                    full_toolset.override_with(loaded[0])
+                    full_toolset.enabled = True
+                    toolsets_to_check.append(full_toolset)
+                    logging.info(f"Merged config for builtin toolset '{name}'")
             except Exception as e:
-                logging.error(f"Failed to load builtin override toolsets: {e}", exc_info=True)
-                for name in builtin_overrides:
-                    results.append(ValidateToolsetResult(
-                        toolset_name=name,
-                        status=ValidationStatus.INVALID,
-                        error=f"Failed to load toolset config: {e}",
-                    ))
+                logging.error(f"Failed to load builtin toolset '{name}': {e}", exc_info=True)
+                results.append(ValidateToolsetResult(
+                    toolset_name=name,
+                    status=ValidationStatus.INVALID,
+                    error=f"Failed to load toolset config: {e}",
+                ))
 
-        # 7. Handle custom/MCP toolsets
-        if custom_dict:
+        # 7. Handle custom/MCP toolsets — load each individually
+        for name, cfg in custom_dict.items():
             try:
-                custom_toolsets = load_toolsets_from_config(custom_dict, strict_check=True)
-                for ts in custom_toolsets:
-                    ts.enabled = True
-                    toolsets_to_check.append(ts)
-                    logging.info(f"Loaded custom/MCP toolset '{ts.name}'")
+                loaded = load_toolsets_from_config({name: cfg}, strict_check=True)
+                if loaded:
+                    loaded[0].enabled = True
+                    toolsets_to_check.append(loaded[0])
+                    logging.info(f"Loaded custom/MCP toolset '{name}'")
             except Exception as e:
-                logging.error(f"Failed to load custom/MCP toolsets: {e}", exc_info=True)
-                for name in custom_dict:
-                    results.append(ValidateToolsetResult(
-                        toolset_name=name,
-                        status=ValidationStatus.INVALID,
-                        error=f"Failed to load toolset config: {e}",
-                    ))
+                logging.error(f"Failed to load custom/MCP toolset '{name}': {e}", exc_info=True)
+                results.append(ValidateToolsetResult(
+                    toolset_name=name,
+                    status=ValidationStatus.INVALID,
+                    error=f"Failed to load toolset config: {e}",
+                ))
 
         # 8. Run prerequisite checks concurrently
         if toolsets_to_check:
