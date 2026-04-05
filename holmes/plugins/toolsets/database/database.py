@@ -18,7 +18,7 @@ from holmes.core.tools import (
     ToolsetTag,
 )
 from holmes.plugins.toolsets.utils import toolset_name_for_one_liner
-from holmes.utils.pydantic_utils import ToolsetConfig
+from holmes.utils.pydantic_utils import ToolsetConfig, build_config_example
 
 import sqlalchemy
 
@@ -134,6 +134,29 @@ class DatabaseConfig(ToolsetConfig):
     )
 
 
+_DB_CONNECTION_EXAMPLES: Dict[str, str] = {
+    "database/mysql": "mysql+pymysql://user:pass@host:3306/db",
+    "database/postgresql": "postgresql://user:pass@host:5432/db",
+    "database/mssql": "mssql+pymssql://user:pass@host:1433/db",
+    "database/sqlite": "sqlite:///path/to/database.db",
+    "database/clickhouse": "clickhouse://user:pass@host:8123/db",
+    "database/cockroachdb": "postgresql://user:pass@host:26257/db",
+}
+
+
+def _make_config_class(example: str) -> Type[DatabaseConfig]:
+    """Create a DatabaseConfig subclass with a DB-specific connection_url example."""
+
+    class _DbConfig(DatabaseConfig):
+        connection_url: str = Field(
+            title="Connection URL",
+            description=DatabaseConfig.model_fields["connection_url"].description,
+            examples=[example],
+        )
+
+    return _DbConfig
+
+
 class DatabaseToolset(Toolset):
     """Toolset for querying SQL databases via SQLAlchemy.
 
@@ -178,6 +201,10 @@ class DatabaseToolset(Toolset):
             os.path.dirname(__file__), "instructions.jinja2"
         )
 
+        self._instance_config_class: Optional[Type[DatabaseConfig]] = None
+        if name in _DB_CONNECTION_EXAMPLES:
+            self._instance_config_class = _make_config_class(_DB_CONNECTION_EXAMPLES[name])
+
         self._user_llm_instructions = llm_instructions
         self._dialect: Optional[str] = None
         if self._user_llm_instructions:
@@ -187,6 +214,16 @@ class DatabaseToolset(Toolset):
                 + self._user_llm_instructions
             )
 
+
+    def get_config_example(self) -> Optional[Dict[str, Any]]:
+        if self._instance_config_class:
+            return build_config_example(self._instance_config_class)
+        return super().get_config_example()
+
+    def get_config_schema(self) -> Optional[Dict[str, Any]]:
+        if self._instance_config_class:
+            return {self._instance_config_class.__name__: self._instance_config_class.model_json_schema()}
+        return super().get_config_schema()
 
     def prerequisites_callable(self, config: Dict[str, Any]) -> Tuple[bool, str]:
         try:
