@@ -119,64 +119,54 @@
       "backendToolsetNames": ["azure_sql", "Azure/Sql", "azure/sql"]
     },
     {
-      "id": "mysql",
+      "id": "database-mysql",
       "name": "MySQL",
       "description": "Diagnose whether your MySQL database is behind your application issues by querying performance, schema, and slow queries.",
       "categories": ["databases"],
       "iconUrl": "https://cdn.jsdelivr.net/npm/simple-icons@latest/icons/mysql.svg",
-      "docsUrl": "https://holmesgpt.dev/data-sources/builtin-toolsets/database/?tab=robusta-helm-chart",
-      "configType": "native",
-      "backendToolsetNames": ["database/mysql", "mysql", "database"]
+      "docsUrl": "https://holmesgpt.dev/latest/data-sources/builtin-toolsets/database-mysql/?tab=robusta-helm-chart",
+      "configType": "native-mcp",
+      "backendToolsetNames": ["database-mysql", "database/mysql", "mysql", "database"]
     },
     {
-      "id": "postgresql",
+      "id": "database-postgresql",
       "name": "PostgreSQL",
       "description": "Diagnose whether your PostgreSQL database is behind your application issues by querying performance, schema, and slow queries.",
       "categories": ["databases"],
       "iconUrl": "https://cdn.jsdelivr.net/npm/simple-icons@latest/icons/postgresql.svg",
-      "docsUrl": "https://holmesgpt.dev/data-sources/builtin-toolsets/database/?tab=robusta-helm-chart",
-      "configType": "native",
-      "backendToolsetNames": ["database/postgresql", "postgresql", "database"]
+      "docsUrl": "https://holmesgpt.dev/latest/data-sources/builtin-toolsets/database-postgresql/?tab=robusta-helm-chart",
+      "configType": "native-mcp",
+      "backendToolsetNames": ["database-postgresql", "database/postgresql", "postgresql", "database"]
     },
     {
-      "id": "mssql",
+      "id": "database-sqlserver",
       "name": "SQL Server",
       "description": "Diagnose whether your SQL Server database is behind your application issues by querying performance, schema, and slow queries.",
       "categories": ["databases"],
       "iconUrl": "https://cdn.jsdelivr.net/npm/simple-icons@latest/icons/microsoftsqlserver.svg",
-      "docsUrl": "https://holmesgpt.dev/data-sources/builtin-toolsets/database/?tab=robusta-helm-chart",
-      "configType": "native",
-      "backendToolsetNames": ["database/mssql", "mssql", "database"]
+      "docsUrl": "https://holmesgpt.dev/latest/data-sources/builtin-toolsets/database-sqlserver/?tab=robusta-helm-chart",
+      "configType": "native-mcp",
+      "backendToolsetNames": ["database-sqlserver", "database/mssql", "mssql", "database"]
     },
     {
-      "id": "sqlite",
+      "id": "database-sqlite",
       "name": "SQLite",
       "description": "Diagnose whether your SQLite database is behind your application issues by querying schema and data directly.",
       "categories": ["databases"],
       "iconUrl": "https://cdn.jsdelivr.net/npm/simple-icons@latest/icons/sqlite.svg",
-      "docsUrl": "https://holmesgpt.dev/data-sources/builtin-toolsets/database/?tab=robusta-helm-chart",
-      "configType": "native",
-      "backendToolsetNames": ["database/sqlite", "sqlite", "database"]
+      "docsUrl": "https://holmesgpt.dev/latest/data-sources/builtin-toolsets/database-sqlite/?tab=robusta-helm-chart",
+      "configType": "native-mcp",
+      "backendToolsetNames": ["database-sqlite", "database/sqlite", "sqlite", "database"]
     },
     {
-      "id": "clickhouse",
+      "id": "database-clickhouse",
       "name": "ClickHouse",
       "description": "Diagnose whether your ClickHouse database is behind your application issues by querying performance and analytics data.",
       "categories": ["databases"],
       "iconUrl": "https://cdn.jsdelivr.net/npm/simple-icons@latest/icons/clickhouse.svg",
-      "docsUrl": "https://holmesgpt.dev/data-sources/builtin-toolsets/database/?tab=robusta-helm-chart",
-      "configType": "native",
-      "backendToolsetNames": ["database/clickhouse", "clickhouse", "database"]
-    },
-    {
-      "id": "cockroachdb",
-      "name": "CockroachDB",
-      "description": "Diagnose whether your CockroachDB cluster is behind your application issues by querying performance, schema, and slow queries.",
-      "categories": ["databases"],
-      "iconUrl": "https://cdn.jsdelivr.net/npm/simple-icons@latest/icons/cockroachlabs.svg",
-      "docsUrl": "https://holmesgpt.dev/data-sources/builtin-toolsets/database/?tab=robusta-helm-chart",
-      "configType": "native",
-      "backendToolsetNames": ["database/cockroachdb", "cockroachdb", "database"]
+      "docsUrl": "https://holmesgpt.dev/latest/data-sources/builtin-toolsets/database-clickhouse/?tab=robusta-helm-chart",
+      "configType": "native-mcp",
+      "backendToolsetNames": ["database-clickhouse", "database/clickhouse", "clickhouse", "database"]
     },
     {
       "id": "github-mcp",
