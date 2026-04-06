@@ -220,6 +220,9 @@ class DatabaseToolset(Toolset):
             except ValueError:
                 logger.warning(f"Unknown database subtype '{subtype_str}', using UNKNOWN")
 
+        # Set initial meta — updated with detected subtype in prerequisites_callable
+        self.meta = {"type": "database", "subtype": self._subtype.value}
+
         self._user_llm_instructions = llm_instructions
         self._dialect: Optional[str] = None
         if self._user_llm_instructions:
