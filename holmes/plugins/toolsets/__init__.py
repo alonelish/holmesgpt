@@ -117,11 +117,6 @@ def load_python_toolsets(
         AzureSQLToolset(),
         ServiceNowTablesToolset(),
         DatabaseToolset(),
-        DatabaseToolset(name="database-mysql"),
-        DatabaseToolset(name="database-postgresql"),
-        DatabaseToolset(name="database-sqlserver"),
-        DatabaseToolset(name="database-sqlite"),
-        DatabaseToolset(name="database-clickhouse"),
         ElasticsearchDataToolset(),
         ElasticsearchClusterToolset(),
     ]

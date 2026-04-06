@@ -119,54 +119,54 @@
       "backendToolsetNames": ["azure_sql", "Azure/Sql", "azure/sql"]
     },
     {
-      "id": "database-mysql",
+      "id": "mysql",
       "name": "MySQL",
       "description": "Run read-only SQL queries against MySQL",
       "categories": ["databases"],
       "iconUrl": "https://cdn.jsdelivr.net/npm/simple-icons@latest/icons/mysql.svg",
       "docsUrl": "https://holmesgpt.dev/latest/data-sources/builtin-toolsets/database-mysql/?tab=robusta-helm-chart",
       "configType": "native-mcp",
-      "backendToolsetNames": ["database-mysql", "database/mysql", "mysql", "database"]
+      "backendToolsetNames": ["mysql", "database-mysql", "database/mysql", "database"]
     },
     {
-      "id": "database-postgresql",
+      "id": "postgresql",
       "name": "PostgreSQL",
       "description": "Run read-only SQL queries against PostgreSQL",
       "categories": ["databases"],
       "iconUrl": "https://cdn.jsdelivr.net/npm/simple-icons@latest/icons/postgresql.svg",
       "docsUrl": "https://holmesgpt.dev/latest/data-sources/builtin-toolsets/database-postgresql/?tab=robusta-helm-chart",
       "configType": "native-mcp",
-      "backendToolsetNames": ["database-postgresql", "database/postgresql", "postgresql", "database"]
+      "backendToolsetNames": ["postgresql", "database-postgresql", "database/postgresql", "database"]
     },
     {
-      "id": "database-sqlserver",
+      "id": "mssql",
       "name": "SQL Server",
       "description": "Run read-only SQL queries against SQL Server",
       "categories": ["databases"],
       "iconUrl": "https://cdn.jsdelivr.net/npm/simple-icons@latest/icons/microsoftsqlserver.svg",
       "docsUrl": "https://holmesgpt.dev/latest/data-sources/builtin-toolsets/database-sqlserver/?tab=robusta-helm-chart",
       "configType": "native-mcp",
-      "backendToolsetNames": ["database-sqlserver", "database/mssql", "mssql", "database"]
+      "backendToolsetNames": ["mssql", "database-sqlserver", "database/mssql", "database"]
     },
     {
-      "id": "database-sqlite",
+      "id": "sqlite",
       "name": "SQLite",
       "description": "Run read-only SQL queries against SQLite",
       "categories": ["databases"],
       "iconUrl": "https://cdn.jsdelivr.net/npm/simple-icons@latest/icons/sqlite.svg",
       "docsUrl": "https://holmesgpt.dev/latest/data-sources/builtin-toolsets/database-sqlite/?tab=robusta-helm-chart",
       "configType": "native-mcp",
-      "backendToolsetNames": ["database-sqlite", "database/sqlite", "sqlite", "database"]
+      "backendToolsetNames": ["sqlite", "database-sqlite", "database/sqlite", "database"]
     },
     {
-      "id": "database-clickhouse",
+      "id": "clickhouse",
       "name": "ClickHouse",
       "description": "Run read-only SQL queries against ClickHouse",
       "categories": ["databases"],
       "iconUrl": "https://cdn.jsdelivr.net/npm/simple-icons@latest/icons/clickhouse.svg",
       "docsUrl": "https://holmesgpt.dev/latest/data-sources/builtin-toolsets/database-clickhouse/?tab=robusta-helm-chart",
       "configType": "native-mcp",
-      "backendToolsetNames": ["database-clickhouse", "database/clickhouse", "clickhouse", "database"]
+      "backendToolsetNames": ["clickhouse", "database-clickhouse", "database/clickhouse", "database"]
     },
     {
       "id": "github-mcp",
