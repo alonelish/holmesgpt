@@ -66,6 +66,7 @@ class StructuredToolResultStatus(str, Enum):
     ERROR = "error"
     NO_DATA = "no_data"
     APPROVAL_REQUIRED = "approval_required"
+    FRONTEND_PAUSE = "frontend_pause"
 
     def to_color(self) -> str:
         if self == StructuredToolResultStatus.SUCCESS:
@@ -74,6 +75,8 @@ class StructuredToolResultStatus(str, Enum):
             return "red"
         elif self == StructuredToolResultStatus.APPROVAL_REQUIRED:
             return "yellow"
+        elif self == StructuredToolResultStatus.FRONTEND_PAUSE:
+            return "cyan"
         else:
             return "white"
 
@@ -84,6 +87,8 @@ class StructuredToolResultStatus(str, Enum):
             return "❌"
         elif self == StructuredToolResultStatus.APPROVAL_REQUIRED:
             return "⚠️"
+        elif self == StructuredToolResultStatus.FRONTEND_PAUSE:
+            return "⏸"
         else:
             return "⚪️"
 
@@ -193,6 +198,10 @@ class ToolParameter(BaseModel):
     # These are passed through to the OpenAI-formatted schema so the LLM
     # knows about constraints.
     json_schema_extra: Optional[Dict[str, Any]] = None
+    # For union types with multiple non-null branches (anyOf in JSON Schema).
+    # When set, type_to_open_ai_schema emits {"anyOf": [...]} instead of a
+    # single type.  Each entry is a ToolParameter representing one branch.
+    any_of: Optional[List["ToolParameter"]] = None
 
     def is_strict_compatible(self) -> bool:
         """Check if this parameter (and all nested parameters) can be used in strict mode.
@@ -212,6 +221,11 @@ class ToolParameter(BaseModel):
         # Recursively check array items
         if self.items and not self.items.is_strict_compatible():
             return False
+        # Recursively check anyOf branches
+        if self.any_of:
+            for branch in self.any_of:
+                if not branch.is_strict_compatible():
+                    return False
         return True
 
     @property
@@ -725,7 +739,7 @@ class Toolset(BaseModel):
         default_factory=lambda: [ToolsetTag.CORE],
     )
     config: Optional[Any] = None
-    is_default: bool = False
+
     llm_instructions: Optional[str] = None
     transformers: Optional[List[Transformer]] = None
 
@@ -863,17 +877,7 @@ class Toolset(BaseModel):
 
     @property
     def missing_config(self) -> bool:
-        """True when this toolset requires user-supplied configuration that was not provided.
-
-        A toolset does NOT have missing config when any of these hold:
-        1. Already enabled or is_default
-        2. No config_classes (YAML toolsets, simple Python toolsets)
-        3. Config classes exist but all fields have defaults
-        4. Config is required AND was provided by user
-        """
-        if self.enabled or self.is_default:
-            return False
-
+        """True when this toolset has required config fields but no config was provided."""
         if not self.config_classes:
             return False
 
@@ -885,10 +889,7 @@ class Toolset(BaseModel):
         if not requires_config:
             return False
 
-        if self.config is not None:
-            return False
-
-        return True
+        return self.config is None
 
     def check_prerequisites(self, silent: bool = False):
         self.status = ToolsetStatusEnum.ENABLED
