@@ -38,9 +38,13 @@ class FetchNotion(Tool):
     def convert_notion_url(self, url):
         if "api.notion.com" in url:
             return url
-        match = re.search(r"-(\w{32})$", url)
+        # Strip query parameters before extracting ID
+        url_without_params = url.split("?")[0].rstrip("/")
+        match = re.search(r"-?(\w{32})$", url_without_params)
         if match:
-            notion_id = match.group(1)
+            raw_id = match.group(1)
+            # Format as UUID (Notion API requires dashed format)
+            notion_id = f"{raw_id[:8]}-{raw_id[8:12]}-{raw_id[12:16]}-{raw_id[16:20]}-{raw_id[20:]}"
             return f"https://api.notion.com/v1/blocks/{notion_id}/children"
         return url  # Return original URL if no match is found
 
@@ -48,9 +52,11 @@ class FetchNotion(Tool):
         url: str = params["url"]
 
         # Get headers from the toolset configuration
-        additional_headers = (
-            self.toolset.additional_headers if self.toolset.additional_headers else {}
+        additional_headers = dict(
+            self.toolset.internet_config.additional_headers if self.toolset.internet_config and self.toolset.internet_config.additional_headers else {}
         )
+        # Notion API requires a version header
+        additional_headers["Notion-Version"] = "2022-06-28"
         url = self.convert_notion_url(url)
         content, _ = scrape(url, additional_headers)
 
@@ -62,32 +68,81 @@ class FetchNotion(Tool):
                 params=params,
             )
 
+        # scrape() returns error message strings on HTTP failures - check if content is valid JSON
+        try:
+            parsed = json.loads(content)
+        except json.JSONDecodeError:
+            logging.error(f"Notion API returned non-JSON response for {url}: {content[:200]}")
+            return StructuredToolResult(
+                status=StructuredToolResultStatus.ERROR,
+                error=f"Notion API error: {content[:500]}",
+                params=params,
+            )
+
+        logging.info(f"Notion API response for {url}: {json.dumps(parsed)[:500]}")
+
+        result_data = self.parse_notion_content_from_dict(parsed)
+        if not result_data:
+            logging.warning(f"Notion page parsed to empty content. Raw response keys: {list(parsed.keys())}, results count: {len(parsed.get('results', []))}, block types: {[r.get('type') for r in parsed.get('results', [])]}")
+
         return StructuredToolResult(
             status=StructuredToolResultStatus.SUCCESS,
-            data=self.parse_notion_content(content),
+            data=result_data,
             params=params,
         )
 
-    def parse_notion_content(self, content: Any) -> str:
-        data = json.loads(content)
+    # Block types that contain rich_text directly under their type key
+    RICH_TEXT_BLOCK_TYPES = {
+        "paragraph",
+        "heading_1",
+        "heading_2",
+        "heading_3",
+        "bulleted_list_item",
+        "numbered_list_item",
+        "quote",
+        "callout",
+        "toggle",
+        "to_do",
+    }
+
+    HEADING_PREFIXES = {
+        "heading_1": "# ",
+        "heading_2": "## ",
+        "heading_3": "### ",
+    }
+
+    def parse_notion_content_from_dict(self, data: dict) -> str:
         texts = []
 
         for result in data.get("results", []):
-            # Handle paragraph blocks
-            if result.get("type") == "paragraph":
-                rich_texts = result["paragraph"].get("rich_text", [])
-                formatted_text = self.format_rich_text(rich_texts)
-                if formatted_text:
-                    texts.append(formatted_text)
+            block_type = result.get("type")
+            if block_type not in self.RICH_TEXT_BLOCK_TYPES:
+                continue
 
-            # Handle bulleted list items
-            elif result.get("type") == "bulleted_list_item":
-                rich_texts = result["bulleted_list_item"].get("rich_text", [])
-                formatted_text = self.format_rich_text(rich_texts)
-                if formatted_text:
-                    texts.append(f"- {formatted_text}")
+            block_data = result.get(block_type, {})
+            rich_texts = block_data.get("rich_text", [])
+            formatted_text = self.format_rich_text(rich_texts)
+            if not formatted_text:
+                continue
 
-        # Join and return the formatted text
+            # Apply block-type-specific formatting
+            if block_type in self.HEADING_PREFIXES:
+                formatted_text = f"{self.HEADING_PREFIXES[block_type]}{formatted_text}"
+            elif block_type == "bulleted_list_item":
+                formatted_text = f"- {formatted_text}"
+            elif block_type == "numbered_list_item":
+                formatted_text = f"1. {formatted_text}"
+            elif block_type == "quote":
+                formatted_text = f"> {formatted_text}"
+            elif block_type == "to_do":
+                checked = block_data.get("checked", False)
+                checkbox = "[x]" if checked else "[ ]"
+                formatted_text = f"- {checkbox} {formatted_text}"
+            elif block_type == "toggle":
+                formatted_text = f"▶ {formatted_text}"
+
+            texts.append(formatted_text)
+
         return "\n\n".join(texts)
 
     def format_rich_text(self, rich_texts: list) -> str:
