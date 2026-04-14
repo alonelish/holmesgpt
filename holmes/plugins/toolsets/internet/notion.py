@@ -1,7 +1,7 @@
 import json
 import logging
 import re
-from typing import Any, Dict, Tuple
+from typing import Any, ClassVar, Dict, Set, Tuple
 
 from holmes.core.tools import (
     StructuredToolResult,
@@ -92,7 +92,7 @@ class FetchNotion(Tool):
         )
 
     # Block types that contain rich_text directly under their type key
-    RICH_TEXT_BLOCK_TYPES = {
+    RICH_TEXT_BLOCK_TYPES: ClassVar[Set[str]] = {
         "paragraph",
         "heading_1",
         "heading_2",
@@ -105,7 +105,7 @@ class FetchNotion(Tool):
         "to_do",
     }
 
-    HEADING_PREFIXES = {
+    HEADING_PREFIXES: ClassVar[Dict[str, str]] = {
         "heading_1": "# ",
         "heading_2": "## ",
         "heading_3": "### ",
