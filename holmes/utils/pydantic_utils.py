@@ -52,6 +52,9 @@ class ToolsetConfig(BaseModel):
     model_config = ConfigDict(extra="allow")
 
     _deprecated_mappings: ClassVar[Dict[str, Optional[str]]] = {}
+    _name: ClassVar[Optional[str]] = None
+    _description: ClassVar[Optional[str]] = None
+    _icon_url: ClassVar[Optional[str]] = None
 
     @classmethod
     def has_required_fields(cls) -> bool:

@@ -76,6 +76,10 @@ def format_ssl_error_message(prometheus_url: str, error: SSLError) -> str:
 class PrometheusConfig(ToolsetConfig):
     """Prometheus toolset configuration."""
 
+    _name: ClassVar[Optional[str]] = "Prometheus"
+    _description: ClassVar[Optional[str]] = "Standard Prometheus server"
+    _icon_url: ClassVar[Optional[str]] = "https://cdn.simpleicons.org/prometheus/E6522C"
+
     _deprecated_mappings: ClassVar[Dict[str, Optional[str]]] = {
         "headers": "additional_headers",
         "default_metadata_time_window_hrs": "discover_metrics_from_last_hours",
@@ -192,6 +196,10 @@ class PrometheusConfig(ToolsetConfig):
 
 
 class AMPConfig(PrometheusConfig):
+    _name: ClassVar[Optional[str]] = "AWS Managed Prometheus"
+    _description: ClassVar[Optional[str]] = "Amazon Managed Service for Prometheus (AMP) with IAM authentication"
+    _icon_url: ClassVar[Optional[str]] = "https://cdn.simpleicons.org/amazonaws/FF9900"
+
     aws_access_key: Optional[str] = None
     aws_secret_access_key: Optional[str] = None
     aws_region: str
@@ -240,6 +248,10 @@ class AMPConfig(PrometheusConfig):
 
 
 class AzurePrometheusConfig(PrometheusConfig):
+    _name: ClassVar[Optional[str]] = "Azure Managed Prometheus"
+    _description: ClassVar[Optional[str]] = "Azure Monitor managed service for Prometheus with Azure AD authentication"
+    _icon_url: ClassVar[Optional[str]] = "https://cdn.simpleicons.org/microsoftazure/0078D4"
+
     azure_resource: Optional[str] = None
     azure_metadata_endpoint: Optional[str] = None
     azure_token_endpoint: Optional[str] = None

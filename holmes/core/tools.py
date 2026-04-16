@@ -1038,11 +1038,17 @@ class Toolset(BaseModel):
     def get_config_schema(self) -> Optional[Dict[str, Any]]:
         """Returns JSON Schema for the toolset's configuration.
 
-        Returns a dict of { config_class_name: model_json_schema } (if any), otherwise returns None.
+        Returns a dict of { config_class_name: { schema, name, description, icon_url } }
+        (if any), otherwise returns None.
         """
         if self.config_classes:
             return {
-                config_cls.__name__: config_cls.model_json_schema()
+                config_cls.__name__: {
+                    "schema": config_cls.model_json_schema(),
+                    "name": getattr(config_cls, "_name", None) or config_cls.__name__,
+                    "description": getattr(config_cls, "_description", None),
+                    "icon_url": getattr(config_cls, "_icon_url", None),
+                }
                 for config_cls in self.config_classes
             }
         return None
