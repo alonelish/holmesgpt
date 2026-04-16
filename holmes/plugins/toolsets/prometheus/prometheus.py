@@ -211,8 +211,7 @@ class CoralogixPrometheusConfig(PrometheusConfig):
             "https://prom-api.eu2.coralogix.com",
         ],
     )
-    additional_headers: Dict[str, str] = Field(
-        default_factory=dict,
+    additional_headers: Dict[str, str] = Field(  # type: ignore[assignment]
         title="Headers",
         description="Must include your Coralogix API key as a 'token' header",
         examples=[
@@ -258,8 +257,7 @@ class GrafanaCloudPrometheusConfig(PrometheusConfig):
             "https://prometheus-prod-XX-prod-REGION.grafana.net/api/prom",
         ],
     )
-    additional_headers: Dict[str, str] = Field(
-        default_factory=dict,
+    additional_headers: Dict[str, str] = Field(  # type: ignore[assignment]
         title="Headers",
         description="Authorization header with Basic auth (base64 of instance_id:cloud_access_policy_token) or Bearer token",
         examples=[
@@ -346,9 +344,21 @@ class AzurePrometheusConfig(PrometheusConfig):
     azure_metadata_endpoint: Optional[str] = None
     azure_token_endpoint: Optional[str] = None
     azure_use_managed_id: bool = False
-    azure_client_id: Optional[str] = None
-    azure_client_secret: Optional[str] = None
-    azure_tenant_id: Optional[str] = None
+    azure_client_id: str = Field(
+        title="Client ID",
+        description="Azure AD application client ID",
+        examples=["{{ env.AZURE_CLIENT_ID }}"],
+    )
+    azure_client_secret: str = Field(
+        title="Client Secret",
+        description="Azure AD application client secret",
+        examples=["{{ env.AZURE_CLIENT_SECRET }}"],
+    )
+    azure_tenant_id: str = Field(
+        title="Tenant ID",
+        description="Azure AD tenant ID",
+        examples=["{{ env.AZURE_TENANT_ID }}"],
+    )
     verify_ssl: bool = True
 
     # Refresh the Azure bearer token every N seconds (default: 15 minutes)
