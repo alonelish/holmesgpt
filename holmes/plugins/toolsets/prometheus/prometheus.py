@@ -211,7 +211,8 @@ class CoralogixPrometheusConfig(PrometheusConfig):
             "https://prom-api.eu2.coralogix.com",
         ],
     )
-    additional_headers: Dict[str, str] = Field(  # type: ignore[assignment]
+    additional_headers: Dict[str, str] = Field(
+        default={"token": "{{ env.CORALOGIX_API_KEY }}"},
         title="Headers",
         description="Must include your Coralogix API key as a 'token' header",
         examples=[
@@ -257,7 +258,8 @@ class GrafanaCloudPrometheusConfig(PrometheusConfig):
             "https://prometheus-prod-XX-prod-REGION.grafana.net/api/prom",
         ],
     )
-    additional_headers: Dict[str, str] = Field(  # type: ignore[assignment]
+    additional_headers: Dict[str, str] = Field(
+        default={"Authorization": "Basic {{ env.GRAFANA_CLOUD_AUTH }}"},
         title="Headers",
         description="Authorization header with Basic auth (base64 of instance_id:cloud_access_policy_token) or Bearer token",
         examples=[
