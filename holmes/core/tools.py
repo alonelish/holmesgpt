@@ -1048,6 +1048,7 @@ class Toolset(BaseModel):
                     "name": getattr(config_cls, "_name", None) or config_cls.__name__,
                     "description": getattr(config_cls, "_description", None),
                     "icon_url": getattr(config_cls, "_icon_url", None),
+                    "docs_anchor": getattr(config_cls, "_docs_anchor", None),
                 }
                 for config_cls in self.config_classes
             }

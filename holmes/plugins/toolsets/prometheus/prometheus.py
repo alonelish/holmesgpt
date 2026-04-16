@@ -79,6 +79,7 @@ class PrometheusConfig(ToolsetConfig):
     _name: ClassVar[Optional[str]] = "Prometheus"
     _description: ClassVar[Optional[str]] = "Standard Prometheus server"
     _icon_url: ClassVar[Optional[str]] = "https://cdn.simpleicons.org/prometheus/E6522C"
+    _docs_anchor: ClassVar[Optional[str]] = "configuration"
 
     _deprecated_mappings: ClassVar[Dict[str, Optional[str]]] = {
         "headers": "additional_headers",
@@ -195,10 +196,84 @@ class PrometheusConfig(ToolsetConfig):
         return False
 
 
+class CoralogixPrometheusConfig(PrometheusConfig):
+    """Coralogix Prometheus-compatible endpoint configuration."""
+
+    _name: ClassVar[Optional[str]] = "Coralogix"
+    _description: ClassVar[Optional[str]] = "Coralogix Prometheus-compatible metrics endpoint"
+    _icon_url: ClassVar[Optional[str]] = "https://avatars.githubusercontent.com/u/35295744?s=200&v=4"
+    _docs_anchor: ClassVar[Optional[str]] = "coralogix-prometheus"
+
+    prometheus_url: str = Field(  # type: ignore[assignment]
+        title="URL",
+        description="Coralogix Prometheus query endpoint URL",
+        examples=[
+            "https://prom-api.eu2.coralogix.com",
+        ],
+    )
+    additional_headers: Dict[str, str] = Field(
+        default_factory=dict,
+        title="Headers",
+        description="Must include your Coralogix API key as a 'token' header",
+        examples=[
+            {"token": "{{ env.CORALOGIX_API_KEY }}"},
+        ],
+    )
+    discover_metrics_from_last_hours: int = Field(
+        default=72,
+        title="Discover Metrics From Last Hours",
+        description="Time window in hours for metric discovery. Coralogix benefits from a longer lookback window.",
+    )
+
+
+class GooglePrometheusConfig(PrometheusConfig):
+    """Google Managed Prometheus configuration."""
+
+    _name: ClassVar[Optional[str]] = "Google Managed Prometheus"
+    _description: ClassVar[Optional[str]] = "Google Cloud Managed Service for Prometheus (no auth headers needed, uses Workload Identity)"
+    _icon_url: ClassVar[Optional[str]] = "https://raw.githubusercontent.com/gilbarbara/logos/de2c1f96ff6e74ea7ea979b43202e8d4b863c655/logos/google-cloud.svg"
+    _docs_anchor: ClassVar[Optional[str]] = "google-managed-prometheus"
+
+    prometheus_url: str = Field(  # type: ignore[assignment]
+        title="URL",
+        description="Google Managed Prometheus frontend service URL",
+        examples=[
+            "http://frontend.default.svc.cluster.local:9090",
+        ],
+    )
+
+
+class GrafanaCloudPrometheusConfig(PrometheusConfig):
+    """Grafana Cloud (Mimir) Prometheus-compatible endpoint configuration."""
+
+    _name: ClassVar[Optional[str]] = "Grafana Cloud"
+    _description: ClassVar[Optional[str]] = "Grafana Cloud Prometheus endpoint (Mimir) with Basic or Bearer token authentication"
+    _icon_url: ClassVar[Optional[str]] = "https://raw.githubusercontent.com/gilbarbara/logos/de2c1f96ff6e74ea7ea979b43202e8d4b863c655/logos/grafana.svg"
+    _docs_anchor: ClassVar[Optional[str]] = "grafana-cloud-mimir"
+
+    prometheus_url: str = Field(  # type: ignore[assignment]
+        title="URL",
+        description="Grafana Cloud Prometheus endpoint URL",
+        examples=[
+            "https://prometheus-prod-XX-prod-REGION.grafana.net/api/prom",
+        ],
+    )
+    additional_headers: Dict[str, str] = Field(
+        default_factory=dict,
+        title="Headers",
+        description="Authorization header with Basic auth (base64 of instance_id:cloud_access_policy_token) or Bearer token",
+        examples=[
+            {"Authorization": "Basic <base64_encoded_credentials>"},
+            {"Authorization": "Bearer {{ env.GRAFANA_CLOUD_SA_TOKEN }}"},
+        ],
+    )
+
+
 class AMPConfig(PrometheusConfig):
     _name: ClassVar[Optional[str]] = "AWS Managed Prometheus"
     _description: ClassVar[Optional[str]] = "Amazon Managed Service for Prometheus (AMP) with IAM authentication"
     _icon_url: ClassVar[Optional[str]] = "https://raw.githubusercontent.com/gilbarbara/logos/de2c1f96ff6e74ea7ea979b43202e8d4b863c655/logos/aws.svg"
+    _docs_anchor: ClassVar[Optional[str]] = "aws-managed-prometheus-amp"
 
     prometheus_url: str = Field(  # type: ignore[assignment]
         title="URL",
@@ -258,6 +333,7 @@ class AzurePrometheusConfig(PrometheusConfig):
     _name: ClassVar[Optional[str]] = "Azure Managed Prometheus"
     _description: ClassVar[Optional[str]] = "Azure Monitor managed service for Prometheus with Azure AD authentication"
     _icon_url: ClassVar[Optional[str]] = "https://raw.githubusercontent.com/gilbarbara/logos/de2c1f96ff6e74ea7ea979b43202e8d4b863c655/logos/microsoft-azure.svg"
+    _docs_anchor: ClassVar[Optional[str]] = "azure-managed-prometheus"
 
     prometheus_url: str = Field(  # type: ignore[assignment]
         title="URL",
@@ -1804,9 +1880,9 @@ class ExecuteRangeQuery(BasePrometheusTool):
 
 class PrometheusToolset(Toolset):
     config_classes: ClassVar[
-        list[Type[Union[PrometheusConfig, AMPConfig, AzurePrometheusConfig]]]
-    ] = [PrometheusConfig, AMPConfig, AzurePrometheusConfig]
-    config: Optional[Union[PrometheusConfig, AMPConfig, AzurePrometheusConfig]] = None
+        list[Type[Union[PrometheusConfig, CoralogixPrometheusConfig, GooglePrometheusConfig, GrafanaCloudPrometheusConfig, AMPConfig, AzurePrometheusConfig]]]
+    ] = [PrometheusConfig, CoralogixPrometheusConfig, GooglePrometheusConfig, GrafanaCloudPrometheusConfig, AMPConfig, AzurePrometheusConfig]
+    config: Optional[Union[PrometheusConfig, CoralogixPrometheusConfig, GooglePrometheusConfig, GrafanaCloudPrometheusConfig, AMPConfig, AzurePrometheusConfig]] = None
 
     def __init__(self):
         super().__init__(
