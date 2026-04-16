@@ -200,6 +200,13 @@ class AMPConfig(PrometheusConfig):
     _description: ClassVar[Optional[str]] = "Amazon Managed Service for Prometheus (AMP) with IAM authentication"
     _icon_url: ClassVar[Optional[str]] = "https://raw.githubusercontent.com/gilbarbara/logos/de2c1f96ff6e74ea7ea979b43202e8d4b863c655/logos/aws.svg"
 
+    prometheus_url: str = Field(  # type: ignore[assignment]
+        title="URL",
+        description="AWS Managed Prometheus workspace endpoint URL",
+        examples=[
+            "https://aps-workspaces.us-east-1.amazonaws.com/workspaces/ws-xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx/",
+        ],
+    )
     aws_access_key: Optional[str] = None
     aws_secret_access_key: Optional[str] = None
     aws_region: str
@@ -252,6 +259,13 @@ class AzurePrometheusConfig(PrometheusConfig):
     _description: ClassVar[Optional[str]] = "Azure Monitor managed service for Prometheus with Azure AD authentication"
     _icon_url: ClassVar[Optional[str]] = "https://raw.githubusercontent.com/gilbarbara/logos/de2c1f96ff6e74ea7ea979b43202e8d4b863c655/logos/microsoft-azure.svg"
 
+    prometheus_url: str = Field(  # type: ignore[assignment]
+        title="URL",
+        description="Azure Monitor Prometheus workspace endpoint URL",
+        examples=[
+            "https://<your-workspace>.<region>.prometheus.monitor.azure.com:443/",
+        ],
+    )
     azure_resource: Optional[str] = None
     azure_metadata_endpoint: Optional[str] = None
     azure_token_endpoint: Optional[str] = None
