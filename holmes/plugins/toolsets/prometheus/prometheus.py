@@ -198,7 +198,7 @@ class PrometheusConfig(ToolsetConfig):
 class AMPConfig(PrometheusConfig):
     _name: ClassVar[Optional[str]] = "AWS Managed Prometheus"
     _description: ClassVar[Optional[str]] = "Amazon Managed Service for Prometheus (AMP) with IAM authentication"
-    _icon_url: ClassVar[Optional[str]] = "https://cdn.simpleicons.org/amazonaws/FF9900"
+    _icon_url: ClassVar[Optional[str]] = "https://raw.githubusercontent.com/gilbarbara/logos/de2c1f96ff6e74ea7ea979b43202e8d4b863c655/logos/aws.svg"
 
     aws_access_key: Optional[str] = None
     aws_secret_access_key: Optional[str] = None
@@ -250,7 +250,7 @@ class AMPConfig(PrometheusConfig):
 class AzurePrometheusConfig(PrometheusConfig):
     _name: ClassVar[Optional[str]] = "Azure Managed Prometheus"
     _description: ClassVar[Optional[str]] = "Azure Monitor managed service for Prometheus with Azure AD authentication"
-    _icon_url: ClassVar[Optional[str]] = "https://cdn.simpleicons.org/microsoftazure/0078D4"
+    _icon_url: ClassVar[Optional[str]] = "https://raw.githubusercontent.com/gilbarbara/logos/de2c1f96ff6e74ea7ea979b43202e8d4b863c655/logos/microsoft-azure.svg"
 
     azure_resource: Optional[str] = None
     azure_metadata_endpoint: Optional[str] = None
