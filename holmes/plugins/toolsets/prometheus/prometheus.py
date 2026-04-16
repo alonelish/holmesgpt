@@ -347,7 +347,7 @@ class AzurePrometheusConfig(PrometheusConfig):
     azure_client_id: str = Field(
         title="Client ID",
         description="Azure AD application client ID",
-        examples=["{{ env.AZURE_CLIENT_ID }}"],
+        examples=["00000000-0000-0000-0000-000000000000"],
     )
     azure_client_secret: str = Field(
         title="Client Secret",
@@ -357,7 +357,7 @@ class AzurePrometheusConfig(PrometheusConfig):
     azure_tenant_id: str = Field(
         title="Tenant ID",
         description="Azure AD tenant ID",
-        examples=["{{ env.AZURE_TENANT_ID }}"],
+        examples=["00000000-0000-0000-0000-000000000000"],
     )
     verify_ssl: bool = True
 
