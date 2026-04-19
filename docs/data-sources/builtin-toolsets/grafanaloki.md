@@ -84,15 +84,17 @@ toolsets:
 
 ### External URL
 
-If HolmesGPT accesses Loki through an internal URL but you want clickable links in results to use a different URL:
+Only applies to the **Loki via Grafana** setup. If HolmesGPT reaches Grafana through an internal URL but you want the clickable "View in Grafana" links in responses to use a public URL:
 
 ```yaml-toolset-config
 toolsets:
   grafana/loki:
     enabled: true
     config:
-      api_url: http://loki.internal:3100  # Internal URL for API calls
-      external_url: https://loki.example.com  # URL for links in results
+      api_url: http://grafana.monitoring.svc.cluster.local  # Internal URL for API calls
+      api_key: <your grafana API key>
+      grafana_datasource_uid: <loki datasource UID>
+      external_url: https://grafana.example.com  # URL used in clickable links
 ```
 
 ## Capabilities
