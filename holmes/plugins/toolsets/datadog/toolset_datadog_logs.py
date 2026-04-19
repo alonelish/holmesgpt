@@ -224,7 +224,7 @@ class GetLogs(Tool):
             url = f"{self.toolset.dd_config.api_url}/api/v2/logs/events/search"
             headers = get_headers(self.toolset.dd_config)
 
-            storage = self.toolset.dd_config.storage_tiers[-1]
+            storage = self.toolset.dd_config.storage_tier
             payload = {
                 "filter": {
                     "query": params.get("query", "*"),
