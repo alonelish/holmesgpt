@@ -6,6 +6,7 @@ from holmes.utils.pydantic_utils import ToolsetConfig
 
 GRAFANA_ICON_URL = "https://raw.githubusercontent.com/gilbarbara/logos/de2c1f96ff6e74ea7ea979b43202e8d4b863c655/logos/grafana.svg"
 LOKI_ICON_URL = "https://grafana.com/media/docs/loki/logo-grafana-loki.png"
+TEMPO_ICON_URL = "https://grafana.com/static/assets/img/blog/tempo.png"
 
 
 class GrafanaConfig(ToolsetConfig):
@@ -148,4 +149,62 @@ class GrafanaTempoConfig(GrafanaConfig):
         default_factory=GrafanaTempoLabelsConfig,
         title="Labels",
         description="Label mappings for Tempo spans",
+    )
+
+
+class GrafanaTempoProxyConfig(GrafanaTempoConfig):
+    """Tempo accessed via a Grafana datasource proxy (recommended)."""
+
+    _name: ClassVar[Optional[str]] = "Tempo via Grafana"
+    _description: ClassVar[Optional[str]] = (
+        "Query Tempo through a Grafana datasource proxy. Use this when you already "
+        "have Grafana with a Tempo datasource configured."
+    )
+    _icon_url: ClassVar[Optional[str]] = GRAFANA_ICON_URL
+    _docs_anchor: ClassVar[Optional[str]] = "tempo-via-grafana-recommended"
+    _hidden_fields: ClassVar[List[str]] = ["additional_headers"]
+    _recommended: ClassVar[bool] = True
+
+    api_url: str = Field(  # type: ignore[assignment]
+        title="Grafana URL",
+        description="Base URL of your Grafana instance",
+        examples=["http://robusta-grafana.default.svc.cluster.local"],
+    )
+    api_key: str = Field(  # type: ignore[assignment]
+        title="API Key",
+        description="Grafana service account token with Viewer role and Data sources -> Reader permission",
+        examples=["{{ env.GRAFANA_API_KEY }}"],
+        json_schema_extra={"format": "password"},
+    )
+    grafana_datasource_uid: str = Field(  # type: ignore[assignment]
+        title="Tempo Datasource UID",
+        description="UID of the Tempo datasource configured in Grafana",
+        examples=["tempo"],
+    )
+
+
+class DirectTempoConfig(GrafanaTempoConfig):
+    """Direct connection to a Tempo API endpoint without Grafana."""
+
+    _name: ClassVar[Optional[str]] = "Direct Tempo"
+    _description: ClassVar[Optional[str]] = (
+        "Connect directly to a Tempo API endpoint without going through Grafana."
+    )
+    _icon_url: ClassVar[Optional[str]] = TEMPO_ICON_URL
+    _docs_anchor: ClassVar[Optional[str]] = "direct-tempo"
+    _hidden_fields: ClassVar[List[str]] = [
+        "api_key",
+        "grafana_datasource_uid",
+        "external_url",
+    ]
+
+    api_url: str = Field(  # type: ignore[assignment]
+        title="Tempo URL",
+        description="Base URL of your Tempo server",
+        examples=["http://tempo.monitoring.svc.cluster.local:3100"],
+    )
+    additional_headers: Dict[str, str] = Field(
+        default={"X-Scope-OrgID": "<tenant id>"},
+        title="Additional Headers",
+        description="Additional HTTP headers to include in requests",
     )

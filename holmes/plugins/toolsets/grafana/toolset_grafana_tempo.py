@@ -16,7 +16,9 @@ from holmes.core.tools import (
 from holmes.plugins.toolsets.consts import STANDARD_END_DATETIME_TOOL_PARAM_DESCRIPTION
 from holmes.plugins.toolsets.grafana.base_grafana_toolset import BaseGrafanaToolset
 from holmes.plugins.toolsets.grafana.common import (
+    DirectTempoConfig,
     GrafanaTempoConfig,
+    GrafanaTempoProxyConfig,
 )
 from holmes.plugins.toolsets.grafana.grafana_tempo_api import GrafanaTempoAPI
 from holmes.plugins.toolsets.logging_utils.logging_api import (
@@ -134,7 +136,13 @@ def _build_grafana_explore_tempo_url(
 
 
 class BaseGrafanaTempoToolset(BaseGrafanaToolset):
-    config_classes: ClassVar[list[Type[GrafanaTempoConfig]]] = [GrafanaTempoConfig]
+    # base_grafana_toolset tries each class in order and uses the first that
+    # validates. The proxy variant is listed first because it matches the
+    # recommended path in the docs.
+    config_classes: ClassVar[list[Type[GrafanaTempoConfig]]] = [
+        GrafanaTempoProxyConfig,
+        DirectTempoConfig,
+    ]
 
     @property
     def grafana_config(self) -> GrafanaTempoConfig:
