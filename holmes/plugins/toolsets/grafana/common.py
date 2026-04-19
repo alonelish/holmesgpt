@@ -131,14 +131,10 @@ class DirectLokiConfig(GrafanaConfig):
             "http://loki-gateway.loki.svc.cluster.local",
         ],
     )
-    additional_headers: Optional[Dict[str, str]] = Field(
-        default=None,
+    additional_headers: Dict[str, str] = Field(
+        default={"X-Scope-OrgID": "<tenant id>"},
         title="Additional Headers",
-        description=(
-            "HTTP headers to include in requests. For multi-tenant Loki deployments, "
-            "set X-Scope-OrgID to the tenant ID."
-        ),
-        examples=[{"X-Scope-OrgID": "tenant1"}],
+        description="Additional HTTP headers to include in requests",
     )
 
 
