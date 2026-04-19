@@ -93,7 +93,7 @@ class GrafanaLokiProxyConfig(GrafanaConfig):
     api_url: str = Field(  # type: ignore[assignment]
         title="Grafana URL",
         description="Base URL of your Grafana instance",
-        examples=["https://grafana.example.com", "http://grafana.monitoring.svc:3000"],
+        examples=["http://robusta-grafana.default.svc.cluster.local"],
     )
     api_key: str = Field(  # type: ignore[assignment]
         title="API Key",
