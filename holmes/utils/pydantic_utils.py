@@ -160,9 +160,14 @@ def build_config_example(model: Type[BaseModel] | BaseModel) -> Dict[str, Any]:
 
     model_cls: Type[BaseModel] = model if isinstance(model, type) else model.__class__
 
+    # Honor _hidden_fields (set on ToolsetConfig subclasses) so hidden fields
+    # are excluded from the generated YAML example in the same way they are
+    # excluded from the schema returned to the frontend.
+    hidden_fields = set(getattr(model_cls, "_hidden_fields", []) or [])
+
     out: Dict[str, Any] = {}
     for field_name, field_info in model_cls.model_fields.items():
-        if field_info.exclude:
+        if field_info.exclude or field_name in hidden_fields:
             continue
 
         example_value: Any = None

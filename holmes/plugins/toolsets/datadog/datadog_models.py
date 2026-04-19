@@ -1,4 +1,5 @@
 from enum import Enum
+from typing import ClassVar, List
 
 from pydantic import Field
 
@@ -37,6 +38,10 @@ class DatadogMetricsConfig(DatadogBaseConfig):
 class DatadogTracesConfig(DatadogBaseConfig):
     """Configuration for Datadog traces toolset."""
 
+    # Hide list-typed advanced fields from the frontend form and example YAML.
+    # The runtime still accepts them via raw YAML for users who need to override.
+    _hidden_fields: ClassVar[List[str]] = ["indexes"]
+
     indexes: list[str] = Field(
         default_factory=lambda: ["*"],
         description="Datadog trace index patterns to search. Use ['*'] for all indexes",
@@ -46,6 +51,10 @@ class DatadogTracesConfig(DatadogBaseConfig):
 
 class DatadogLogsConfig(DatadogBaseConfig):
     """Configuration for Datadog logs toolset."""
+
+    # Hide list-typed advanced fields from the frontend form and example YAML.
+    # The runtime still accepts them via raw YAML for users who need to override.
+    _hidden_fields: ClassVar[List[str]] = ["indexes", "storage_tiers"]
 
     indexes: list[str] = Field(
         default_factory=lambda: ["*"],
