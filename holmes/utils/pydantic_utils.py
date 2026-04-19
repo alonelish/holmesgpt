@@ -56,6 +56,7 @@ class ToolsetConfig(BaseModel):
     _description: ClassVar[Optional[str]] = None
     _icon_url: ClassVar[Optional[str]] = None
     _docs_anchor: ClassVar[Optional[str]] = None
+    _hidden_fields: ClassVar[List[str]] = []
 
     @classmethod
     def has_required_fields(cls) -> bool:

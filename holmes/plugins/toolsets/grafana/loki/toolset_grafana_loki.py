@@ -1,6 +1,6 @@
 import json
 import os
-from typing import Dict, Optional, Tuple
+from typing import ClassVar, Dict, List, Optional, Tuple, Type
 from urllib.parse import quote
 
 from holmes.core.tools import (
@@ -13,7 +13,13 @@ from holmes.core.tools import (
 from holmes.plugins.toolsets.consts import (
     STANDARD_END_DATETIME_TOOL_PARAM_DESCRIPTION,
 )
-from holmes.plugins.toolsets.grafana.common import GrafanaConfig, get_base_url
+from holmes.plugins.toolsets.grafana.common import (
+    DirectLokiConfig,
+    GrafanaCloudLokiConfig,
+    GrafanaConfig,
+    GrafanaLokiProxyConfig,
+    get_base_url,
+)
 from holmes.plugins.toolsets.grafana.loki_api import (
     execute_loki_query,
 )
@@ -68,6 +74,16 @@ def _build_grafana_loki_explore_url(
 
 
 class GrafanaLokiToolset(BaseGrafanaToolset):
+    # Order matters: base_grafana_toolset uses config_classes[0] as the parser
+    # for the user-supplied config dict. The proxy variant is most inclusive
+    # (inherits all GrafanaConfig fields) and matches the "recommended" path
+    # in the docs, so existing user configs continue to parse successfully.
+    config_classes: ClassVar[List[Type[GrafanaConfig]]] = [
+        GrafanaLokiProxyConfig,
+        DirectLokiConfig,
+        GrafanaCloudLokiConfig,
+    ]
+
     def health_check(self) -> Tuple[bool, str]:
         """Test a dummy query to check if service available."""
         (start, end) = process_timestamps_to_rfc3339(

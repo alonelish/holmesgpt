@@ -1,8 +1,11 @@
-from typing import ClassVar, Dict, Optional
+from typing import ClassVar, Dict, List, Optional
 
 from pydantic import Field
 
 from holmes.utils.pydantic_utils import ToolsetConfig
+
+GRAFANA_ICON_URL = "https://raw.githubusercontent.com/gilbarbara/logos/de2c1f96ff6e74ea7ea979b43202e8d4b863c655/logos/grafana.svg"
+LOKI_ICON_URL = "https://grafana.com/media/docs/loki/logo-grafana-loki.png"
 
 
 class GrafanaConfig(ToolsetConfig):
@@ -72,6 +75,102 @@ def get_base_url(config: GrafanaConfig) -> str:
         return f"{config.api_url}/api/datasources/proxy/uid/{config.grafana_datasource_uid}"
     else:
         return config.api_url
+
+
+class GrafanaLokiProxyConfig(GrafanaConfig):
+    """Loki accessed via a Grafana datasource proxy (recommended)."""
+
+    _name: ClassVar[Optional[str]] = "Loki via Grafana"
+    _description: ClassVar[Optional[str]] = (
+        "Query Loki through a Grafana datasource proxy (recommended)."
+    )
+    _icon_url: ClassVar[Optional[str]] = GRAFANA_ICON_URL
+    _docs_anchor: ClassVar[Optional[str]] = "option-1-through-grafana-recommended"
+    _hidden_fields: ClassVar[List[str]] = ["additional_headers"]
+
+    api_url: str = Field(  # type: ignore[assignment]
+        title="Grafana URL",
+        description="Base URL of your Grafana instance",
+        examples=["https://grafana.example.com", "http://grafana.monitoring.svc:3000"],
+    )
+    api_key: str = Field(  # type: ignore[assignment]
+        title="API Key",
+        description="Grafana service account token with Viewer role",
+        examples=["{{ env.GRAFANA_API_KEY }}"],
+        json_schema_extra={"format": "password"},
+    )
+    grafana_datasource_uid: str = Field(  # type: ignore[assignment]
+        title="Loki Datasource UID",
+        description="UID of the Loki datasource configured in Grafana",
+        examples=["loki"],
+    )
+
+
+class DirectLokiConfig(GrafanaConfig):
+    """Direct connection to a Loki endpoint (self-hosted or multi-tenant)."""
+
+    _name: ClassVar[Optional[str]] = "Direct Loki"
+    _description: ClassVar[Optional[str]] = (
+        "Query a Loki endpoint directly (supports X-Scope-OrgID multi-tenancy via headers)."
+    )
+    _icon_url: ClassVar[Optional[str]] = LOKI_ICON_URL
+    _docs_anchor: ClassVar[Optional[str]] = "direct-connection"
+    _hidden_fields: ClassVar[List[str]] = [
+        "api_key",
+        "grafana_datasource_uid",
+        "external_url",
+    ]
+
+    api_url: str = Field(  # type: ignore[assignment]
+        title="Loki URL",
+        description="Base URL of your Loki server",
+        examples=[
+            "http://loki.monitoring.svc:3100",
+            "http://loki-gateway.loki.svc.cluster.local",
+        ],
+    )
+    additional_headers: Optional[Dict[str, str]] = Field(
+        default=None,
+        title="Additional Headers",
+        description=(
+            "HTTP headers to include in requests. For multi-tenant Loki deployments, "
+            "set X-Scope-OrgID to the tenant ID."
+        ),
+        examples=[{"X-Scope-OrgID": "tenant1"}],
+    )
+
+
+class GrafanaCloudLokiConfig(GrafanaConfig):
+    """Grafana Cloud hosted Loki endpoint with Basic authentication."""
+
+    _name: ClassVar[Optional[str]] = "Grafana Cloud Loki"
+    _description: ClassVar[Optional[str]] = (
+        "Grafana Cloud hosted Loki endpoint with Basic authentication."
+    )
+    _icon_url: ClassVar[Optional[str]] = GRAFANA_ICON_URL
+    _docs_anchor: ClassVar[Optional[str]] = "direct-connection"
+    _hidden_fields: ClassVar[List[str]] = [
+        "api_key",
+        "grafana_datasource_uid",
+        "external_url",
+    ]
+
+    api_url: str = Field(  # type: ignore[assignment]
+        title="Grafana Cloud Loki URL",
+        description="Grafana Cloud Loki endpoint URL for your stack",
+        examples=["https://logs-prod-XXX.grafana.net"],
+    )
+    additional_headers: Dict[str, str] = Field(
+        default={"Authorization": "Basic {{ env.GRAFANA_CLOUD_AUTH }}"},
+        title="Additional Headers",
+        description=(
+            "Authorization header with Basic auth (base64 of user_id:api_token)."
+        ),
+        examples=[
+            {"Authorization": "Basic {{ env.GRAFANA_CLOUD_AUTH }}"},
+            {"Authorization": "Basic <base64_encoded_credentials>"},
+        ],
+    )
 
 
 class GrafanaTempoLabelsConfig(ToolsetConfig):

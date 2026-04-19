@@ -31,13 +31,18 @@ def fetch_notion_tool(notion_toolset):
 
 
 def test_convert_notion_url(fetch_notion_tool):
+    # Notion API requires page IDs in UUID format (with dashes)
     notion_url = (
         "https://www.notion.so/some-page-title-19dc2297bf71806d9fddc40806ae4e4d"
     )
     expected_api_url = (
-        "https://api.notion.com/v1/blocks/19dc2297bf71806d9fddc40806ae4e4d/children"
+        "https://api.notion.com/v1/blocks/19dc2297-bf71-806d-9fdd-c40806ae4e4d/children"
     )
     assert fetch_notion_tool.convert_notion_url(notion_url) == expected_api_url
+
+    # URL with query parameters should still be parsed correctly
+    notion_url_with_params = f"{notion_url}?source=copy_link"
+    assert fetch_notion_tool.convert_notion_url(notion_url_with_params) == expected_api_url
 
     api_url = "https://api.notion.com/v1/blocks/1234/children"
     assert (
@@ -58,10 +63,21 @@ def test_parse_notion_content(fetch_notion_tool):
                     "rich_text": [{"text": {"content": "Bullet point"}}]
                 },
             },
+            {
+                "type": "heading_1",
+                "heading_1": {"rich_text": [{"text": {"content": "A Heading"}}]},
+            },
+            {
+                "type": "to_do",
+                "to_do": {
+                    "rich_text": [{"text": {"content": "A task"}}],
+                    "checked": False,
+                },
+            },
         ]
     }
-    parsed_content = fetch_notion_tool.parse_notion_content(json.dumps(mock_response))
-    expected_output = "Hello World\n\n- Bullet point"
+    parsed_content = fetch_notion_tool.parse_notion_content_from_dict(mock_response)
+    expected_output = "Hello World\n\n- Bullet point\n\n# A Heading\n\n- [ ] A task"
     assert parsed_content == expected_output
 
 

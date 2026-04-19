@@ -1038,21 +1038,36 @@ class Toolset(BaseModel):
     def get_config_schema(self) -> Optional[Dict[str, Any]]:
         """Returns JSON Schema for the toolset's configuration.
 
-        Returns a dict of { config_class_name: { schema, name, description, icon_url } }
+        Returns a dict of { config_class_name: { schema, name, description, icon_url, docs_anchor } }
         (if any), otherwise returns None.
+
+        Fields listed in the config class's `_hidden_fields` ClassVar are stripped from
+        the schema's `properties` and `required` so the frontend doesn't render them.
+        They remain valid at runtime (inherited fields still accept values).
         """
-        if self.config_classes:
-            return {
-                config_cls.__name__: {
-                    "schema": config_cls.model_json_schema(),
-                    "name": getattr(config_cls, "_name", None) or config_cls.__name__,
-                    "description": getattr(config_cls, "_description", None),
-                    "icon_url": getattr(config_cls, "_icon_url", None),
-                    "docs_anchor": getattr(config_cls, "_docs_anchor", None),
-                }
-                for config_cls in self.config_classes
+        if not self.config_classes:
+            return None
+
+        result: Dict[str, Any] = {}
+        for config_cls in self.config_classes:
+            raw_schema = config_cls.model_json_schema()
+            hidden = list(getattr(config_cls, "_hidden_fields", []) or [])
+            if hidden:
+                props = raw_schema.get("properties", {})
+                for name in hidden:
+                    props.pop(name, None)
+                if "required" in raw_schema:
+                    raw_schema["required"] = [
+                        r for r in raw_schema["required"] if r not in hidden
+                    ]
+            result[config_cls.__name__] = {
+                "schema": raw_schema,
+                "name": getattr(config_cls, "_name", None) or config_cls.__name__,
+                "description": getattr(config_cls, "_description", None),
+                "icon_url": getattr(config_cls, "_icon_url", None),
+                "docs_anchor": getattr(config_cls, "_docs_anchor", None),
             }
-        return None
+        return result
 
     def _load_llm_instructions(self, jinja_template: str):
         tool_names = [t.name for t in self.tools]
