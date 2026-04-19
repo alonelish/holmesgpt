@@ -11,10 +11,14 @@ You'll need two keys and your site URL from your Datadog account:
 
 - **API Key**: Found under **Organization Settings > API Keys** (disable 'Remote Config' when creating)
 - **Application Key**: Found under **Organization Settings > Application Keys**
-- **Site URL**: Your Datadog site endpoint
-    - **US (default)**: `https://app.datadoghq.com`
-    - **EU**: `https://app.datadoghq.eu`
-    - **Other regions**: See the [complete list of Datadog sites](https://docs.datadoghq.com/getting_started/site/)
+- **API URL**: Your Datadog site's API endpoint (note: `api.` subdomain, not `app.`)
+    - **US1 (default)**: `https://api.datadoghq.com`
+    - **EU**: `https://api.datadoghq.eu`
+    - **US3**: `https://api.us3.datadoghq.com`
+    - **US5**: `https://api.us5.datadoghq.com`
+    - **AP1**: `https://api.ap1.datadoghq.com`
+    - **GOV**: `https://api.ddog-gov.com`
+    - See the [complete list of Datadog sites](https://docs.datadoghq.com/getting_started/site/) for reference
 
 ### 2. Configure HolmesGPT
 
@@ -35,28 +39,28 @@ You'll need two keys and your site URL from your Datadog account:
         config:
           api_key: "{{ env.DD_API_KEY }}"
           app_key: "{{ env.DD_APP_KEY }}"
-          api_url: https://app.datadoghq.com  # Change for EU/other regions
+          api_url: https://api.datadoghq.com  # Change for EU/other regions
 
       datadog/metrics:
         enabled: true
         config:
           api_key: "{{ env.DD_API_KEY }}"
           app_key: "{{ env.DD_APP_KEY }}"
-          api_url: https://app.datadoghq.com
+          api_url: https://api.datadoghq.com
 
       datadog/traces:
         enabled: true
         config:
           api_key: "{{ env.DD_API_KEY }}"
           app_key: "{{ env.DD_APP_KEY }}"
-          api_url: https://app.datadoghq.com
+          api_url: https://api.datadoghq.com
 
       datadog/general:
         enabled: true
         config:
           api_key: "{{ env.DD_API_KEY }}"
           app_key: "{{ env.DD_APP_KEY }}"
-          api_url: https://app.datadoghq.com
+          api_url: https://api.datadoghq.com
     ```
 
 === "Holmes Helm Chart"
@@ -90,28 +94,28 @@ You'll need two keys and your site URL from your Datadog account:
         config:
           api_key: "{{ env.DD_API_KEY }}"
           app_key: "{{ env.DD_APP_KEY }}"
-          api_url: https://app.datadoghq.com  # Change for EU/other regions
+          api_url: https://api.datadoghq.com  # Change for EU/other regions
 
       datadog/metrics:
         enabled: true
         config:
           api_key: "{{ env.DD_API_KEY }}"
           app_key: "{{ env.DD_APP_KEY }}"
-          api_url: https://app.datadoghq.com
+          api_url: https://api.datadoghq.com
 
       datadog/traces:
         enabled: true
         config:
           api_key: "{{ env.DD_API_KEY }}"
           app_key: "{{ env.DD_APP_KEY }}"
-          api_url: https://app.datadoghq.com
+          api_url: https://api.datadoghq.com
 
       datadog/general:
         enabled: true
         config:
           api_key: "{{ env.DD_API_KEY }}"
           app_key: "{{ env.DD_APP_KEY }}"
-          api_url: https://app.datadoghq.com
+          api_url: https://api.datadoghq.com
     ```
 
 === "Robusta Helm Chart"
@@ -146,28 +150,28 @@ You'll need two keys and your site URL from your Datadog account:
           config:
             api_key: "{{ env.DD_API_KEY }}"
             app_key: "{{ env.DD_APP_KEY }}"
-            api_url: https://app.datadoghq.com  # Change for EU/other regions
+            api_url: https://api.datadoghq.com  # Change for EU/other regions
 
         datadog/metrics:
           enabled: true
           config:
             api_key: "{{ env.DD_API_KEY }}"
             app_key: "{{ env.DD_APP_KEY }}"
-            api_url: https://app.datadoghq.com
+            api_url: https://api.datadoghq.com
 
         datadog/traces:
           enabled: true
           config:
             api_key: "{{ env.DD_API_KEY }}"
             app_key: "{{ env.DD_APP_KEY }}"
-            api_url: https://app.datadoghq.com
+            api_url: https://api.datadoghq.com
 
         datadog/general:
           enabled: true
           config:
             api_key: "{{ env.DD_API_KEY }}"
             app_key: "{{ env.DD_APP_KEY }}"
-            api_url: https://app.datadoghq.com
+            api_url: https://api.datadoghq.com
     ```
 
 ### 3. Test It Works
