@@ -17,6 +17,7 @@ from holmes.plugins.toolsets.consts import STANDARD_END_DATETIME_TOOL_PARAM_DESC
 from holmes.plugins.toolsets.grafana.base_grafana_toolset import BaseGrafanaToolset
 from holmes.plugins.toolsets.grafana.common import (
     DirectTempoConfig,
+    GrafanaCloudTempoConfig,
     GrafanaTempoConfig,
     GrafanaTempoProxyConfig,
 )
@@ -142,6 +143,7 @@ class BaseGrafanaTempoToolset(BaseGrafanaToolset):
     config_classes: ClassVar[list[Type[GrafanaTempoConfig]]] = [
         GrafanaTempoProxyConfig,
         DirectTempoConfig,
+        GrafanaCloudTempoConfig,
     ]
 
     @property

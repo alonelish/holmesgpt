@@ -79,15 +79,15 @@ def get_base_url(config: GrafanaConfig) -> str:
 
 
 class GrafanaLokiProxyConfig(GrafanaConfig):
-    """Loki accessed via a Grafana datasource proxy (recommended)."""
+    """Self-hosted Loki accessed via a self-hosted Grafana datasource proxy."""
 
-    _name: ClassVar[Optional[str]] = "Loki via Grafana"
+    _name: ClassVar[Optional[str]] = "Self-Hosted Loki via Grafana Proxy"
     _description: ClassVar[Optional[str]] = (
-        "Query Loki through a Grafana datasource proxy. Use this when you already "
-        "have Grafana with a Loki datasource configured."
+        "Query self-hosted Loki through your Grafana datasource proxy. Use this when "
+        "you already have Grafana with a Loki datasource configured."
     )
     _icon_url: ClassVar[Optional[str]] = GRAFANA_ICON_URL
-    _docs_anchor: ClassVar[Optional[str]] = "loki-via-grafana-recommended"
+    _docs_anchor: ClassVar[Optional[str]] = "self-hosted-loki-via-grafana-proxy"
     _hidden_fields: ClassVar[List[str]] = ["additional_headers"]
     _recommended: ClassVar[bool] = True
 
@@ -112,12 +112,12 @@ class GrafanaLokiProxyConfig(GrafanaConfig):
 class DirectLokiConfig(GrafanaConfig):
     """Direct connection to a self-hosted Loki API endpoint without Grafana."""
 
-    _name: ClassVar[Optional[str]] = "Direct Loki"
+    _name: ClassVar[Optional[str]] = "Self-Hosted Loki (Direct Connection)"
     _description: ClassVar[Optional[str]] = (
-        "Connect directly to a Loki API endpoint without going through Grafana."
+        "Connect directly to a self-hosted Loki API endpoint without going through Grafana."
     )
     _icon_url: ClassVar[Optional[str]] = LOKI_ICON_URL
-    _docs_anchor: ClassVar[Optional[str]] = "direct-loki"
+    _docs_anchor: ClassVar[Optional[str]] = "self-hosted-loki-direct-connection"
     _hidden_fields: ClassVar[List[str]] = [
         "api_key",
         "grafana_datasource_uid",
@@ -133,6 +133,33 @@ class DirectLokiConfig(GrafanaConfig):
         default={"X-Scope-OrgID": "<tenant id>"},
         title="Additional Headers",
         description="Additional HTTP headers to include in requests",
+    )
+
+
+class GrafanaCloudLokiConfig(GrafanaConfig):
+    """Grafana Cloud's hosted Loki endpoint accessed directly with Basic authentication."""
+
+    _name: ClassVar[Optional[str]] = "Grafana Cloud"
+    _description: ClassVar[Optional[str]] = (
+        "Connect to Grafana Cloud's hosted Loki endpoint using Basic authentication."
+    )
+    _icon_url: ClassVar[Optional[str]] = GRAFANA_ICON_URL
+    _docs_anchor: ClassVar[Optional[str]] = "grafana-cloud"
+    _hidden_fields: ClassVar[List[str]] = [
+        "api_key",
+        "grafana_datasource_uid",
+        "external_url",
+    ]
+
+    api_url: str = Field(  # type: ignore[assignment]
+        title="Loki URL",
+        description="Grafana Cloud Loki endpoint URL for your stack",
+        examples=["https://logs-prod-XXX.grafana.net"],
+    )
+    additional_headers: Dict[str, str] = Field(
+        default={"Authorization": "Basic {{ env.GRAFANA_CLOUD_LOKI_AUTH }}"},
+        title="Additional Headers",
+        description="Authorization header with Basic auth (base64 of user_id:api_token)",
     )
 
 
@@ -153,15 +180,15 @@ class GrafanaTempoConfig(GrafanaConfig):
 
 
 class GrafanaTempoProxyConfig(GrafanaTempoConfig):
-    """Tempo accessed via a Grafana datasource proxy (recommended)."""
+    """Self-hosted Tempo accessed via a self-hosted Grafana datasource proxy."""
 
-    _name: ClassVar[Optional[str]] = "Tempo via Grafana"
+    _name: ClassVar[Optional[str]] = "Self-Hosted Tempo via Grafana Proxy"
     _description: ClassVar[Optional[str]] = (
-        "Query Tempo through a Grafana datasource proxy. Use this when you already "
-        "have Grafana with a Tempo datasource configured."
+        "Query self-hosted Tempo through your Grafana datasource proxy. Use this when "
+        "you already have Grafana with a Tempo datasource configured."
     )
     _icon_url: ClassVar[Optional[str]] = GRAFANA_ICON_URL
-    _docs_anchor: ClassVar[Optional[str]] = "tempo-via-grafana-recommended"
+    _docs_anchor: ClassVar[Optional[str]] = "self-hosted-tempo-via-grafana-proxy"
     _hidden_fields: ClassVar[List[str]] = ["additional_headers"]
     _recommended: ClassVar[bool] = True
 
@@ -184,14 +211,14 @@ class GrafanaTempoProxyConfig(GrafanaTempoConfig):
 
 
 class DirectTempoConfig(GrafanaTempoConfig):
-    """Direct connection to a Tempo API endpoint without Grafana."""
+    """Direct connection to a self-hosted Tempo API endpoint without Grafana."""
 
-    _name: ClassVar[Optional[str]] = "Direct Tempo"
+    _name: ClassVar[Optional[str]] = "Self-Hosted Tempo (Direct Connection)"
     _description: ClassVar[Optional[str]] = (
-        "Connect directly to a Tempo API endpoint without going through Grafana."
+        "Connect directly to a self-hosted Tempo API endpoint without going through Grafana."
     )
     _icon_url: ClassVar[Optional[str]] = TEMPO_ICON_URL
-    _docs_anchor: ClassVar[Optional[str]] = "direct-tempo"
+    _docs_anchor: ClassVar[Optional[str]] = "self-hosted-tempo-direct-connection"
     _hidden_fields: ClassVar[List[str]] = [
         "api_key",
         "grafana_datasource_uid",
@@ -207,4 +234,31 @@ class DirectTempoConfig(GrafanaTempoConfig):
         default={"X-Scope-OrgID": "<tenant id>"},
         title="Additional Headers",
         description="Additional HTTP headers to include in requests",
+    )
+
+
+class GrafanaCloudTempoConfig(GrafanaTempoConfig):
+    """Grafana Cloud's hosted Tempo endpoint accessed directly with Basic authentication."""
+
+    _name: ClassVar[Optional[str]] = "Grafana Cloud"
+    _description: ClassVar[Optional[str]] = (
+        "Connect to Grafana Cloud's hosted Tempo endpoint using Basic authentication."
+    )
+    _icon_url: ClassVar[Optional[str]] = GRAFANA_ICON_URL
+    _docs_anchor: ClassVar[Optional[str]] = "grafana-cloud"
+    _hidden_fields: ClassVar[List[str]] = [
+        "api_key",
+        "grafana_datasource_uid",
+        "external_url",
+    ]
+
+    api_url: str = Field(  # type: ignore[assignment]
+        title="Tempo URL",
+        description="Grafana Cloud Tempo endpoint URL for your stack",
+        examples=["https://tempo-prod-XX-prod-REGION.grafana.net"],
+    )
+    additional_headers: Dict[str, str] = Field(
+        default={"Authorization": "Basic {{ env.GRAFANA_CLOUD_TEMPO_AUTH }}"},
+        title="Additional Headers",
+        description="Authorization header with Basic auth (base64 of user_id:api_token)",
     )

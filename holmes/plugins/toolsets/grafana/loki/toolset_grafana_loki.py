@@ -15,6 +15,7 @@ from holmes.plugins.toolsets.consts import (
 )
 from holmes.plugins.toolsets.grafana.common import (
     DirectLokiConfig,
+    GrafanaCloudLokiConfig,
     GrafanaConfig,
     GrafanaLokiProxyConfig,
     get_base_url,
@@ -80,6 +81,7 @@ class GrafanaLokiToolset(BaseGrafanaToolset):
     config_classes: ClassVar[List[Type[GrafanaConfig]]] = [
         GrafanaLokiProxyConfig,
         DirectLokiConfig,
+        GrafanaCloudLokiConfig,
     ]
 
     def health_check(self) -> Tuple[bool, str]:
