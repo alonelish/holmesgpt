@@ -82,10 +82,11 @@ class GrafanaLokiProxyConfig(GrafanaConfig):
 
     _name: ClassVar[Optional[str]] = "Loki via Grafana"
     _description: ClassVar[Optional[str]] = (
-        "Query Loki through a Grafana datasource proxy (recommended)."
+        "Query Loki through a Grafana datasource proxy. Recommended when you already "
+        "have Grafana with a Loki datasource configured."
     )
     _icon_url: ClassVar[Optional[str]] = GRAFANA_ICON_URL
-    _docs_anchor: ClassVar[Optional[str]] = "option-1-through-grafana-recommended"
+    _docs_anchor: ClassVar[Optional[str]] = "loki-via-grafana-recommended"
     _hidden_fields: ClassVar[List[str]] = ["additional_headers"]
 
     api_url: str = Field(  # type: ignore[assignment]
@@ -107,14 +108,15 @@ class GrafanaLokiProxyConfig(GrafanaConfig):
 
 
 class DirectLokiConfig(GrafanaConfig):
-    """Direct connection to a Loki endpoint (self-hosted or multi-tenant)."""
+    """Direct connection to a self-hosted Loki API endpoint without Grafana."""
 
     _name: ClassVar[Optional[str]] = "Direct Loki"
     _description: ClassVar[Optional[str]] = (
-        "Query a Loki endpoint directly (supports X-Scope-OrgID multi-tenancy via headers)."
+        "Connect directly to a self-hosted Loki API endpoint without going through Grafana. "
+        "Supports multi-tenancy via the X-Scope-OrgID header."
     )
     _icon_url: ClassVar[Optional[str]] = LOKI_ICON_URL
-    _docs_anchor: ClassVar[Optional[str]] = "direct-connection"
+    _docs_anchor: ClassVar[Optional[str]] = "direct-loki"
     _hidden_fields: ClassVar[List[str]] = [
         "api_key",
         "grafana_datasource_uid",
@@ -137,39 +139,6 @@ class DirectLokiConfig(GrafanaConfig):
             "set X-Scope-OrgID to the tenant ID."
         ),
         examples=[{"X-Scope-OrgID": "tenant1"}],
-    )
-
-
-class GrafanaCloudLokiConfig(GrafanaConfig):
-    """Grafana Cloud hosted Loki endpoint with Basic authentication."""
-
-    _name: ClassVar[Optional[str]] = "Grafana Cloud Loki"
-    _description: ClassVar[Optional[str]] = (
-        "Grafana Cloud hosted Loki endpoint with Basic authentication."
-    )
-    _icon_url: ClassVar[Optional[str]] = GRAFANA_ICON_URL
-    _docs_anchor: ClassVar[Optional[str]] = "direct-connection"
-    _hidden_fields: ClassVar[List[str]] = [
-        "api_key",
-        "grafana_datasource_uid",
-        "external_url",
-    ]
-
-    api_url: str = Field(  # type: ignore[assignment]
-        title="Grafana Cloud Loki URL",
-        description="Grafana Cloud Loki endpoint URL for your stack",
-        examples=["https://logs-prod-XXX.grafana.net"],
-    )
-    additional_headers: Dict[str, str] = Field(
-        default={"Authorization": "Basic {{ env.GRAFANA_CLOUD_AUTH }}"},
-        title="Additional Headers",
-        description=(
-            "Authorization header with Basic auth (base64 of user_id:api_token)."
-        ),
-        examples=[
-            {"Authorization": "Basic {{ env.GRAFANA_CLOUD_AUTH }}"},
-            {"Authorization": "Basic <base64_encoded_credentials>"},
-        ],
     )
 
 

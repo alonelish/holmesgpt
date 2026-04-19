@@ -17,9 +17,16 @@ Connect HolmesGPT to Loki for log analysis through Grafana or direct API access.
 
 ## Configuration
 
-Choose one of the following methods:
+HolmesGPT supports two ways to connect to Loki. Pick the one that matches your setup:
 
-### Option 1: Through Grafana (Recommended)
+| Setup | When to use |
+|-------|-------------|
+| [Loki via Grafana](#loki-via-grafana-recommended) (recommended) | You already have Grafana with a Loki datasource configured (works for self-hosted Grafana and Grafana Cloud) |
+| [Direct Loki](#direct-loki) | Self-hosted Loki without Grafana, including multi-tenant setups needing `X-Scope-OrgID` |
+
+### Loki via Grafana (Recommended)
+
+HolmesGPT queries Loki through your Grafana instance's datasource proxy. Recommended when you already have Grafana — it handles authentication and you only need one API key. This is also the only mode that produces clickable Grafana Explore links in Holmes's responses.
 
 **Required:**
 
@@ -27,6 +34,7 @@ Choose one of the following methods:
 - Loki datasource UID from Grafana
 
 **Find your Loki datasource UID:**
+
 ```bash
 # Port forward to Grafana
 kubectl port-forward svc/grafana 3000:80
@@ -35,32 +43,28 @@ kubectl port-forward svc/grafana 3000:80
 curl -s -u admin:admin http://localhost:3000/api/datasources | jq '.[] | select(.type == "loki") | .uid'
 ```
 
-### Configuration (Grafana Proxy)
-
 ```yaml-toolset-config
 toolsets:
   grafana/loki:
     enabled: true
     config:
+      api_url: https://xxxxxxx.grafana.net  # Your Grafana URL
       api_key: <your grafana API key>
-      api_url: https://xxxxxxx.grafana.net # Your Grafana cloud account URL
       grafana_datasource_uid: <the UID of the loki data source in Grafana>
 ```
 
-## Direct Connection
+### Direct Loki
 
-The toolset can directly connect to a Loki instance without proxying through a Grafana instance. This is done by not setting the `grafana_datasource_uid` field. Not setting this field makes HolmesGPT assume that it is directly connecting to Loki.
-
-### Configuration (Direct Connection)
+HolmesGPT connects directly to a self-hosted Loki API endpoint without going through Grafana.
 
 ```yaml-toolset-config
 toolsets:
   grafana/loki:
     enabled: true
     config:
-      api_url: http://loki.logging
+      api_url: http://loki.logging:3100
       additional_headers:
-        X-Scope-OrgID: "<tenant id>" # Set the X-Scope-OrgID if loki multitenancy is enabled
+        X-Scope-OrgID: "<tenant id>"  # Only needed for multi-tenant Loki
 ```
 
 ## Advanced Configuration

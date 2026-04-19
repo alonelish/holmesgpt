@@ -15,7 +15,6 @@ from holmes.plugins.toolsets.consts import (
 )
 from holmes.plugins.toolsets.grafana.common import (
     DirectLokiConfig,
-    GrafanaCloudLokiConfig,
     GrafanaConfig,
     GrafanaLokiProxyConfig,
     get_base_url,
@@ -74,14 +73,13 @@ def _build_grafana_loki_explore_url(
 
 
 class GrafanaLokiToolset(BaseGrafanaToolset):
-    # Order matters: base_grafana_toolset uses config_classes[0] as the parser
-    # for the user-supplied config dict. The proxy variant is most inclusive
-    # (inherits all GrafanaConfig fields) and matches the "recommended" path
-    # in the docs, so existing user configs continue to parse successfully.
+    # base_grafana_toolset tries each class in order and uses the first that
+    # validates. The proxy variant is listed first because it matches the
+    # recommended path in the docs and existing configs with grafana_datasource_uid
+    # continue to parse successfully against it.
     config_classes: ClassVar[List[Type[GrafanaConfig]]] = [
         GrafanaLokiProxyConfig,
         DirectLokiConfig,
-        GrafanaCloudLokiConfig,
     ]
 
     def health_check(self) -> Tuple[bool, str]:
