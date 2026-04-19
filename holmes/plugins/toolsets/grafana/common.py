@@ -126,10 +126,7 @@ class DirectLokiConfig(GrafanaConfig):
     api_url: str = Field(  # type: ignore[assignment]
         title="Loki URL",
         description="Base URL of your Loki server",
-        examples=[
-            "http://loki.monitoring.svc:3100",
-            "http://loki-gateway.loki.svc.cluster.local",
-        ],
+        examples=["http://loki.monitoring.svc.cluster.local:3100"],
     )
     additional_headers: Dict[str, str] = Field(
         default={"X-Scope-OrgID": "<tenant id>"},
