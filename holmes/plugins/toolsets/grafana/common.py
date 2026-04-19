@@ -227,8 +227,8 @@ class DirectTempoConfig(GrafanaTempoConfig):
 
     api_url: str = Field(  # type: ignore[assignment]
         title="Tempo URL",
-        description="Base URL of your Tempo server",
-        examples=["http://tempo.monitoring.svc.cluster.local:3100"],
+        description="Base URL of your Tempo server (Tempo's HTTP API listens on 3200 by default)",
+        examples=["http://tempo.monitoring.svc.cluster.local:3200"],
     )
     additional_headers: Dict[str, str] = Field(
         default={"X-Scope-OrgID": "<tenant id>"},

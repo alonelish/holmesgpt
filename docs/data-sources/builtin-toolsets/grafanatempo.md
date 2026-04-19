@@ -94,7 +94,7 @@ HolmesGPT connects directly to a self-hosted Tempo API endpoint without going th
       grafana/tempo:
         enabled: true
         config:
-          api_url: http://tempo.monitoring.svc.cluster.local:3100
+          api_url: http://tempo.monitoring.svc.cluster.local:3200
           additional_headers:
             X-Scope-OrgID: "<tenant id>"  # Only needed for multi-tenant Tempo
     ```
@@ -109,7 +109,7 @@ HolmesGPT connects directly to a self-hosted Tempo API endpoint without going th
         grafana/tempo:
           enabled: true
           config:
-            api_url: http://tempo.monitoring.svc.cluster.local:3100
+            api_url: http://tempo.monitoring.svc.cluster.local:3200
             additional_headers:
               X-Scope-OrgID: "<tenant id>"  # Only needed for multi-tenant Tempo
     ```
