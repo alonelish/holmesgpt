@@ -9,7 +9,7 @@ Connect HolmesGPT to Datadog for comprehensive observability including logs, met
 
 You'll need two keys and your site URL from your Datadog account:
 
-- **API Key**: Found under **Organization Settings > API Keys** (disable 'Remote Config' when creating)
+- **API Key**: Found under **Organization Settings > API Keys**
 - **Application Key**: Found under **Organization Settings > Application Keys**
 - **API URL**: Your Datadog site's API endpoint (note: `api.` subdomain, not `app.`)
     - **US1 (default)**: `https://api.datadoghq.com`
@@ -26,8 +26,8 @@ You'll need two keys and your site URL from your Datadog account:
 
     Set environment variables:
     ```bash
-    export DD_API_KEY="your-datadog-api-key"
-    export DD_APP_KEY="your-datadog-app-key"
+    export DATADOG_API_KEY="your-datadog-api-key"
+    export DATADOG_APP_KEY="your-datadog-app-key"
     ```
 
     Add to your config file:
@@ -37,29 +37,29 @@ You'll need two keys and your site URL from your Datadog account:
       datadog/logs:
         enabled: true
         config:
-          api_key: "{{ env.DD_API_KEY }}"
-          app_key: "{{ env.DD_APP_KEY }}"
+          api_key: "{{ env.DATADOG_API_KEY }}"
+          app_key: "{{ env.DATADOG_APP_KEY }}"
           api_url: https://api.datadoghq.com  # Change for EU/other regions
 
       datadog/metrics:
         enabled: true
         config:
-          api_key: "{{ env.DD_API_KEY }}"
-          app_key: "{{ env.DD_APP_KEY }}"
+          api_key: "{{ env.DATADOG_API_KEY }}"
+          app_key: "{{ env.DATADOG_APP_KEY }}"
           api_url: https://api.datadoghq.com
 
       datadog/traces:
         enabled: true
         config:
-          api_key: "{{ env.DD_API_KEY }}"
-          app_key: "{{ env.DD_APP_KEY }}"
+          api_key: "{{ env.DATADOG_API_KEY }}"
+          app_key: "{{ env.DATADOG_APP_KEY }}"
           api_url: https://api.datadoghq.com
 
       datadog/general:
         enabled: true
         config:
-          api_key: "{{ env.DD_API_KEY }}"
-          app_key: "{{ env.DD_APP_KEY }}"
+          api_key: "{{ env.DATADOG_API_KEY }}"
+          app_key: "{{ env.DATADOG_APP_KEY }}"
           api_url: https://api.datadoghq.com
     ```
 
@@ -68,53 +68,53 @@ You'll need two keys and your site URL from your Datadog account:
     First, create a Kubernetes secret with your API keys:
     ```bash
     kubectl create secret generic holmes-datadog-secrets \
-      --from-literal=dd-api-key=your-datadog-api-key \
-      --from-literal=dd-app-key=your-datadog-app-key
+      --from-literal=datadog-api-key=your-datadog-api-key \
+      --from-literal=datadog-app-key=your-datadog-app-key
     ```
 
     Then add to your Holmes Helm values:
     ```yaml
     # Load API keys from secret
     additionalEnvVars:
-      - name: DD_API_KEY
+      - name: DATADOG_API_KEY
         valueFrom:
           secretKeyRef:
             name: holmes-datadog-secrets
-            key: dd-api-key
-      - name: DD_APP_KEY
+            key: datadog-api-key
+      - name: DATADOG_APP_KEY
         valueFrom:
           secretKeyRef:
             name: holmes-datadog-secrets
-            key: dd-app-key
+            key: datadog-app-key
 
     toolsets:
       # Enable all Datadog toolsets
       datadog/logs:
         enabled: true
         config:
-          api_key: "{{ env.DD_API_KEY }}"
-          app_key: "{{ env.DD_APP_KEY }}"
+          api_key: "{{ env.DATADOG_API_KEY }}"
+          app_key: "{{ env.DATADOG_APP_KEY }}"
           api_url: https://api.datadoghq.com  # Change for EU/other regions
 
       datadog/metrics:
         enabled: true
         config:
-          api_key: "{{ env.DD_API_KEY }}"
-          app_key: "{{ env.DD_APP_KEY }}"
+          api_key: "{{ env.DATADOG_API_KEY }}"
+          app_key: "{{ env.DATADOG_APP_KEY }}"
           api_url: https://api.datadoghq.com
 
       datadog/traces:
         enabled: true
         config:
-          api_key: "{{ env.DD_API_KEY }}"
-          app_key: "{{ env.DD_APP_KEY }}"
+          api_key: "{{ env.DATADOG_API_KEY }}"
+          app_key: "{{ env.DATADOG_APP_KEY }}"
           api_url: https://api.datadoghq.com
 
       datadog/general:
         enabled: true
         config:
-          api_key: "{{ env.DD_API_KEY }}"
-          app_key: "{{ env.DD_APP_KEY }}"
+          api_key: "{{ env.DATADOG_API_KEY }}"
+          app_key: "{{ env.DATADOG_APP_KEY }}"
           api_url: https://api.datadoghq.com
     ```
 
@@ -123,8 +123,8 @@ You'll need two keys and your site URL from your Datadog account:
     First, create a Kubernetes secret with your API keys:
     ```bash
     kubectl create secret generic holmes-datadog-secrets \
-      --from-literal=dd-api-key=your-datadog-api-key \
-      --from-literal=dd-app-key=your-datadog-app-key
+      --from-literal=datadog-api-key=your-datadog-api-key \
+      --from-literal=datadog-app-key=your-datadog-app-key
     ```
 
     Then add to your Robusta Helm values:
@@ -132,45 +132,45 @@ You'll need two keys and your site URL from your Datadog account:
     holmes:
       # Load API keys from secret
       additionalEnvVars:
-        - name: DD_API_KEY
+        - name: DATADOG_API_KEY
           valueFrom:
             secretKeyRef:
               name: holmes-datadog-secrets
-              key: dd-api-key
-        - name: DD_APP_KEY
+              key: datadog-api-key
+        - name: DATADOG_APP_KEY
           valueFrom:
             secretKeyRef:
               name: holmes-datadog-secrets
-              key: dd-app-key
+              key: datadog-app-key
 
       toolsets:
         # Enable all Datadog toolsets
         datadog/logs:
           enabled: true
           config:
-            api_key: "{{ env.DD_API_KEY }}"
-            app_key: "{{ env.DD_APP_KEY }}"
+            api_key: "{{ env.DATADOG_API_KEY }}"
+            app_key: "{{ env.DATADOG_APP_KEY }}"
             api_url: https://api.datadoghq.com  # Change for EU/other regions
 
         datadog/metrics:
           enabled: true
           config:
-            api_key: "{{ env.DD_API_KEY }}"
-            app_key: "{{ env.DD_APP_KEY }}"
+            api_key: "{{ env.DATADOG_API_KEY }}"
+            app_key: "{{ env.DATADOG_APP_KEY }}"
             api_url: https://api.datadoghq.com
 
         datadog/traces:
           enabled: true
           config:
-            api_key: "{{ env.DD_API_KEY }}"
-            app_key: "{{ env.DD_APP_KEY }}"
+            api_key: "{{ env.DATADOG_API_KEY }}"
+            app_key: "{{ env.DATADOG_APP_KEY }}"
             api_url: https://api.datadoghq.com
 
         datadog/general:
           enabled: true
           config:
-            api_key: "{{ env.DD_API_KEY }}"
-            app_key: "{{ env.DD_APP_KEY }}"
+            api_key: "{{ env.DATADOG_API_KEY }}"
+            app_key: "{{ env.DATADOG_APP_KEY }}"
             api_url: https://api.datadoghq.com
     ```
 
@@ -214,8 +214,8 @@ toolsets:
   datadog/logs:
     enabled: true
     config:
-      api_key: "{{ env.DD_API_KEY }}"
-      app_key: "{{ env.DD_APP_KEY }}"
+      api_key: "{{ env.DATADOG_API_KEY }}"
+      app_key: "{{ env.DATADOG_APP_KEY }}"
       api_url: https://api.datadoghq.com
       timeout_seconds: 60  # Timeout in seconds (default: 60)
 
@@ -223,7 +223,7 @@ toolsets:
       indexes: ["*"]  # Log indexes to search (default: ["*"])
       compact_logs: True # Reduces log metadata and tags to save LLM context space.
       storage_tiers: ["indexes"]  # Options: indexes, online-archives, flex
-      default_limit: 150  # Max logs to retrieve in a query.
+      default_limit: 100  # Max logs to retrieve in a query (default: 100)
 
 
 ```
@@ -258,13 +258,13 @@ toolsets:
   datadog/metrics:
     enabled: true
     config:
-      api_key: "{{ env.DD_API_KEY }}"
-      app_key: "{{ env.DD_APP_KEY }}"
+      api_key: "{{ env.DATADOG_API_KEY }}"
+      app_key: "{{ env.DATADOG_APP_KEY }}"
       api_url: https://api.datadoghq.com
       timeout_seconds: 60  # Timeout in seconds (default: 60)
 
       # Optional
-      default_limit: 1000  # Max data points to retrieve (default: 1000)
+      default_limit: 100  # Max data points to retrieve (default: 100)
 ```
 
 **Capabilities**
@@ -300,8 +300,8 @@ toolsets:
   datadog/traces:
     enabled: true
     config:
-      api_key: "{{ env.DD_API_KEY }}"
-      app_key: "{{ env.DD_APP_KEY }}"
+      api_key: "{{ env.DATADOG_API_KEY }}"
+      app_key: "{{ env.DATADOG_APP_KEY }}"
       api_url: https://api.datadoghq.com
       timeout_seconds: 60  # Timeout in seconds (default: 60)
 ```
@@ -337,8 +337,8 @@ toolsets:
   datadog/general:
     enabled: true
     config:
-      api_key: "{{ env.DD_API_KEY }}"
-      app_key: "{{ env.DD_APP_KEY }}"
+      api_key: "{{ env.DATADOG_API_KEY }}"
+      app_key: "{{ env.DATADOG_APP_KEY }}"
       api_url: https://api.datadoghq.com
       timeout_seconds: 60  # Timeout in seconds (default: 60)
 

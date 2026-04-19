@@ -13,6 +13,10 @@ DEFAULT_TOP_INSTANCES = 10
 # Constants for general toolset
 MAX_RESPONSE_SIZE = 10 * 1024 * 1024  # 10MB
 
+# Default maximum number of metric data points returned by the metrics toolset
+# when the user doesn't specify one explicitly.
+DEFAULT_METRICS_LIMIT = 100
+
 
 class DataDogStorageTier(str, Enum):
     """Storage tier enum for Datadog logs."""
@@ -30,7 +34,7 @@ class DatadogMetricsConfig(DatadogBaseConfig):
     """Configuration for Datadog metrics toolset."""
 
     default_limit: int = Field(
-        default=DEFAULT_LOG_LIMIT,
+        default=DEFAULT_METRICS_LIMIT,
         description="Default maximum number of results to return when a limit is not explicitly provided",
     )
 
