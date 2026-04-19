@@ -77,7 +77,7 @@ class PrometheusConfig(ToolsetConfig):
     """Prometheus toolset configuration."""
 
     _name: ClassVar[Optional[str]] = "Prometheus"
-    _description: ClassVar[Optional[str]] = "Standard Prometheus server"
+    _description: ClassVar[Optional[str]] = "Connect to a self-hosted Prometheus server."
     _icon_url: ClassVar[Optional[str]] = "https://cdn.simpleicons.org/prometheus/E6522C"
     _docs_anchor: ClassVar[Optional[str]] = "configuration"
 
@@ -200,7 +200,7 @@ class CoralogixPrometheusConfig(PrometheusConfig):
     """Coralogix Prometheus-compatible endpoint configuration."""
 
     _name: ClassVar[Optional[str]] = "Coralogix"
-    _description: ClassVar[Optional[str]] = "Coralogix Prometheus-compatible metrics endpoint"
+    _description: ClassVar[Optional[str]] = "Connect to Coralogix's Prometheus-compatible endpoint."
     _icon_url: ClassVar[Optional[str]] = "https://avatars.githubusercontent.com/u/35295744?s=200&v=4"
     _docs_anchor: ClassVar[Optional[str]] = "coralogix-prometheus"
 
@@ -230,7 +230,7 @@ class GooglePrometheusConfig(PrometheusConfig):
     """Google Managed Prometheus configuration."""
 
     _name: ClassVar[Optional[str]] = "Google Managed Prometheus"
-    _description: ClassVar[Optional[str]] = "Google Cloud Managed Service for Prometheus (no auth headers needed, uses Workload Identity)"
+    _description: ClassVar[Optional[str]] = "Connect to Google Cloud Managed Prometheus using Workload Identity."
     _icon_url: ClassVar[Optional[str]] = "https://raw.githubusercontent.com/gilbarbara/logos/de2c1f96ff6e74ea7ea979b43202e8d4b863c655/logos/google-cloud.svg"
     _docs_anchor: ClassVar[Optional[str]] = "google-managed-prometheus"
 
@@ -247,7 +247,7 @@ class GrafanaCloudPrometheusConfig(PrometheusConfig):
     """Grafana Cloud (Mimir) Prometheus-compatible endpoint configuration."""
 
     _name: ClassVar[Optional[str]] = "Grafana Cloud"
-    _description: ClassVar[Optional[str]] = "Grafana Cloud Prometheus endpoint (Mimir) with Basic or Bearer token authentication"
+    _description: ClassVar[Optional[str]] = "Connect to Grafana Cloud's Prometheus (Mimir) endpoint."
     _icon_url: ClassVar[Optional[str]] = "https://raw.githubusercontent.com/gilbarbara/logos/de2c1f96ff6e74ea7ea979b43202e8d4b863c655/logos/grafana.svg"
     _docs_anchor: ClassVar[Optional[str]] = "grafana-cloud-mimir"
 
@@ -271,7 +271,7 @@ class GrafanaCloudPrometheusConfig(PrometheusConfig):
 
 class AMPConfig(PrometheusConfig):
     _name: ClassVar[Optional[str]] = "AWS Managed Prometheus"
-    _description: ClassVar[Optional[str]] = "Amazon Managed Service for Prometheus (AMP) with IAM authentication"
+    _description: ClassVar[Optional[str]] = "Connect to AWS Managed Service for Prometheus using IAM credentials."
     _icon_url: ClassVar[Optional[str]] = "https://raw.githubusercontent.com/gilbarbara/logos/de2c1f96ff6e74ea7ea979b43202e8d4b863c655/logos/aws.svg"
     _docs_anchor: ClassVar[Optional[str]] = "aws-managed-prometheus-amp"
 
@@ -331,7 +331,7 @@ class AMPConfig(PrometheusConfig):
 
 class AzurePrometheusConfig(PrometheusConfig):
     _name: ClassVar[Optional[str]] = "Azure Managed Prometheus"
-    _description: ClassVar[Optional[str]] = "Azure Monitor managed service for Prometheus with Azure AD authentication"
+    _description: ClassVar[Optional[str]] = "Connect to Azure Monitor Managed Prometheus using Azure AD."
     _icon_url: ClassVar[Optional[str]] = "https://raw.githubusercontent.com/gilbarbara/logos/de2c1f96ff6e74ea7ea979b43202e8d4b863c655/logos/microsoft-azure.svg"
     _docs_anchor: ClassVar[Optional[str]] = "azure-managed-prometheus"
 
