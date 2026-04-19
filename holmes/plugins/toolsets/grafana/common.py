@@ -82,12 +82,13 @@ class GrafanaLokiProxyConfig(GrafanaConfig):
 
     _name: ClassVar[Optional[str]] = "Loki via Grafana"
     _description: ClassVar[Optional[str]] = (
-        "Query Loki through a Grafana datasource proxy. Recommended when you already "
+        "Query Loki through a Grafana datasource proxy. Use this when you already "
         "have Grafana with a Loki datasource configured."
     )
     _icon_url: ClassVar[Optional[str]] = GRAFANA_ICON_URL
     _docs_anchor: ClassVar[Optional[str]] = "loki-via-grafana-recommended"
     _hidden_fields: ClassVar[List[str]] = ["additional_headers"]
+    _recommended: ClassVar[bool] = True
 
     api_url: str = Field(  # type: ignore[assignment]
         title="Grafana URL",

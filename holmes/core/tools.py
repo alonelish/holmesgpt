@@ -1066,6 +1066,7 @@ class Toolset(BaseModel):
                 "description": getattr(config_cls, "_description", None),
                 "icon_url": getattr(config_cls, "_icon_url", None),
                 "docs_anchor": getattr(config_cls, "_docs_anchor", None),
+                "recommended": bool(getattr(config_cls, "_recommended", False)),
             }
         return result
 
