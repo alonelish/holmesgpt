@@ -83,8 +83,7 @@ class GrafanaLokiProxyConfig(GrafanaConfig):
 
     _name: ClassVar[Optional[str]] = "Self-Hosted Loki via Grafana Proxy"
     _description: ClassVar[Optional[str]] = (
-        "Query self-hosted Loki through your Grafana datasource proxy. Use this when "
-        "you already have Grafana with a Loki datasource configured."
+        "Route queries through your Grafana's Loki datasource proxy."
     )
     _icon_url: ClassVar[Optional[str]] = GRAFANA_ICON_URL
     _docs_anchor: ClassVar[Optional[str]] = "self-hosted-loki-via-grafana-proxy"
@@ -114,7 +113,7 @@ class DirectLokiConfig(GrafanaConfig):
 
     _name: ClassVar[Optional[str]] = "Self-Hosted Loki - Direct Connection"
     _description: ClassVar[Optional[str]] = (
-        "Connect directly to a self-hosted Loki API endpoint without going through Grafana."
+        "Query your Loki API directly, without going through Grafana."
     )
     _icon_url: ClassVar[Optional[str]] = LOKI_ICON_URL
     _docs_anchor: ClassVar[Optional[str]] = "self-hosted-loki-direct-connection"
@@ -141,7 +140,7 @@ class GrafanaCloudLokiConfig(GrafanaConfig):
 
     _name: ClassVar[Optional[str]] = "Grafana Cloud"
     _description: ClassVar[Optional[str]] = (
-        "Query Loki through your Grafana Cloud Grafana instance's datasource proxy."
+        "Route queries through your Grafana Cloud Grafana's Loki datasource proxy."
     )
     _icon_url: ClassVar[Optional[str]] = GRAFANA_ICON_URL
     _docs_anchor: ClassVar[Optional[str]] = "grafana-cloud"
@@ -186,8 +185,7 @@ class GrafanaTempoProxyConfig(GrafanaTempoConfig):
 
     _name: ClassVar[Optional[str]] = "Self-Hosted Tempo via Grafana Proxy"
     _description: ClassVar[Optional[str]] = (
-        "Query self-hosted Tempo through your Grafana datasource proxy. Use this when "
-        "you already have Grafana with a Tempo datasource configured."
+        "Route queries through your Grafana's Tempo datasource proxy."
     )
     _icon_url: ClassVar[Optional[str]] = GRAFANA_ICON_URL
     _docs_anchor: ClassVar[Optional[str]] = "self-hosted-tempo-via-grafana-proxy"
@@ -217,7 +215,7 @@ class DirectTempoConfig(GrafanaTempoConfig):
 
     _name: ClassVar[Optional[str]] = "Self-Hosted Tempo - Direct Connection"
     _description: ClassVar[Optional[str]] = (
-        "Connect directly to a self-hosted Tempo API endpoint without going through Grafana."
+        "Query your Tempo API directly, without going through Grafana."
     )
     _icon_url: ClassVar[Optional[str]] = TEMPO_ICON_URL
     _docs_anchor: ClassVar[Optional[str]] = "self-hosted-tempo-direct-connection"
@@ -244,7 +242,7 @@ class GrafanaCloudTempoConfig(GrafanaTempoConfig):
 
     _name: ClassVar[Optional[str]] = "Grafana Cloud"
     _description: ClassVar[Optional[str]] = (
-        "Query Tempo through your Grafana Cloud Grafana instance's datasource proxy."
+        "Route queries through your Grafana Cloud Grafana's Tempo datasource proxy."
     )
     _icon_url: ClassVar[Optional[str]] = GRAFANA_ICON_URL
     _docs_anchor: ClassVar[Optional[str]] = "grafana-cloud"
