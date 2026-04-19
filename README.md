@@ -10,6 +10,16 @@
 
 Open-source AI agent for investigating production incidents and finding root causes. Works with any stack — Kubernetes, VMs, cloud providers, databases, and SaaS platforms. We are a [Cloud Native Computing Foundation](https://www.cncf.io/) sandbox project. Originally created by [Robusta.Dev](http://robusta.dev), with major contributions from [Microsoft](https://microsoft.com/).
 
+## New: Operator Mode — Find Problems 24/7 in the Background
+
+Most AI agents are great at troubleshooting problems, but still need a human to notice something is wrong and trigger an investigation. [Operator mode](https://holmesgpt.dev/operator/) fixes that — HolmesGPT runs in the background 24/7, spots problems before your customers notice, and messages you in Slack with the fix. Connect the [GitHub integration](https://holmesgpt.dev/data-sources/builtin-toolsets/github-mcp/) and it can even open PRs to fix what it finds.
+
+While the operator itself runs in Kubernetes, health checks can query any data source Holmes is connected to — VMs, cloud services, databases, SaaS platforms, and more.
+
+- **[Deployment verification](https://holmesgpt.dev/operator/deployment-verification/)** — Deploy a health check alongside your app to verify the new version is healthy
+- **[Scheduled health checks](https://holmesgpt.dev/operator/scheduled-health-checks/)** — Continuously monitor services and catch regressions automatically
+
+## Features
 
 - **Petabyte-scale data**: Server-side filtering, JSON tree traversal, and tool output transformers keep large payloads out of context windows
 - **Memory-safe execution**: Per-tool memory limits, streaming large results to disk, and automatic output budgeting prevent OOM kills when querying large observability datasets
@@ -17,7 +27,6 @@ Open-source AI agent for investigating production incidents and finding root cau
 - **Bidirectional alert integrations**: Fetch alerts from AlertManager, PagerDuty, OpsGenie, or Jira—and write findings back
 - **[Any LLM provider](https://holmesgpt.dev/ai-providers/)**: OpenAI, Anthropic, Azure, Bedrock, Gemini, and more
 - **No Kubernetes required**: Works with any infrastructure — VMs, bare metal, cloud services, or containers
-- **[Operator mode](https://holmesgpt.dev/operator/)**: Optionally run as a Kubernetes operator for automated investigations
 
 ## How it Works
 
@@ -46,9 +55,10 @@ HolmesGPT integrates with popular observability and cloud platforms. The followi
 | [<img src="images/integration_logos/opensearchserverless-icon.png" alt="Elasticsearch" width="20" style="vertical-align: middle;"> **Elasticsearch / OpenSearch**](https://holmesgpt.dev/data-sources/builtin-toolsets/elasticsearch/) | Query logs, cluster health, shard and index diagnostics |
 | [<img src="images/integration_logos/gcpmonitoring-icon.png" alt="GCP" width="20" style="vertical-align: middle;"> **GCP**](https://holmesgpt.dev/data-sources/builtin-toolsets/gcp/) | Google Cloud Platform resources (MCP) |
 | [<img src="images/integration_logos/github_logo.png" alt="GitHub" width="20" style="vertical-align: middle;"> **GitHub**](https://holmesgpt.dev/data-sources/builtin-toolsets/github-mcp/) | Repositories, issues, and pull requests (MCP) |
+| [<img src="images/integration_logos/jenkins-icon.png" alt="Jenkins" width="20" style="vertical-align: middle;"> **Jenkins (MCP)**](https://holmesgpt.dev/data-sources/builtin-toolsets/jenkins-mcp/) | Build status, pipeline logs, and job history (MCP) |
 | [<img src="images/integration_logos/grafana-icon.png" alt="Grafana" width="20" style="vertical-align: middle;"> **Grafana**](https://holmesgpt.dev/data-sources/builtin-toolsets/grafanadashboards/) | Query and analyze dashboard configurations and panels |
 | [<img src="images/integration_logos/helm_logo.png" alt="Helm" width="20" style="vertical-align: middle;"> **Helm**](https://holmesgpt.dev/data-sources/builtin-toolsets/helm/) | Release status, chart metadata, and values |
-| [<img src="images/integration_logos/http-icon.png" alt="Internet" width="20" style="vertical-align: middle;"> **Internet**](https://holmesgpt.dev/data-sources/builtin-toolsets/internet/) | Public runbooks, community docs etc |
+| [<img src="images/integration_logos/http-icon.png" alt="Internet" width="20" style="vertical-align: middle;"> **Internet**](https://holmesgpt.dev/data-sources/builtin-toolsets/internet/) | Public runbooks, community docs, etc. |
 | [<img src="images/integration_logos/kafka_logo.png" alt="Kafka" width="20" style="vertical-align: middle;"> **Kafka**](https://holmesgpt.dev/data-sources/builtin-toolsets/kafka/) | Fetch metadata, list consumers and topics or find lagging consumer groups |
 | [<img src="images/integration_logos/kubernetes-icon.png" alt="Kubernetes" width="20" style="vertical-align: middle;"> **Kubernetes**](https://holmesgpt.dev/data-sources/builtin-toolsets/kubernetes/) | Pod logs, K8s events, and resource status (kubectl describe) |
 | [<img src="images/integration_logos/kubernetes-icon.png" alt="Kubernetes Remediation" width="20" style="vertical-align: middle;"> **Kubernetes Remediation (MCP)**](https://holmesgpt.dev/data-sources/builtin-toolsets/kubernetes-remediation-mcp/) | Apply fixes like scaling, rollbacks, and resource edits (MCP) |
@@ -68,6 +78,7 @@ HolmesGPT integrates with popular observability and cloud platforms. The followi
 | **Splunk** | Log search and analysis (MCP) |
 | [<img src="images/integration_logos/postgres-icon.png" alt="SQL Databases" width="20" style="vertical-align: middle;"> **SQL Databases**](https://holmesgpt.dev/data-sources/builtin-toolsets/database-postgresql/) | PostgreSQL, MySQL, ClickHouse, MariaDB, SQL Server, SQLite |
 | [<img src="images/integration_logos/tempo_logo.png" alt="Tempo" width="20" style="vertical-align: middle;"> **Tempo**](https://holmesgpt.dev/data-sources/builtin-toolsets/grafanatempo/) | Fetch trace info, debug issues like high latency in application |
+| [<img src="images/integration_logos/zabbix-icon.png" alt="Zabbix" width="20" style="vertical-align: middle;"> **Zabbix**](https://holmesgpt.dev/data-sources/builtin-toolsets/zabbix/) | Monitor hosts, problems, events, triggers, and historical metrics |
 
 See the [full list of built-in toolsets](https://holmesgpt.dev/data-sources/builtin-toolsets/) for additional integrations including Cilium, KubeVela, Notion, and more.
 
@@ -77,9 +88,9 @@ HolmesGPT can fetch alerts/tickets to investigate from external systems, then wr
 
 | Integration             | Status    | Notes |
 |-------------------------|-----------|-------|
-| Slack                   | ✅        | [Demo.](https://www.loom.com/share/afcd81444b1a4adfaa0bbe01c37a4847) Available via [Robusta.dev](https://home.robusta.dev/) (commercial platform) |
-| Microsoft Teams         | ✅        | Available via [Robusta.dev](https://home.robusta.dev/) (commercial platform) |
-| Prometheus/AlertManager | ✅        | Robusta SaaS or HolmesGPT CLI |
+| Slack                   | ✅        | [Demo.](https://www.loom.com/share/afcd81444b1a4adfaa0bbe01c37a4847) Available via [Robusta](https://home.robusta.dev/) |
+| Microsoft Teams         | ✅        | Available via [Robusta](https://home.robusta.dev/) |
+| Prometheus/AlertManager | ✅        | Robusta or HolmesGPT CLI |
 | PagerDuty               | ✅        | HolmesGPT CLI only |
 | OpsGenie                | ✅        | HolmesGPT CLI only |
 | Jira                    | ✅        | HolmesGPT CLI only |
