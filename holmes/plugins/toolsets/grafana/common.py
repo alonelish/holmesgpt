@@ -113,8 +113,7 @@ class DirectLokiConfig(GrafanaConfig):
 
     _name: ClassVar[Optional[str]] = "Direct Loki"
     _description: ClassVar[Optional[str]] = (
-        "Connect directly to a self-hosted Loki API endpoint without going through Grafana. "
-        "Supports multi-tenancy via the X-Scope-OrgID header."
+        "Connect directly to a Loki API endpoint without going through Grafana."
     )
     _icon_url: ClassVar[Optional[str]] = LOKI_ICON_URL
     _docs_anchor: ClassVar[Optional[str]] = "direct-loki"
