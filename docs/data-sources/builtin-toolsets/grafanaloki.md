@@ -22,7 +22,7 @@ HolmesGPT supports three ways to connect to Loki. Pick the one that matches your
 | Setup | When to use |
 |-------|-------------|
 | [Self-Hosted Loki via Grafana Proxy](#self-hosted-loki-via-grafana-proxy) (recommended) | You run your own Grafana with a Loki datasource configured |
-| [Self-Hosted Loki (Direct Connection)](#self-hosted-loki-direct-connection) | Self-hosted Loki without Grafana, including multi-tenant setups needing `X-Scope-OrgID` |
+| [Self-Hosted Loki - Direct Connection](#self-hosted-loki-direct-connection) | Self-hosted Loki without Grafana, including multi-tenant setups needing `X-Scope-OrgID` |
 | [Grafana Cloud](#grafana-cloud) | Grafana Cloud's hosted Loki endpoint |
 
 ### Self-Hosted Loki via Grafana Proxy
@@ -54,7 +54,7 @@ toolsets:
       grafana_datasource_uid: <the UID of the loki data source in Grafana>
 ```
 
-### Self-Hosted Loki (Direct Connection)
+### Self-Hosted Loki - Direct Connection
 
 HolmesGPT connects directly to a self-hosted Loki API endpoint without going through Grafana.
 

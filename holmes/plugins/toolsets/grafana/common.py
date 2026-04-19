@@ -112,7 +112,7 @@ class GrafanaLokiProxyConfig(GrafanaConfig):
 class DirectLokiConfig(GrafanaConfig):
     """Direct connection to a self-hosted Loki API endpoint without Grafana."""
 
-    _name: ClassVar[Optional[str]] = "Self-Hosted Loki (Direct Connection)"
+    _name: ClassVar[Optional[str]] = "Self-Hosted Loki - Direct Connection"
     _description: ClassVar[Optional[str]] = (
         "Connect directly to a self-hosted Loki API endpoint without going through Grafana."
     )
@@ -213,7 +213,7 @@ class GrafanaTempoProxyConfig(GrafanaTempoConfig):
 class DirectTempoConfig(GrafanaTempoConfig):
     """Direct connection to a self-hosted Tempo API endpoint without Grafana."""
 
-    _name: ClassVar[Optional[str]] = "Self-Hosted Tempo (Direct Connection)"
+    _name: ClassVar[Optional[str]] = "Self-Hosted Tempo - Direct Connection"
     _description: ClassVar[Optional[str]] = (
         "Connect directly to a self-hosted Tempo API endpoint without going through Grafana."
     )

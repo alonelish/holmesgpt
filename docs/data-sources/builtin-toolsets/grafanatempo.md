@@ -20,7 +20,7 @@ HolmesGPT supports three ways to connect to Tempo. Pick the one that matches you
 | Setup | When to use |
 |-------|-------------|
 | [Self-Hosted Tempo via Grafana Proxy](#self-hosted-tempo-via-grafana-proxy) (recommended) | You run your own Grafana with a Tempo datasource configured |
-| [Self-Hosted Tempo (Direct Connection)](#self-hosted-tempo-direct-connection) | Self-hosted Tempo without Grafana, including multi-tenant setups needing `X-Scope-OrgID` |
+| [Self-Hosted Tempo - Direct Connection](#self-hosted-tempo-direct-connection) | Self-hosted Tempo without Grafana, including multi-tenant setups needing `X-Scope-OrgID` |
 | [Grafana Cloud](#grafana-cloud) | Grafana Cloud's hosted Tempo endpoint |
 
 ### Self-Hosted Tempo via Grafana Proxy
@@ -81,7 +81,7 @@ curl -s -u <username>:<password> http://localhost:3000/api/datasources | jq '.[]
             grafana_datasource_uid: <the UID of the tempo data source in Grafana>
     ```
 
-### Self-Hosted Tempo (Direct Connection)
+### Self-Hosted Tempo - Direct Connection
 
 HolmesGPT connects directly to a self-hosted Tempo API endpoint without going through Grafana.
 
