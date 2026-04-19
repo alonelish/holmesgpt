@@ -137,29 +137,31 @@ class DirectLokiConfig(GrafanaConfig):
 
 
 class GrafanaCloudLokiConfig(GrafanaConfig):
-    """Grafana Cloud's hosted Loki endpoint accessed directly with Basic authentication."""
+    """Grafana Cloud Loki accessed via your Grafana Cloud Grafana datasource proxy."""
 
     _name: ClassVar[Optional[str]] = "Grafana Cloud"
     _description: ClassVar[Optional[str]] = (
-        "Connect to Grafana Cloud's hosted Loki endpoint using Basic authentication."
+        "Query Loki through your Grafana Cloud Grafana instance's datasource proxy."
     )
     _icon_url: ClassVar[Optional[str]] = GRAFANA_ICON_URL
     _docs_anchor: ClassVar[Optional[str]] = "grafana-cloud"
-    _hidden_fields: ClassVar[List[str]] = [
-        "api_key",
-        "grafana_datasource_uid",
-        "external_url",
-    ]
+    _hidden_fields: ClassVar[List[str]] = ["additional_headers"]
 
     api_url: str = Field(  # type: ignore[assignment]
-        title="Loki URL",
-        description="Grafana Cloud Loki endpoint URL for your stack",
-        examples=["https://logs-prod-XXX.grafana.net"],
+        title="Grafana Cloud URL",
+        description="URL of your Grafana Cloud Grafana instance",
+        examples=["https://<your-stack>.grafana.net"],
     )
-    additional_headers: Dict[str, str] = Field(
-        default={"Authorization": "Basic {{ env.GRAFANA_CLOUD_LOKI_AUTH }}"},
-        title="Additional Headers",
-        description="Authorization header with Basic auth (base64 of user_id:api_token)",
+    api_key: str = Field(  # type: ignore[assignment]
+        title="API Key",
+        description="Grafana Cloud service account token with Viewer role",
+        examples=["{{ env.GRAFANA_CLOUD_API_KEY }}"],
+        json_schema_extra={"format": "password"},
+    )
+    grafana_datasource_uid: str = Field(  # type: ignore[assignment]
+        title="Loki Datasource UID",
+        description="UID of the Loki datasource configured in your Grafana Cloud Grafana",
+        examples=["grafanacloud-logs"],
     )
 
 
@@ -238,27 +240,29 @@ class DirectTempoConfig(GrafanaTempoConfig):
 
 
 class GrafanaCloudTempoConfig(GrafanaTempoConfig):
-    """Grafana Cloud's hosted Tempo endpoint accessed directly with Basic authentication."""
+    """Grafana Cloud Tempo accessed via your Grafana Cloud Grafana datasource proxy."""
 
     _name: ClassVar[Optional[str]] = "Grafana Cloud"
     _description: ClassVar[Optional[str]] = (
-        "Connect to Grafana Cloud's hosted Tempo endpoint using Basic authentication."
+        "Query Tempo through your Grafana Cloud Grafana instance's datasource proxy."
     )
     _icon_url: ClassVar[Optional[str]] = GRAFANA_ICON_URL
     _docs_anchor: ClassVar[Optional[str]] = "grafana-cloud"
-    _hidden_fields: ClassVar[List[str]] = [
-        "api_key",
-        "grafana_datasource_uid",
-        "external_url",
-    ]
+    _hidden_fields: ClassVar[List[str]] = ["additional_headers"]
 
     api_url: str = Field(  # type: ignore[assignment]
-        title="Tempo URL",
-        description="Grafana Cloud Tempo endpoint URL for your stack",
-        examples=["https://tempo-prod-XX-prod-REGION.grafana.net"],
+        title="Grafana Cloud URL",
+        description="URL of your Grafana Cloud Grafana instance",
+        examples=["https://<your-stack>.grafana.net"],
     )
-    additional_headers: Dict[str, str] = Field(
-        default={"Authorization": "Basic {{ env.GRAFANA_CLOUD_TEMPO_AUTH }}"},
-        title="Additional Headers",
-        description="Authorization header with Basic auth (base64 of user_id:api_token)",
+    api_key: str = Field(  # type: ignore[assignment]
+        title="API Key",
+        description="Grafana Cloud service account token with Viewer role and Data sources -> Reader permission",
+        examples=["{{ env.GRAFANA_CLOUD_API_KEY }}"],
+        json_schema_extra={"format": "password"},
+    )
+    grafana_datasource_uid: str = Field(  # type: ignore[assignment]
+        title="Tempo Datasource UID",
+        description="UID of the Tempo datasource configured in your Grafana Cloud Grafana",
+        examples=["grafanacloud-traces"],
     )

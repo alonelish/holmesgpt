@@ -23,7 +23,7 @@ HolmesGPT supports three ways to connect to Loki. Pick the one that matches your
 |-------|-------------|
 | [Self-Hosted Loki via Grafana Proxy](#self-hosted-loki-via-grafana-proxy) (recommended) | You run your own Grafana with a Loki datasource configured |
 | [Self-Hosted Loki - Direct Connection](#self-hosted-loki-direct-connection) | Self-hosted Loki without Grafana, including multi-tenant setups needing `X-Scope-OrgID` |
-| [Grafana Cloud](#grafana-cloud) | Grafana Cloud's hosted Loki endpoint |
+| [Grafana Cloud](#grafana-cloud) | Your Grafana Cloud stack (queries Loki via your Grafana Cloud Grafana) |
 
 ### Self-Hosted Loki via Grafana Proxy
 
@@ -70,18 +70,30 @@ toolsets:
 
 ### Grafana Cloud
 
-Connect directly to Grafana Cloud's hosted Loki endpoint using Basic authentication. This bypasses Grafana and talks to Loki's endpoint directly.
+Query Loki through your Grafana Cloud Grafana instance's datasource proxy. Same flow as the self-hosted proxy option, just pointed at your Grafana Cloud URL.
 
-**Find your endpoint and credentials:** in the Grafana Cloud portal, navigate to your stack → Loki → Details. Copy the endpoint URL (e.g., `https://logs-prod-001.grafana.net`) and create an access policy token with the `logs:read` scope. Base64-encode `<user_id>:<api_token>` to produce the Basic auth value.
+**Required:**
+
+- Your Grafana Cloud Grafana URL (e.g., `https://myorg.grafana.net`)
+- A Grafana Cloud service account token with Viewer role
+- Loki datasource UID from your Grafana Cloud Grafana
+
+**Find your Loki datasource UID:**
+
+In your Grafana Cloud Grafana UI → Connections → Data sources → click on the Loki datasource. The UID appears in the URL. Or via the API:
+
+```bash
+curl -s -H "Authorization: Bearer <service-account-token>" https://<your-stack>.grafana.net/api/datasources | jq '.[] | select(.type == "loki") | .uid'
+```
 
 ```yaml-toolset-config
 toolsets:
   grafana/loki:
     enabled: true
     config:
-      api_url: https://logs-prod-XXX.grafana.net
-      additional_headers:
-        Authorization: "Basic <base64_encoded_credentials>"  # base64(user_id:api_token)
+      api_url: https://<your-stack>.grafana.net
+      api_key: <grafana cloud service account token>
+      grafana_datasource_uid: <the UID of the Loki datasource>
 ```
 
 ## Advanced Configuration

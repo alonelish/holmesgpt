@@ -21,7 +21,7 @@ HolmesGPT supports three ways to connect to Tempo. Pick the one that matches you
 |-------|-------------|
 | [Self-Hosted Tempo via Grafana Proxy](#self-hosted-tempo-via-grafana-proxy) (recommended) | You run your own Grafana with a Tempo datasource configured |
 | [Self-Hosted Tempo - Direct Connection](#self-hosted-tempo-direct-connection) | Self-hosted Tempo without Grafana, including multi-tenant setups needing `X-Scope-OrgID` |
-| [Grafana Cloud](#grafana-cloud) | Grafana Cloud's hosted Tempo endpoint |
+| [Grafana Cloud](#grafana-cloud) | Your Grafana Cloud stack (queries Tempo via your Grafana Cloud Grafana) |
 
 ### Self-Hosted Tempo via Grafana Proxy
 
@@ -116,9 +116,23 @@ HolmesGPT connects directly to a self-hosted Tempo API endpoint without going th
 
 ### Grafana Cloud
 
-Connect directly to Grafana Cloud's hosted Tempo endpoint using Basic authentication. This bypasses Grafana and talks to Tempo's endpoint directly.
+Query Tempo through your Grafana Cloud Grafana instance's datasource proxy. Same flow as the self-hosted proxy option, just pointed at your Grafana Cloud URL.
 
-**Find your endpoint and credentials:** in the Grafana Cloud portal, navigate to your stack → Tempo → Details. Copy the endpoint URL (e.g., `https://tempo-prod-04-prod-us-east-0.grafana.net`) and create an access policy token with the `traces:read` scope. Base64-encode `<user_id>:<api_token>` to produce the Basic auth value.
+**Required:**
+
+- Your Grafana Cloud Grafana URL (e.g., `https://myorg.grafana.net`)
+- A Grafana Cloud service account token with:
+    - Basic role → Viewer
+    - Data sources → Reader
+- Tempo datasource UID from your Grafana Cloud Grafana
+
+**Find your Tempo datasource UID:**
+
+In your Grafana Cloud Grafana UI → Connections → Data sources → click on the Tempo datasource. The UID appears in the URL. Or via the API:
+
+```bash
+curl -s -H "Authorization: Bearer <service-account-token>" https://<your-stack>.grafana.net/api/datasources | jq '.[] | select(.type == "tempo") | .uid'
+```
 
 === "Holmes CLI"
 
@@ -127,9 +141,9 @@ Connect directly to Grafana Cloud's hosted Tempo endpoint using Basic authentica
       grafana/tempo:
         enabled: true
         config:
-          api_url: https://tempo-prod-XX-prod-REGION.grafana.net
-          additional_headers:
-            Authorization: "Basic <base64_encoded_credentials>"  # base64(user_id:api_token)
+          api_url: https://<your-stack>.grafana.net
+          api_key: <grafana cloud service account token>
+          grafana_datasource_uid: <the UID of the Tempo datasource>
     ```
 
 === "Robusta Helm Chart"
@@ -140,9 +154,9 @@ Connect directly to Grafana Cloud's hosted Tempo endpoint using Basic authentica
         grafana/tempo:
           enabled: true
           config:
-            api_url: https://tempo-prod-XX-prod-REGION.grafana.net
-            additional_headers:
-              Authorization: "Basic <base64_encoded_credentials>"  # base64(user_id:api_token)
+            api_url: https://<your-stack>.grafana.net
+            api_key: <grafana cloud service account token>
+            grafana_datasource_uid: <the UID of the Tempo datasource>
     ```
 
 ## Advanced Configuration
