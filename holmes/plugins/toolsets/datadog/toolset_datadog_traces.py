@@ -57,7 +57,7 @@ class DatadogTracesToolset(Toolset):
             name="datadog/traces",
             description="Toolset for interacting with Datadog APM to fetch and analyze traces",
             docs_url="https://holmesgpt.dev/data-sources/builtin-toolsets/datadog/",
-            icon_url="https://imgix.datadoghq.com//img/about/presskit/DDlogo.jpg",
+            icon_url="https://raw.githubusercontent.com/gilbarbara/logos/de2c1f96ff6e74ea7ea979b43202e8d4b863c655/logos/datadog.svg",
             prerequisites=[CallablePrerequisite(callable=self.prerequisites_callable)],
             tools=[
                 GetSpans(toolset=self),

@@ -308,7 +308,7 @@ class NewRelicToolset(Toolset):
             name="newrelic",
             description="Toolset for interacting with New Relic to fetch logs, traces, and execute freeform NRQL queries",
             docs_url="https://holmesgpt.dev/data-sources/builtin-toolsets/newrelic/",
-            icon_url="https://companieslogo.com/img/orig/NEWR-de5fcb2e.png?t=1720244493",
+            icon_url="https://raw.githubusercontent.com/gilbarbara/logos/de2c1f96ff6e74ea7ea979b43202e8d4b863c655/logos/new-relic.svg",
             prerequisites=[CallablePrerequisite(callable=self.prerequisites_callable)],  # type: ignore
             tools=[],
             tags=[ToolsetTag.CORE],

@@ -172,7 +172,7 @@ class NotionToolset(InternetBaseToolset):
         super().__init__(
             name="notion",
             description="Fetch notion webpages",
-            icon_url="https://upload.wikimedia.org/wikipedia/commons/thumb/e/e9/Notion-logo.svg/2048px-Notion-logo.svg.png",
+            icon_url="https://raw.githubusercontent.com/gilbarbara/logos/de2c1f96ff6e74ea7ea979b43202e8d4b863c655/logos/notion.svg",
             docs_url="https://holmesgpt.dev/data-sources/builtin-toolsets/notion/",
             tools=[
                 FetchNotion(self),

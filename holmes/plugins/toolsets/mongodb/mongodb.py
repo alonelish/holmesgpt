@@ -155,7 +155,7 @@ class MongoDBToolset(Toolset):
             enabled=enabled,
             description=description,
             docs_url="https://holmesgpt.dev/data-sources/builtin-toolsets/mongodb/",
-            icon_url="https://www.mongodb.com/favicon.ico",
+            icon_url="https://raw.githubusercontent.com/gilbarbara/logos/de2c1f96ff6e74ea7ea979b43202e8d4b863c655/logos/mongodb.svg",
             prerequisites=[CallablePrerequisite(callable=self.prerequisites_callable)],
             tools=[],
             tags=[ToolsetTag.CORE],

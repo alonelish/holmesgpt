@@ -78,7 +78,7 @@ class PrometheusConfig(ToolsetConfig):
 
     _name: ClassVar[Optional[str]] = "Prometheus"
     _description: ClassVar[Optional[str]] = "Connect to a self-hosted Prometheus server."
-    _icon_url: ClassVar[Optional[str]] = "https://cdn.simpleicons.org/prometheus/E6522C"
+    _icon_url: ClassVar[Optional[str]] = "https://raw.githubusercontent.com/gilbarbara/logos/de2c1f96ff6e74ea7ea979b43202e8d4b863c655/logos/prometheus.svg"
     _docs_anchor: ClassVar[Optional[str]] = "configuration"
 
     _deprecated_mappings: ClassVar[Dict[str, Optional[str]]] = {
@@ -1901,7 +1901,7 @@ class PrometheusToolset(Toolset):
             name="prometheus/metrics",
             description="Prometheus integration to fetch metadata and execute PromQL queries",
             docs_url="https://holmesgpt.dev/data-sources/builtin-toolsets/prometheus/",
-            icon_url="https://upload.wikimedia.org/wikipedia/commons/3/38/Prometheus_software_logo.svg",
+            icon_url="https://raw.githubusercontent.com/gilbarbara/logos/de2c1f96ff6e74ea7ea979b43202e8d4b863c655/logos/prometheus.svg",
             prerequisites=[CallablePrerequisite(callable=self.prerequisites_callable)],
             tools=[
                 ListPrometheusRules(toolset=self),

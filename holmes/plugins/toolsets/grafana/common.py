@@ -5,8 +5,8 @@ from pydantic import Field
 from holmes.utils.pydantic_utils import ToolsetConfig
 
 GRAFANA_ICON_URL = "https://raw.githubusercontent.com/gilbarbara/logos/de2c1f96ff6e74ea7ea979b43202e8d4b863c655/logos/grafana.svg"
-LOKI_ICON_URL = "https://grafana.com/media/docs/loki/logo-grafana-loki.png"
-TEMPO_ICON_URL = "https://grafana.com/static/assets/img/blog/tempo.png"
+LOKI_ICON_URL = "https://raw.githubusercontent.com/gilbarbara/logos/de2c1f96ff6e74ea7ea979b43202e8d4b863c655/logos/grafana.svg"
+TEMPO_ICON_URL = "https://raw.githubusercontent.com/gilbarbara/logos/de2c1f96ff6e74ea7ea979b43202e8d4b863c655/logos/grafana.svg"
 
 
 class GrafanaConfig(ToolsetConfig):

@@ -112,7 +112,7 @@ class GrafanaLokiToolset(BaseGrafanaToolset):
         super().__init__(
             name="grafana/loki",
             description="Runs loki log queries using Grafana Loki or Loki directly.",
-            icon_url="https://grafana.com/media/docs/loki/logo-grafana-loki.png",
+            icon_url="https://raw.githubusercontent.com/gilbarbara/logos/de2c1f96ff6e74ea7ea979b43202e8d4b863c655/logos/grafana.svg",
             docs_url="https://holmesgpt.dev/data-sources/builtin-toolsets/grafanaloki/",
             tools=[],
         )

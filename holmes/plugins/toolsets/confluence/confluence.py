@@ -63,7 +63,7 @@ class ConfluenceToolset(Toolset):
         super().__init__(
             name="confluence",
             description="Fetch and search Confluence pages",
-            icon_url="https://platform.robusta.dev/demos/confluence.svg",
+            icon_url="https://raw.githubusercontent.com/gilbarbara/logos/de2c1f96ff6e74ea7ea979b43202e8d4b863c655/logos/confluence.svg",
             docs_url="https://holmesgpt.dev/data-sources/builtin-toolsets/confluence/",
             prerequisites=[CallablePrerequisite(callable=self.prerequisites_callable)],
             tools=[],

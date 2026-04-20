@@ -196,7 +196,7 @@ class DatabaseToolset(Toolset):
             enabled=enabled,
             description=description,
             docs_url="https://holmesgpt.dev/data-sources/builtin-toolsets/database/",
-            icon_url="https://www.postgresql.org/favicon.ico",
+            icon_url="https://raw.githubusercontent.com/gilbarbara/logos/de2c1f96ff6e74ea7ea979b43202e8d4b863c655/logos/postgresql.svg",
             prerequisites=[CallablePrerequisite(callable=self.prerequisites_callable)],
             tools=[],
             tags=[ToolsetTag.CORE],
