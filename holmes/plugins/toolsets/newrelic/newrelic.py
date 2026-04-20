@@ -327,17 +327,30 @@ class NewRelicToolset(Toolset):
             self.api_key = nr_config.api_key
             self.is_eu_datacenter = nr_config.is_eu_datacenter or False
             self.enable_multi_account = nr_config.enable_multi_account or False
-
-            # Tool uses enable_multi_account flag.
-            self.tools = [ExecuteNRQLQuery(self)]
-            if self.enable_multi_account:
-                self.tools.append(ListOrganizationAccounts(self))
-            template_file_path = os.path.abspath(
-                os.path.join(os.path.dirname(__file__), "newrelic.jinja2")
-            )
-            self._load_llm_instructions(jinja_template=f"file://{template_file_path}")
-
-            return True, None
         except Exception as e:
-            logging.exception("Failed to set up New Relic toolset")
-            return False, str(e)
+            logging.exception("Failed to parse New Relic configuration")
+            return False, f"Failed to parse New Relic configuration: {e}"
+
+        # Health check: run a minimal NRQL query so we catch bad credentials or
+        # an unreachable account at config time instead of on first real query.
+        # NrAuditEvent is auto-populated by New Relic for every API call, so it
+        # exists on every account regardless of what's being instrumented.
+        try:
+            api = self.create_api_client()
+            api.execute_nrql_query(
+                "SELECT count(*) FROM NrAuditEvent SINCE 1 day ago LIMIT 1"
+            )
+        except Exception as e:
+            logging.exception("New Relic health check failed")
+            return False, f"New Relic health check failed: {e}"
+
+        # Tool list uses enable_multi_account flag.
+        self.tools = [ExecuteNRQLQuery(self)]
+        if self.enable_multi_account:
+            self.tools.append(ListOrganizationAccounts(self))
+        template_file_path = os.path.abspath(
+            os.path.join(os.path.dirname(__file__), "newrelic.jinja2")
+        )
+        self._load_llm_instructions(jinja_template=f"file://{template_file_path}")
+
+        return True, None
