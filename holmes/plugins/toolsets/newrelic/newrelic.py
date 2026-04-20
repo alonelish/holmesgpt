@@ -235,8 +235,9 @@ class NewrelicConfig(ToolsetConfig):
 
     api_key: str = Field(
         title="API Key",
-        description="New Relic API key for authentication",
-        examples=["NRAK-XXXXXXXXXXXXXXXXXXXXXXXXXX"],
+        description="New Relic User API Key (starts with NRAK-). Create one at https://one.newrelic.com/admin-portal/api-keys/launcher (or the EU equivalent).",
+        examples=["{{ env.NEW_RELIC_API_KEY }}"],
+        json_schema_extra={"format": "password"},
     )
     account_id: str = Field(
         title="Account ID",
