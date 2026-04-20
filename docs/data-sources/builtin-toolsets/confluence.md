@@ -8,124 +8,167 @@ Works with both **Confluence Cloud** and **Confluence Data Center / Server**.
 
 ## Configuration
 
-=== "Confluence Cloud"
+HolmesGPT supports three ways to connect to Confluence. Pick the one that matches your setup:
 
-    **Create an API token:**
+| Setup | When to use |
+|-------|-------------|
+| [Confluence Cloud](#confluence-cloud) (recommended) | Atlassian-hosted Confluence at `<your-company>.atlassian.net` |
+| [Confluence Data Center - Personal Access Token](#confluence-data-center-personal-access-token) | Self-hosted Confluence Data Center / Server using a PAT (recommended for DC) |
+| [Confluence Data Center - Basic Auth](#confluence-data-center-basic-auth) | Self-hosted Confluence Data Center / Server using username + password |
 
-    Go to [Atlassian API Tokens](https://id.atlassian.com/manage/api-tokens){:target="_blank"} and create a new token. For service accounts, create a scoped API token in the [Atlassian Admin](https://admin.atlassian.com){:target="_blank"} under **Security** > **API tokens**.
+### Confluence Cloud
 
-    === "Holmes CLI"
+HolmesGPT authenticates to Confluence Cloud with an Atlassian API token.
 
-        Add to your config file (`~/.holmes/config.yaml`):
+**Create an API token:**
 
-        ```yaml
-        toolsets:
-          confluence:
-            enabled: true
-            config:
-              api_url: "https://yourcompany.atlassian.net"
-              user: "your-email@example.com"
-              api_key: "your-api-token"
-        ```
+Go to [Atlassian API Tokens](https://id.atlassian.com/manage/api-tokens){:target="_blank"} and create a new token. For service accounts, create a scoped API token in the [Atlassian Admin](https://admin.atlassian.com){:target="_blank"} under **Security** > **API tokens**.
 
-        To test, run:
+=== "Holmes CLI"
 
-        ```bash
-        holmes ask "search Confluence for runbooks about database issues"
-        ```
+    Add to your config file (`~/.holmes/config.yaml`):
 
-        --8<-- "snippets/toolset_refresh_warning.md"
+    ```yaml
+    toolsets:
+      confluence:
+        enabled: true
+        config:
+          api_url: "https://yourcompany.atlassian.net"
+          user: "your-email@example.com"
+          api_key: "your-api-token"
+    ```
 
-    === "Robusta Helm Chart"
+    To test, run:
 
-        ```yaml
-        holmes:
-          additionalEnvVars:
-            - name: CONFLUENCE_API_URL
-              value: "https://yourcompany.atlassian.net"
-            - name: CONFLUENCE_USER
-              value: "your-email@example.com"
-            - name: CONFLUENCE_API_KEY
-              valueFrom:
-                secretKeyRef:
-                  name: confluence-credentials
-                  key: api-key
-          toolsets:
-            confluence:
-              enabled: true
-              config:
-                api_url: "{{ env.CONFLUENCE_API_URL }}"
-                user: "{{ env.CONFLUENCE_USER }}"
-                api_key: "{{ env.CONFLUENCE_API_KEY }}"
-        ```
+    ```bash
+    holmes ask "search Confluence for runbooks about database issues"
+    ```
 
-        --8<-- "snippets/helm_upgrade_command.md"
+    --8<-- "snippets/toolset_refresh_warning.md"
 
-    !!! note "Scoped tokens and service accounts"
-        Scoped API tokens and service account tokens on Confluence Cloud require routing through the Atlassian API gateway (`api.atlassian.com`). HolmesGPT auto-detects this and switches to the gateway transparently — no extra configuration needed. If auto-detection doesn't work, you can set `cloud_id` explicitly (find it at `https://yourcompany.atlassian.net/_edge/tenant_info`).
+=== "Robusta Helm Chart"
 
-=== "Confluence Data Center / Server"
+    ```yaml
+    holmes:
+      additionalEnvVars:
+        - name: CONFLUENCE_API_URL
+          value: "https://yourcompany.atlassian.net"
+        - name: CONFLUENCE_USER
+          value: "your-email@example.com"
+        - name: CONFLUENCE_API_KEY
+          valueFrom:
+            secretKeyRef:
+              name: confluence-credentials
+              key: api-key
+      toolsets:
+        confluence:
+          enabled: true
+          config:
+            api_url: "{{ env.CONFLUENCE_API_URL }}"
+            user: "{{ env.CONFLUENCE_USER }}"
+            api_key: "{{ env.CONFLUENCE_API_KEY }}"
+    ```
 
-    Data Center supports two authentication methods: Personal Access Tokens (recommended) and basic auth with username/password.
+    --8<-- "snippets/helm_upgrade_command.md"
 
-    **Create a Personal Access Token (PAT):**
+!!! note "Scoped tokens and service accounts"
+    Scoped API tokens and service account tokens on Confluence Cloud require routing through the Atlassian API gateway (`api.atlassian.com`). HolmesGPT auto-detects this and switches to the gateway transparently — no extra configuration needed. If auto-detection doesn't work, you can set `cloud_id` explicitly in raw YAML (find it at `https://yourcompany.atlassian.net/_edge/tenant_info`).
 
-    In Confluence Data Center, go to your **Profile** > **Personal Access Tokens** > **Create token**.
+### Confluence Data Center - Personal Access Token
 
-    === "Holmes CLI"
+HolmesGPT authenticates to a self-hosted Confluence Data Center (or Server) instance with a Personal Access Token. This is the **recommended** auth method for Data Center — PATs can be revoked individually and don't require sharing a password.
 
-        Add to your config file (`~/.holmes/config.yaml`):
+**Create a Personal Access Token:**
 
-        ```yaml
-        # Using Personal Access Token (recommended)
-        toolsets:
-          confluence:
-            enabled: true
-            config:
-              api_url: "https://confluence.yourcompany.com"
-              api_key: "your-personal-access-token"
-              auth_type: "bearer"
-              api_path_prefix: ""
-        ```
+In Confluence Data Center, go to your **Profile** > **Personal Access Tokens** > **Create token**.
 
-        ```yaml
-        # Using username/password
-        toolsets:
-          confluence:
-            enabled: true
-            config:
-              api_url: "https://confluence.yourcompany.com"
-              user: "your-username"
-              api_key: "your-password"
-              api_path_prefix: ""
-        ```
+=== "Holmes CLI"
 
-        --8<-- "snippets/toolset_refresh_warning.md"
+    Add to your config file (`~/.holmes/config.yaml`):
 
-    === "Robusta Helm Chart"
+    ```yaml
+    toolsets:
+      confluence:
+        enabled: true
+        config:
+          api_url: "https://confluence.yourcompany.com"
+          api_key: "your-personal-access-token"
+          auth_type: "bearer"
+          api_path_prefix: ""
+    ```
 
-        ```yaml
-        # Using Personal Access Token (recommended)
-        holmes:
-          additionalEnvVars:
-            - name: CONFLUENCE_API_URL
-              value: "https://confluence.yourcompany.com"
-            - name: CONFLUENCE_PAT
-              valueFrom:
-                secretKeyRef:
-                  name: confluence-credentials
-                  key: pat
-          toolsets:
-            confluence:
-              enabled: true
-              config:
-                api_url: "{{ env.CONFLUENCE_API_URL }}"
-                api_key: "{{ env.CONFLUENCE_PAT }}"
-                auth_type: "bearer"
-                api_path_prefix: ""
-        ```
+    --8<-- "snippets/toolset_refresh_warning.md"
 
-        --8<-- "snippets/helm_upgrade_command.md"
+=== "Robusta Helm Chart"
+
+    ```yaml
+    holmes:
+      additionalEnvVars:
+        - name: CONFLUENCE_API_URL
+          value: "https://confluence.yourcompany.com"
+        - name: CONFLUENCE_PAT
+          valueFrom:
+            secretKeyRef:
+              name: confluence-credentials
+              key: pat
+      toolsets:
+        confluence:
+          enabled: true
+          config:
+            api_url: "{{ env.CONFLUENCE_API_URL }}"
+            api_key: "{{ env.CONFLUENCE_PAT }}"
+            auth_type: "bearer"
+            api_path_prefix: ""
+    ```
+
+    --8<-- "snippets/helm_upgrade_command.md"
+
+### Confluence Data Center - Basic Auth
+
+HolmesGPT authenticates to a self-hosted Confluence Data Center (or Server) instance with a username and password. Prefer Personal Access Tokens where possible; use this mode when PATs are not available.
+
+=== "Holmes CLI"
+
+    Add to your config file (`~/.holmes/config.yaml`):
+
+    ```yaml
+    toolsets:
+      confluence:
+        enabled: true
+        config:
+          api_url: "https://confluence.yourcompany.com"
+          user: "your-username"
+          api_key: "your-password"
+          api_path_prefix: ""
+    ```
+
+    --8<-- "snippets/toolset_refresh_warning.md"
+
+=== "Robusta Helm Chart"
+
+    ```yaml
+    holmes:
+      additionalEnvVars:
+        - name: CONFLUENCE_API_URL
+          value: "https://confluence.yourcompany.com"
+        - name: CONFLUENCE_USER
+          value: "your-username"
+        - name: CONFLUENCE_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: confluence-credentials
+              key: password
+      toolsets:
+        confluence:
+          enabled: true
+          config:
+            api_url: "{{ env.CONFLUENCE_API_URL }}"
+            user: "{{ env.CONFLUENCE_USER }}"
+            api_key: "{{ env.CONFLUENCE_PASSWORD }}"
+            api_path_prefix: ""
+    ```
+
+    --8<-- "snippets/helm_upgrade_command.md"
 
 ## Configuration Reference
 

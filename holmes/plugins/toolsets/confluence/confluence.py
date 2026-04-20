@@ -1,6 +1,6 @@
 import logging
 import re
-from typing import Any, ClassVar, Dict, Literal, Optional, Tuple, Type
+from typing import Any, ClassVar, Dict, List, Literal, Optional, Tuple, Type
 from urllib.parse import urlparse
 
 import requests  # type: ignore
@@ -19,51 +19,211 @@ logger = logging.getLogger(__name__)
 
 ATLASSIAN_CLOUD_PATTERN = re.compile(r"https?://[^/]+\.atlassian\.net")
 ATLASSIAN_GATEWAY_BASE = "https://api.atlassian.com/ex/confluence"
+CONFLUENCE_ICON_URL = (
+    "https://raw.githubusercontent.com/gilbarbara/logos/"
+    "de2c1f96ff6e74ea7ea979b43202e8d4b863c655/logos/confluence.svg"
+)
 
 
 class ConfluenceConfig(ToolsetConfig):
-    """Configuration for Confluence REST API access (Cloud and Data Center)."""
+    """Base configuration shared by all Confluence variants (Cloud and Data Center).
+
+    Holds the full runtime surface. Variant subclasses (`ConfluenceCloudConfig`,
+    `ConfluenceDataCenterPATConfig`, `ConfluenceDataCenterBasicConfig`) narrow
+    and rename the fields shown to the frontend; runtime code keeps reading
+    the same attribute names off whichever subclass was instantiated.
+    """
 
     api_url: str = Field(
-        description="Confluence base URL (e.g., https://mycompany.atlassian.net)",
+        title="URL",
+        description="Confluence base URL",
+        examples=["https://mycompany.atlassian.net"],
     )
     user: Optional[str] = Field(
         default=None,
+        title="User",
         description="User email (Cloud) or username (Data Center). Required for basic auth.",
     )
     api_key: str = Field(
-        description="Atlassian API token (Cloud) or Personal Access Token (Data Center)",
+        title="API Key",
+        description="Atlassian API token (Cloud), Personal Access Token (Data Center), or password",
+        examples=["{{ env.CONFLUENCE_API_KEY }}"],
+        json_schema_extra={"format": "password"},
     )
     auth_type: Literal["basic", "bearer"] = Field(
         default="basic",
+        title="Authentication Type",
         description="'basic' for Cloud or Data Center user+password, 'bearer' for Data Center PATs.",
     )
     api_path_prefix: str = Field(
         default="/wiki",
+        title="API Path Prefix",
         description="Path prefix before /rest/api. Cloud uses '/wiki', Data Center typically ''.",
     )
     cloud_id: Optional[str] = Field(
         default=None,
+        title="Cloud ID",
         description="Atlassian Cloud ID for the API gateway. Auto-detected when needed.",
     )
 
     @model_validator(mode="after")
     def validate_auth(self) -> "ConfluenceConfig":
         if self.auth_type == "basic" and not self.user:
-            raise ValueError("'user' is required when auth_type is 'basic'. For PATs, set auth_type to 'bearer'.")
+            raise ValueError(
+                "'user' is required when auth_type is 'basic'. For PATs, set auth_type to 'bearer'."
+            )
         return self
+
+
+class ConfluenceCloudConfig(ConfluenceConfig):
+    """Confluence Cloud — hosted at yourcompany.atlassian.net with an API token."""
+
+    _name: ClassVar[Optional[str]] = "Confluence Cloud"
+    _description: ClassVar[Optional[str]] = (
+        "Confluence Cloud hosted at <your-company>.atlassian.net, authenticated with an API token."
+    )
+    _icon_url: ClassVar[Optional[str]] = CONFLUENCE_ICON_URL
+    _docs_anchor: ClassVar[Optional[str]] = "confluence-cloud"
+    _hidden_fields: ClassVar[List[str]] = [
+        "auth_type",
+        "api_path_prefix",
+        "cloud_id",
+    ]
+    _recommended: ClassVar[bool] = True
+
+    api_url: str = Field(  # type: ignore[assignment]
+        title="Confluence URL",
+        description="Your Confluence Cloud URL",
+        examples=["https://yourcompany.atlassian.net"],
+    )
+    user: str = Field(  # type: ignore[assignment]
+        title="User Email",
+        description="Email address of the Atlassian user whose API token you're using",
+        examples=["you@yourcompany.com"],
+    )
+    api_key: str = Field(  # type: ignore[assignment]
+        title="API Token",
+        description=(
+            "Atlassian API token. Create one at "
+            "https://id.atlassian.com/manage/api-tokens"
+        ),
+        examples=["{{ env.CONFLUENCE_API_KEY }}"],
+        json_schema_extra={"format": "password"},
+    )
+
+
+class ConfluenceDataCenterPATConfig(ConfluenceConfig):
+    """Confluence Data Center / Server authenticated with a Personal Access Token."""
+
+    _name: ClassVar[Optional[str]] = "Confluence Data Center - Personal Access Token"
+    _description: ClassVar[Optional[str]] = (
+        "Self-hosted Confluence Data Center / Server authenticated with a Personal Access Token (recommended for DC)."
+    )
+    _icon_url: ClassVar[Optional[str]] = CONFLUENCE_ICON_URL
+    _docs_anchor: ClassVar[Optional[str]] = "confluence-data-center-personal-access-token"
+    _hidden_fields: ClassVar[List[str]] = [
+        "user",
+        "auth_type",
+        "api_path_prefix",
+        "cloud_id",
+    ]
+
+    api_url: str = Field(  # type: ignore[assignment]
+        title="Confluence URL",
+        description="Base URL of your self-hosted Confluence instance",
+        examples=["https://confluence.yourcompany.com"],
+    )
+    api_key: str = Field(  # type: ignore[assignment]
+        title="Personal Access Token",
+        description=(
+            "Personal Access Token. Create one in Confluence at "
+            "Profile → Personal Access Tokens → Create token."
+        ),
+        examples=["{{ env.CONFLUENCE_PAT }}"],
+        json_schema_extra={"format": "password"},
+    )
+    auth_type: Literal["basic", "bearer"] = Field(  # type: ignore[assignment]
+        default="bearer",
+        title="Authentication Type",
+        description="Always 'bearer' for Personal Access Tokens.",
+    )
+    api_path_prefix: str = Field(  # type: ignore[assignment]
+        default="",
+        title="API Path Prefix",
+        description="Data Center uses an empty path prefix.",
+    )
+
+
+class ConfluenceDataCenterBasicConfig(ConfluenceConfig):
+    """Confluence Data Center / Server authenticated with username + password."""
+
+    _name: ClassVar[Optional[str]] = "Confluence Data Center - Basic Auth"
+    _description: ClassVar[Optional[str]] = (
+        "Self-hosted Confluence Data Center / Server authenticated with a username and password."
+    )
+    _icon_url: ClassVar[Optional[str]] = CONFLUENCE_ICON_URL
+    _docs_anchor: ClassVar[Optional[str]] = "confluence-data-center-basic-auth"
+    _hidden_fields: ClassVar[List[str]] = [
+        "auth_type",
+        "api_path_prefix",
+        "cloud_id",
+    ]
+
+    api_url: str = Field(  # type: ignore[assignment]
+        title="Confluence URL",
+        description="Base URL of your self-hosted Confluence instance",
+        examples=["https://confluence.yourcompany.com"],
+    )
+    user: str = Field(  # type: ignore[assignment]
+        title="Username",
+        description="Confluence Data Center username",
+        examples=["myuser"],
+    )
+    api_key: str = Field(  # type: ignore[assignment]
+        title="Password",
+        description="Confluence Data Center password for the user above",
+        examples=["{{ env.CONFLUENCE_PASSWORD }}"],
+        json_schema_extra={"format": "password"},
+    )
+    api_path_prefix: str = Field(  # type: ignore[assignment]
+        default="",
+        title="API Path Prefix",
+        description="Data Center uses an empty path prefix.",
+    )
+
+
+def determine_confluence_class(config: Dict[str, Any]) -> Type[ConfluenceConfig]:
+    """Pick the right variant based on the config dict.
+
+    - URL matching *.atlassian.net → Confluence Cloud
+    - Otherwise auth_type='bearer' (or 'bearer' in config hints) → Data Center PAT
+    - Otherwise → Data Center Basic Auth
+    """
+    api_url = str(config.get("api_url", "") or "")
+    if ATLASSIAN_CLOUD_PATTERN.match(api_url):
+        return ConfluenceCloudConfig
+    if str(config.get("auth_type", "") or "").lower() == "bearer":
+        return ConfluenceDataCenterPATConfig
+    return ConfluenceDataCenterBasicConfig
 
 
 class ConfluenceToolset(Toolset):
     """Confluence toolset that auto-detects auth and delegates to the HTTP toolset."""
 
-    config_classes: ClassVar[list[Type[ConfluenceConfig]]] = [ConfluenceConfig]
+    # Order matters: frontend shows them in this order, and
+    # `prerequisites_callable` picks via `determine_confluence_class` below.
+    # The first entry is the recommended default.
+    config_classes: ClassVar[list[Type[ConfluenceConfig]]] = [
+        ConfluenceCloudConfig,
+        ConfluenceDataCenterPATConfig,
+        ConfluenceDataCenterBasicConfig,
+    ]
 
     def __init__(self) -> None:
         super().__init__(
             name="confluence",
             description="Fetch and search Confluence pages",
-            icon_url="https://raw.githubusercontent.com/gilbarbara/logos/de2c1f96ff6e74ea7ea979b43202e8d4b863c655/logos/confluence.svg",
+            icon_url=CONFLUENCE_ICON_URL,
             docs_url="https://holmesgpt.dev/data-sources/builtin-toolsets/confluence/",
             prerequisites=[CallablePrerequisite(callable=self.prerequisites_callable)],
             tools=[],
@@ -73,7 +233,13 @@ class ConfluenceToolset(Toolset):
 
     def prerequisites_callable(self, config: dict[str, Any]) -> Tuple[bool, str]:
         try:
-            self.config = ConfluenceConfig(**config)
+            # Pick the variant based on the supplied config. Backwards-compatible
+            # with existing YAML: if `api_url` looks like Atlassian Cloud, use
+            # the Cloud variant; else use Data Center PAT or Basic based on
+            # auth_type. All three variants share the same runtime contract
+            # (same attribute names) so the rest of this class is unchanged.
+            config_cls = determine_confluence_class(config)
+            self.config = config_cls(**config)
             self._gateway_base_url = None
 
             ok, msg = self._perform_health_check()
