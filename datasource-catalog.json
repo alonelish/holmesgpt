@@ -56,7 +56,7 @@
       "description": "Query data from any AWS service",
       "categories": ["cloud-providers"],
       "iconUrl": "https://raw.githubusercontent.com/gilbarbara/logos/de2c1f96ff6e74ea7ea979b43202e8d4b863c655/logos/aws.svg",
-      "docsUrl": "https://holmesgpt.dev/data-sources/builtin-toolsets/aws/?tab=robusta-helm-chart",
+      "docsUrl": "https://holmesgpt.dev/latest/data-sources/builtin-toolsets/aws/?tab=robusta-helm-chart",
       "configType": "native-mcp",
       "helmPath": "holmes.mcpAddons.aws",
       "minRobustaVersion": "0.29.2",
@@ -68,7 +68,7 @@
       "description": "Query data from any Azure service",
       "categories": ["cloud-providers"],
       "iconUrl": "https://raw.githubusercontent.com/gilbarbara/logos/de2c1f96ff6e74ea7ea979b43202e8d4b863c655/logos/microsoft-azure.svg",
-      "docsUrl": "https://holmesgpt.dev/data-sources/builtin-toolsets/azure-mcp/?tab=robusta-helm-chart",
+      "docsUrl": "https://holmesgpt.dev/latest/data-sources/builtin-toolsets/azure-mcp/?tab=robusta-helm-chart",
       "configType": "native-mcp",
       "helmPath": "holmes.mcpAddons.azure",
       "minRobustaVersion": "0.31.2",
@@ -80,7 +80,7 @@
       "description": "Query data from any GCP service",
       "categories": ["cloud-providers"],
       "iconUrl": "https://raw.githubusercontent.com/gilbarbara/logos/de2c1f96ff6e74ea7ea979b43202e8d4b863c655/logos/google-cloud.svg",
-      "docsUrl": "https://holmesgpt.dev/data-sources/builtin-toolsets/gcp/?tab=robusta-helm-chart",
+      "docsUrl": "https://holmesgpt.dev/latest/data-sources/builtin-toolsets/gcp/?tab=robusta-helm-chart",
       "configType": "native-mcp",
       "helmPath": "holmes.mcpAddons.gcp",
       "minRobustaVersion": "0.31.2",
@@ -92,7 +92,7 @@
       "description": "Query MariaDB performance data, deadlocks, and slow queries",
       "categories": ["databases"],
       "iconUrl": "https://raw.githubusercontent.com/gilbarbara/logos/de2c1f96ff6e74ea7ea979b43202e8d4b863c655/logos/mariadb.svg",
-      "docsUrl": "https://holmesgpt.dev/data-sources/builtin-toolsets/mariadb-mcp/?tab=robusta-helm-chart",
+      "docsUrl": "https://holmesgpt.dev/latest/data-sources/builtin-toolsets/mariadb-mcp/?tab=robusta-helm-chart",
       "configType": "native-mcp",
       "helmPath": "holmes.mcpAddons.mariadb",
       "minRobustaVersion": "0.29.2",
@@ -104,7 +104,7 @@
       "description": "Query MongoDB Atlas alerts, events, logs, and slow queries",
       "categories": ["databases"],
       "iconUrl": "https://raw.githubusercontent.com/gilbarbara/logos/de2c1f96ff6e74ea7ea979b43202e8d4b863c655/logos/mongodb.svg",
-      "docsUrl": "https://holmesgpt.dev/data-sources/builtin-toolsets/mongodb-atlas/?tab=robusta-helm-chart",
+      "docsUrl": "https://holmesgpt.dev/latest/data-sources/builtin-toolsets/mongodb-atlas/?tab=robusta-helm-chart",
       "configType": "native",
       "backendToolsetNames": ["atlas_mongodb", "MongoDBAtlas", "mongodbatlas"]
     },
@@ -114,7 +114,7 @@
       "description": "Query Azure SQL performance metrics, connections, and query stats",
       "categories": ["databases"],
       "iconUrl": "https://raw.githubusercontent.com/gilbarbara/logos/de2c1f96ff6e74ea7ea979b43202e8d4b863c655/logos/microsoft-azure.svg",
-      "docsUrl": "https://holmesgpt.dev/data-sources/builtin-toolsets/azure-sql/?tab=robusta-helm-chart",
+      "docsUrl": "https://holmesgpt.dev/latest/data-sources/builtin-toolsets/azure-sql/?tab=robusta-helm-chart",
       "configType": "native",
       "backendToolsetNames": ["azure_sql", "Azure/Sql", "azure/sql"]
     },
@@ -184,7 +184,7 @@
       "description": "Query GitHub repositories, pull requests, issues, and Actions workflows",
       "categories": ["source-control-cicd"],
       "iconUrl": "https://raw.githubusercontent.com/gilbarbara/logos/de2c1f96ff6e74ea7ea979b43202e8d4b863c655/logos/github.svg",
-      "docsUrl": "https://holmesgpt.dev/data-sources/builtin-toolsets/github-mcp/?tab=robusta-helm-chart",
+      "docsUrl": "https://holmesgpt.dev/latest/data-sources/builtin-toolsets/github-mcp/?tab=robusta-helm-chart",
       "configType": "native-mcp",
       "helmPath": "holmes.mcpAddons.github",
       "minRobustaVersion": "0.32.0",
@@ -196,7 +196,7 @@
       "description": "Query ArgoCD application sync status and deployment health",
       "categories": ["source-control-cicd"],
       "iconUrl": "https://raw.githubusercontent.com/gilbarbara/logos/de2c1f96ff6e74ea7ea979b43202e8d4b863c655/logos/argo.svg",
-      "docsUrl": "https://holmesgpt.dev/data-sources/builtin-toolsets/argocd/?tab=robusta-helm-chart",
+      "docsUrl": "https://holmesgpt.dev/latest/data-sources/builtin-toolsets/argocd/?tab=robusta-helm-chart",
       "configType": "native",
       "backendToolsetNames": ["argocd/core"]
     },
@@ -206,7 +206,7 @@
       "description": "Search and query Splunk logs and events",
       "categories": ["logs"],
       "iconUrl": "https://raw.githubusercontent.com/gilbarbara/logos/de2c1f96ff6e74ea7ea979b43202e8d4b863c655/logos/splunk.svg",
-      "docsUrl": "https://holmesgpt.dev/data-sources/builtin-toolsets/splunk-mcp/?tab=robusta-helm-chart",
+      "docsUrl": "https://holmesgpt.dev/latest/data-sources/builtin-toolsets/splunk-mcp/?tab=robusta-helm-chart",
       "configType": "mcp",
       "backendToolsetNames": ["splunk", "splunk-mcp"]
     },
@@ -216,7 +216,7 @@
       "description": "Search and query Datadog logs",
       "categories": ["logs"],
       "iconUrl": "https://raw.githubusercontent.com/gilbarbara/logos/de2c1f96ff6e74ea7ea979b43202e8d4b863c655/logos/datadog.svg",
-      "docsUrl": "https://holmesgpt.dev/data-sources/builtin-toolsets/datadog/?tab=robusta-helm-chart",
+      "docsUrl": "https://holmesgpt.dev/latest/data-sources/builtin-toolsets/datadog/?tab=robusta-helm-chart",
       "configType": "native",
       "backendToolsetNames": ["datadog/logs"]
     },
@@ -226,7 +226,7 @@
       "description": "Search and query Grafana Loki logs",
       "categories": ["logs"],
       "iconUrl": "https://raw.githubusercontent.com/gilbarbara/logos/de2c1f96ff6e74ea7ea979b43202e8d4b863c655/logos/grafana.svg",
-      "docsUrl": "https://holmesgpt.dev/data-sources/builtin-toolsets/grafanaloki/?tab=robusta-helm-chart",
+      "docsUrl": "https://holmesgpt.dev/latest/data-sources/builtin-toolsets/grafanaloki/?tab=robusta-helm-chart",
       "configType": "native",
       "backendToolsetNames": ["grafana/loki"]
     },
@@ -236,7 +236,7 @@
       "description": "Search and query OpenSearch logs",
       "categories": ["logs"],
       "iconUrl": "https://raw.githubusercontent.com/gilbarbara/logos/de2c1f96ff6e74ea7ea979b43202e8d4b863c655/logos/opensearch.svg",
-      "docsUrl": "https://holmesgpt.dev/data-sources/builtin-toolsets/elasticsearch/?tab=robusta-helm-chart",
+      "docsUrl": "https://holmesgpt.dev/latest/data-sources/builtin-toolsets/elasticsearch/?tab=robusta-helm-chart",
       "configType": "native",
       "backendToolsetNames": ["opensearch/logs", "opensearch/query_assist"]
     },
@@ -246,7 +246,7 @@
       "description": "Search and query Elasticsearch data",
       "categories": ["logs", "metrics", "traces"],
       "iconUrl": "https://raw.githubusercontent.com/gilbarbara/logos/de2c1f96ff6e74ea7ea979b43202e8d4b863c655/logos/elasticsearch.svg",
-      "docsUrl": "https://holmesgpt.dev/data-sources/builtin-toolsets/elasticsearch/?tab=robusta-helm-chart",
+      "docsUrl": "https://holmesgpt.dev/latest/data-sources/builtin-toolsets/elasticsearch/?tab=robusta-helm-chart",
       "configType": "native",
       "backendToolsetNames": ["elasticsearch/data"]
     },
@@ -256,7 +256,7 @@
       "description": "Query Prometheus metrics and alerting rules",
       "categories": ["metrics"],
       "iconUrl": "https://raw.githubusercontent.com/gilbarbara/logos/de2c1f96ff6e74ea7ea979b43202e8d4b863c655/logos/prometheus.svg",
-      "docsUrl": "https://holmesgpt.dev/data-sources/builtin-toolsets/prometheus/?tab=robusta-helm-chart",
+      "docsUrl": "https://holmesgpt.dev/latest/data-sources/builtin-toolsets/prometheus/?tab=robusta-helm-chart",
       "configType": "native",
       "backendToolsetNames": ["prometheus/metrics"]
     },
@@ -266,7 +266,7 @@
       "description": "Query Datadog metrics",
       "categories": ["metrics"],
       "iconUrl": "https://raw.githubusercontent.com/gilbarbara/logos/de2c1f96ff6e74ea7ea979b43202e8d4b863c655/logos/datadog.svg",
-      "docsUrl": "https://holmesgpt.dev/data-sources/builtin-toolsets/datadog/?tab=robusta-helm-chart",
+      "docsUrl": "https://holmesgpt.dev/latest/data-sources/builtin-toolsets/datadog/?tab=robusta-helm-chart",
       "configType": "native",
       "backendToolsetNames": ["datadog/metrics"]
     },
@@ -276,7 +276,7 @@
       "description": "Query OpenSearch metrics",
       "categories": ["metrics"],
       "iconUrl": "https://raw.githubusercontent.com/gilbarbara/logos/de2c1f96ff6e74ea7ea979b43202e8d4b863c655/logos/opensearch.svg",
-      "docsUrl": "https://holmesgpt.dev/data-sources/builtin-toolsets/elasticsearch/?tab=robusta-helm-chart",
+      "docsUrl": "https://holmesgpt.dev/latest/data-sources/builtin-toolsets/elasticsearch/?tab=robusta-helm-chart",
       "configType": "native",
       "backendToolsetNames": ["opensearch/metrics"]
     },
@@ -286,7 +286,7 @@
       "description": "Search and query Grafana Tempo traces",
       "categories": ["traces"],
       "iconUrl": "https://raw.githubusercontent.com/gilbarbara/logos/de2c1f96ff6e74ea7ea979b43202e8d4b863c655/logos/grafana.svg",
-      "docsUrl": "https://holmesgpt.dev/data-sources/builtin-toolsets/grafanatempo/?tab=robusta-helm-chart",
+      "docsUrl": "https://holmesgpt.dev/latest/data-sources/builtin-toolsets/grafanatempo/?tab=robusta-helm-chart",
       "configType": "native",
       "backendToolsetNames": ["grafana/tempo"]
     },
@@ -296,7 +296,7 @@
       "description": "Query Datadog APM traces",
       "categories": ["traces"],
       "iconUrl": "https://raw.githubusercontent.com/gilbarbara/logos/de2c1f96ff6e74ea7ea979b43202e8d4b863c655/logos/datadog.svg",
-      "docsUrl": "https://holmesgpt.dev/data-sources/builtin-toolsets/datadog/?tab=robusta-helm-chart",
+      "docsUrl": "https://holmesgpt.dev/latest/data-sources/builtin-toolsets/datadog/?tab=robusta-helm-chart",
       "configType": "native",
       "backendToolsetNames": ["datadog/traces"]
     },
@@ -306,7 +306,7 @@
       "description": "Query OpenSearch traces",
       "categories": ["traces"],
       "iconUrl": "https://raw.githubusercontent.com/gilbarbara/logos/de2c1f96ff6e74ea7ea979b43202e8d4b863c655/logos/opensearch.svg",
-      "docsUrl": "https://holmesgpt.dev/data-sources/builtin-toolsets/elasticsearch/?tab=robusta-helm-chart",
+      "docsUrl": "https://holmesgpt.dev/latest/data-sources/builtin-toolsets/elasticsearch/?tab=robusta-helm-chart",
       "configType": "native",
       "backendToolsetNames": ["opensearch/traces"]
     },
@@ -316,7 +316,7 @@
       "description": "Query New Relic logs, metrics, and traces",
       "categories": ["logs", "metrics", "traces"],
       "iconUrl": "https://raw.githubusercontent.com/gilbarbara/logos/de2c1f96ff6e74ea7ea979b43202e8d4b863c655/logos/new-relic.svg",
-      "docsUrl": "https://holmesgpt.dev/data-sources/builtin-toolsets/newrelic/?tab=robusta-helm-chart",
+      "docsUrl": "https://holmesgpt.dev/latest/data-sources/builtin-toolsets/newrelic/?tab=robusta-helm-chart",
       "configType": "native",
       "backendToolsetNames": ["newrelic"]
     },
@@ -326,7 +326,7 @@
       "description": "Query Coralogix logs, metrics, and traces",
       "categories": ["logs", "metrics", "traces"],
       "iconUrl": "https://avatars.githubusercontent.com/u/35295744?s=200&v=4",
-      "docsUrl": "https://holmesgpt.dev/data-sources/builtin-toolsets/coralogix-logs/?tab=robusta-helm-chart",
+      "docsUrl": "https://holmesgpt.dev/latest/data-sources/builtin-toolsets/coralogix-logs/?tab=robusta-helm-chart",
       "configType": "native",
       "backendToolsetNames": ["coralogix"]
     },
@@ -336,7 +336,7 @@
       "description": "Query Dynatrace logs, metrics, and traces",
       "categories": ["logs", "metrics", "traces"],
       "iconUrl": "https://raw.githubusercontent.com/gilbarbara/logos/de2c1f96ff6e74ea7ea979b43202e8d4b863c655/logos/dynatrace.svg",
-      "docsUrl": "https://holmesgpt.dev/data-sources/remote-mcp-servers/?tab=robusta-helm-chart",
+      "docsUrl": "https://holmesgpt.dev/latest/data-sources/remote-mcp-servers/?tab=robusta-helm-chart",
       "configType": "mcp",
       "backendToolsetNames": ["dynatrace", "dynatrace-mcp"]
     },
@@ -346,7 +346,7 @@
       "description": "Query ServiceNow incidents, change requests, and CMDB records",
       "categories": ["itsm-knowledgebase"],
       "iconUrl": "https://upload.wikimedia.org/wikipedia/commons/5/57/ServiceNow_logo.svg",
-      "docsUrl": "https://holmesgpt.dev/data-sources/builtin-toolsets/servicenow/?tab=robusta-helm-chart",
+      "docsUrl": "https://holmesgpt.dev/latest/data-sources/builtin-toolsets/servicenow/?tab=robusta-helm-chart",
       "configType": "native",
       "backendToolsetNames": ["servicenow/tables"]
     },
@@ -356,7 +356,7 @@
       "description": "Search Confluence pages and knowledge base content",
       "categories": ["itsm-knowledgebase"],
       "iconUrl": "https://raw.githubusercontent.com/gilbarbara/logos/de2c1f96ff6e74ea7ea979b43202e8d4b863c655/logos/confluence.svg",
-      "docsUrl": "https://holmesgpt.dev/data-sources/builtin-toolsets/confluence/?tab=robusta-helm-chart",
+      "docsUrl": "https://holmesgpt.dev/latest/data-sources/builtin-toolsets/confluence/?tab=robusta-helm-chart",
       "configType": "native",
       "backendToolsetNames": ["confluence"]
     },
@@ -366,7 +366,7 @@
       "description": "Search Notion pages and knowledge base content",
       "categories": ["itsm-knowledgebase"],
       "iconUrl": "https://raw.githubusercontent.com/gilbarbara/logos/de2c1f96ff6e74ea7ea979b43202e8d4b863c655/logos/notion.svg",
-      "docsUrl": "https://holmesgpt.dev/data-sources/builtin-toolsets/notion/?tab=robusta-helm-chart",
+      "docsUrl": "https://holmesgpt.dev/latest/data-sources/builtin-toolsets/notion/?tab=robusta-helm-chart",
       "configType": "native",
       "backendToolsetNames": ["notion"]
     },
@@ -376,7 +376,7 @@
       "description": "Search Slab knowledge base articles",
       "categories": ["itsm-knowledgebase"],
       "iconUrl": "https://cdn.simpleicons.org/bookstack/0288D1",
-      "docsUrl": "https://holmesgpt.dev/data-sources/builtin-toolsets/slab/?tab=robusta-helm-chart",
+      "docsUrl": "https://holmesgpt.dev/latest/data-sources/builtin-toolsets/slab/?tab=robusta-helm-chart",
       "configType": "native",
       "backendToolsetNames": ["slab"]
     },
