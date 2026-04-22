@@ -217,8 +217,15 @@ class DatabaseToolset(Toolset):
         if subtype_str:
             try:
                 self._subtype = DatabaseSubtype(subtype_str)
-            except ValueError:
-                logger.warning(f"Unknown database subtype '{subtype_str}', using UNKNOWN")
+            except ValueError as exc:
+                valid_subtypes = sorted(
+                    s.value for s in DatabaseSubtype if s != DatabaseSubtype.UNKNOWN
+                )
+                raise ValueError(
+                    f"Unknown database subtype '{subtype_str}'. "
+                    f"Valid values: {', '.join(valid_subtypes)}. "
+                    "Omit `subtype` to auto-detect from the connection URL."
+                ) from exc
 
         # Set initial meta — updated with detected subtype in prerequisites_callable
         self.meta = {"type": "database", "subtype": self._subtype.value}
