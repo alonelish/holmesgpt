@@ -82,7 +82,7 @@ class DatadogLogsToolset(Toolset):
     def _perform_healthcheck(self) -> Tuple[bool, str]:
         """Perform health check on Datadog logs API."""
         if not self.dd_config:
-            return False, "Datadog configuration not initialized"
+            return False, "Internal error: Datadog configuration not initialized"
         try:
             logging.info("Performing Datadog logs configuration healthcheck...")
             headers = get_headers(self.dd_config)
@@ -119,8 +119,8 @@ class DatadogLogsToolset(Toolset):
             else:
                 return False, f"Datadog API error: {e.status_code} - {e.response_text}"
         except Exception as e:
-            logging.exception("Failed during Datadog traces healthcheck")
-            return False, f"Healthcheck failed with exception: {str(e)}"
+            logging.exception("Failed during Datadog logs health check")
+            return False, f"Datadog Logs health check failed: {e}"
 
     def prerequisites_callable(self, config: dict[str, Any]) -> Tuple[bool, str]:
         if not config:
@@ -137,8 +137,8 @@ class DatadogLogsToolset(Toolset):
             return success, error_msg
 
         except Exception as e:
-            logging.exception("Failed to set up Datadog toolset")
-            return (False, f"Failed to parse Datadog configuration: {str(e)}")
+            logging.exception("Failed to set up Datadog Logs toolset")
+            return (False, f"Invalid Datadog Logs configuration: {e}")
 
     def _reload_instructions(self):
         """Load Datadog logs specific troubleshooting instructions."""

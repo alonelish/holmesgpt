@@ -319,7 +319,7 @@ class NewRelicToolset(Toolset):
         self, config: dict[str, Any]
     ) -> tuple[bool, Optional[str]]:
         if not config:
-            return False, "No configuration provided"
+            return False, "No configuration provided for New Relic toolset"
 
         try:
             nr_config = NewrelicConfig(**config)
@@ -329,7 +329,7 @@ class NewRelicToolset(Toolset):
             self.enable_multi_account = nr_config.enable_multi_account or False
         except Exception as e:
             logging.exception("Failed to parse New Relic configuration")
-            return False, f"Failed to parse New Relic configuration: {e}"
+            return False, f"Invalid New Relic configuration: {e}"
 
         # Health check: run a minimal NRQL query so we catch bad credentials or
         # an unreachable account at config time instead of on first real query.

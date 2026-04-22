@@ -249,7 +249,7 @@ class DatabaseToolset(Toolset):
             self.meta = {"type": "database", "subtype": self._subtype.value}
             return self._perform_health_check()
         except Exception as e:
-            return False, f"Failed to validate database configuration: {e}"
+            return False, f"Invalid database configuration: {e}"
 
     def _perform_health_check(self) -> Tuple[bool, str]:
         try:

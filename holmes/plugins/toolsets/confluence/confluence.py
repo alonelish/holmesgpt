@@ -249,7 +249,7 @@ class ConfluenceToolset(Toolset):
             self._setup_http_tools()
             return True, msg
         except Exception as e:
-            return False, f"Failed to validate Confluence configuration: {e}"
+            return False, f"Invalid Confluence configuration: {e}"
 
     @property
     def _conf(self) -> ConfluenceConfig:
@@ -310,7 +310,12 @@ class ConfluenceToolset(Toolset):
                 ok, msg = self._try_gateway_fallback()
                 if ok:
                     return True, msg
-            return False, f"Confluence API error: HTTP {status}: {e.response.text}"
+            # Truncate the response body so a full Atlassian HTML error page
+            # (common on 401/403) doesn't flood the DB row.
+            body = (e.response.text or "").strip()
+            if len(body) > 300:
+                body = body[:300] + "…"
+            return False, f"Confluence API error: HTTP {status}: {body}"
         except requests.exceptions.ConnectionError as e:
             return False, f"Failed to connect to Confluence at {self._conf.api_url}: {e}"
         except requests.exceptions.Timeout:

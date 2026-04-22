@@ -1968,9 +1968,9 @@ class PrometheusToolset(Toolset):
                     self._disable_azure_incompatible_tools()
                 self._reload_llm_instructions()
                 return self._is_healthy()
-        except Exception:
+        except Exception as e:
             logging.exception("Failed to create prometheus config")
-            return False, "Failed to create prometheus config"
+            return False, f"Invalid Prometheus configuration: {e}"
         try:
             prometheus_url = os.environ.get("PROMETHEUS_URL")
             if not prometheus_url:
@@ -1992,7 +1992,7 @@ class PrometheusToolset(Toolset):
             return self._is_healthy()
         except Exception as e:
             logging.exception("Failed to set up prometheus")
-            return False, str(e)
+            return False, f"Failed to set up Prometheus toolset: {e}"
 
     def auto_detect_prometheus_url(self) -> Optional[str]:
         url: Optional[str] = PrometheusDiscovery.find_prometheus_url()

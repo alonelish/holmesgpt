@@ -260,7 +260,7 @@ class DatadogGeneralToolset(Toolset):
             return success, error_msg
         except Exception as e:
             logging.exception("Failed to set up Datadog general toolset")
-            return False, f"Failed to parse Datadog configuration: {str(e)}"
+            return False, f"Invalid Datadog General configuration: {e}"
 
     def _perform_healthcheck(self, dd_config: DatadogGeneralConfig) -> Tuple[bool, str]:
         """Perform health check on Datadog API."""
@@ -279,16 +279,16 @@ class DatadogGeneralToolset(Toolset):
             )
 
             if data.get("valid", False):
-                logging.debug("Datadog general API healthcheck completed successfully")
+                logging.debug("Datadog general API health check completed successfully")
                 return True, ""
             else:
                 error_msg = "Datadog API key validation failed"
-                logging.error(f"Datadog general API healthcheck failed: {error_msg}")
-                return False, f"Datadog general API healthcheck failed: {error_msg}"
+                logging.error(f"Datadog General health check failed: {error_msg}")
+                return False, f"Datadog General health check failed: {error_msg}"
 
         except Exception as e:
-            logging.exception("Failed during Datadog general API healthcheck")
-            return False, f"Healthcheck failed with exception: {str(e)}"
+            logging.exception("Failed during Datadog general API health check")
+            return False, f"Datadog General health check failed: {e}"
 
 
 def is_endpoint_allowed(

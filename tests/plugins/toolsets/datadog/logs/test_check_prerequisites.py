@@ -48,7 +48,7 @@ class TestDatadogToolsetCheckPrerequisites:
 
         assert toolset.status == ToolsetStatusEnum.FAILED
         assert toolset.error
-        assert "Failed to parse Datadog configuration" in toolset.error
+        assert "Invalid Datadog Logs configuration" in toolset.error
 
     def test_check_prerequisites_invalid_config_format(self):
         """Test check_prerequisites with invalid config format"""
@@ -63,7 +63,7 @@ class TestDatadogToolsetCheckPrerequisites:
 
         assert toolset.status == ToolsetStatusEnum.FAILED
         assert toolset.error
-        assert "Failed to parse Datadog configuration" in toolset.error
+        assert "Invalid Datadog Logs configuration" in toolset.error
 
     @patch(
         "holmes.plugins.toolsets.datadog.toolset_datadog_logs.execute_datadog_http_request"
@@ -130,7 +130,7 @@ class TestDatadogToolsetCheckPrerequisites:
         toolset.check_prerequisites()
 
         assert toolset.status == ToolsetStatusEnum.FAILED
-        assert "Healthcheck failed with exception: Network error" in toolset.error
+        assert "Datadog Logs health check failed: Network error" in toolset.error
 
     @patch(
         "holmes.plugins.toolsets.datadog.toolset_datadog_logs.execute_datadog_http_request"

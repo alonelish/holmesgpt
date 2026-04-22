@@ -82,7 +82,7 @@ class KubernetesLogsToolset(Toolset):
         except subprocess.TimeoutExpired:
             return False, "kubectl command timed out"
         except FileNotFoundError:
-            return False, "kubectl command not found"
+            return False, "kubectl command not found (ensure kubectl is installed and in PATH)"
         except Exception as e:
             return False, f"kubectl health check error: {str(e)}"
 

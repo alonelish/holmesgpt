@@ -212,7 +212,7 @@ class HttpToolset(Toolset):
             )
 
         except Exception as e:
-            return False, f"Failed to validate HTTP configuration: {str(e)}"
+            return False, f"Invalid HTTP configuration: {e}"
 
     def _build_curl_command(self, endpoint: EndpointConfig, url: str) -> str:
         parts = ["curl", "-v"]

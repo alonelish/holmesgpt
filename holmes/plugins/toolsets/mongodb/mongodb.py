@@ -187,7 +187,7 @@ class MongoDBToolset(Toolset):
             self.config = MongoDBConfig(**config)
             return self._perform_health_check()
         except Exception as e:
-            return False, f"Failed to validate MongoDB configuration: {e}"
+            return False, f"Invalid MongoDB configuration: {e}"
 
     def _perform_health_check(self) -> Tuple[bool, str]:
         try:

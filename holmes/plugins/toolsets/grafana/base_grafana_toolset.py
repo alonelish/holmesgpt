@@ -57,13 +57,18 @@ class BaseGrafanaToolset(Toolset):
                 continue
             except Exception as e:
                 logging.exception(f"Failed to set up grafana toolset {self.name}")
-                return False, str(e)
+                return False, f"Failed to set up {self.name}: {e}"
 
         logging.warning(
             f"No config class matched for {self.name}. Tried: "
             f"{[c.__name__ for c in config_classes]}"
         )
-        return False, str(last_error) if last_error else "No matching config class"
+        if last_error:
+            return False, f"Invalid {self.name} configuration: {last_error}"
+        return (
+            False,
+            "No config variant matched the provided fields — check the docs for required fields per variant.",
+        )
 
     @abstractmethod
     def health_check(self) -> Tuple[bool, str]:
