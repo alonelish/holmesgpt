@@ -1117,6 +1117,10 @@ class Toolset(BaseModel):
                 "icon_url": getattr(config_cls, "_icon_url", None),
                 "docs_anchor": getattr(config_cls, "_docs_anchor", None),
                 "recommended": bool(getattr(config_cls, "_recommended", False)),
+                # Stable slug the frontend emits as the top-level `subtype:`
+                # YAML field so the backend can pick this exact variant.
+                # None for toolsets that don't use variants.
+                "subtype": getattr(config_cls, "_subtype", None),
             }
         return result
 

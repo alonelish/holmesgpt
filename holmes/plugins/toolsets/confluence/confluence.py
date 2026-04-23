@@ -1,5 +1,6 @@
 import logging
 import re
+from enum import Enum
 from typing import Any, ClassVar, Dict, List, Literal, Optional, Tuple, Type
 from urllib.parse import urlparse
 
@@ -23,6 +24,19 @@ CONFLUENCE_ICON_URL = (
     "https://raw.githubusercontent.com/gilbarbara/logos/"
     "de2c1f96ff6e74ea7ea979b43202e8d4b863c655/logos/confluence.svg"
 )
+
+
+class ConfluenceSubtype(str, Enum):
+    """Stable identifiers for the Confluence toolset variants.
+
+    Exposed to users as the top-level `subtype:` YAML field on the
+    `confluence` toolset. Mirrors the PrometheusSubtype / DatabaseSubtype
+    pattern.
+    """
+
+    CLOUD = "cloud"
+    DC_PAT = "dc-pat"
+    DC_BASIC = "dc-basic"
 
 
 class ConfluenceConfig(ToolsetConfig):
@@ -84,6 +98,7 @@ class ConfluenceCloudConfig(ConfluenceConfig):
     )
     _icon_url: ClassVar[Optional[str]] = CONFLUENCE_ICON_URL
     _docs_anchor: ClassVar[Optional[str]] = "confluence-cloud"
+    _subtype: ClassVar[Optional[str]] = ConfluenceSubtype.CLOUD.value
     _hidden_fields: ClassVar[List[str]] = [
         "auth_type",
         "api_path_prefix",
@@ -121,6 +136,7 @@ class ConfluenceDataCenterPATConfig(ConfluenceConfig):
     )
     _icon_url: ClassVar[Optional[str]] = CONFLUENCE_ICON_URL
     _docs_anchor: ClassVar[Optional[str]] = "confluence-data-center-personal-access-token"
+    _subtype: ClassVar[Optional[str]] = ConfluenceSubtype.DC_PAT.value
     _hidden_fields: ClassVar[List[str]] = [
         "user",
         "auth_type",
@@ -163,6 +179,7 @@ class ConfluenceDataCenterBasicConfig(ConfluenceConfig):
     )
     _icon_url: ClassVar[Optional[str]] = CONFLUENCE_ICON_URL
     _docs_anchor: ClassVar[Optional[str]] = "confluence-data-center-basic-auth"
+    _subtype: ClassVar[Optional[str]] = ConfluenceSubtype.DC_BASIC.value
     _hidden_fields: ClassVar[List[str]] = [
         "auth_type",
         "api_path_prefix",
@@ -192,13 +209,37 @@ class ConfluenceDataCenterBasicConfig(ConfluenceConfig):
     )
 
 
-def determine_confluence_class(config: Dict[str, Any]) -> Type[ConfluenceConfig]:
-    """Pick the right variant based on the config dict.
+_SUBTYPE_TO_CONFIG_CLASS: Dict[str, Type[ConfluenceConfig]] = {
+    ConfluenceSubtype.CLOUD.value: ConfluenceCloudConfig,
+    ConfluenceSubtype.DC_PAT.value: ConfluenceDataCenterPATConfig,
+    ConfluenceSubtype.DC_BASIC.value: ConfluenceDataCenterBasicConfig,
+}
 
-    - URL matching *.atlassian.net → Confluence Cloud
-    - Otherwise auth_type='bearer' (or 'bearer' in config hints) → Data Center PAT
-    - Otherwise → Data Center Basic Auth
+
+def determine_confluence_class(
+    config: Dict[str, Any], subtype: Optional[str] = None
+) -> Type[ConfluenceConfig]:
+    """Pick the right variant.
+
+    - Explicit ``subtype`` on the toolset YAML wins (the frontend emits this
+      when the user picks a variant in the config form).
+    - Otherwise fall back to field-shape detection for back-compat:
+        * URL matching *.atlassian.net → Confluence Cloud
+        * auth_type='bearer' → Data Center PAT
+        * otherwise → Data Center Basic Auth
     """
+    if subtype:
+        try:
+            resolved = ConfluenceSubtype(subtype)
+        except ValueError as exc:
+            valid = ", ".join(s.value for s in ConfluenceSubtype)
+            raise ValueError(
+                f"Unknown confluence subtype '{subtype}'. "
+                f"Valid values: {valid}. "
+                "Omit `subtype` to auto-detect from the configuration fields."
+            ) from exc
+        return _SUBTYPE_TO_CONFIG_CLASS[resolved.value]
+
     api_url = str(config.get("api_url", "") or "")
     if ATLASSIAN_CLOUD_PATTERN.match(api_url):
         return ConfluenceCloudConfig
@@ -233,12 +274,14 @@ class ConfluenceToolset(Toolset):
 
     def prerequisites_callable(self, config: dict[str, Any]) -> Tuple[bool, str]:
         try:
-            # Pick the variant based on the supplied config. Backwards-compatible
-            # with existing YAML: if `api_url` looks like Atlassian Cloud, use
-            # the Cloud variant; else use Data Center PAT or Basic based on
-            # auth_type. All three variants share the same runtime contract
-            # (same attribute names) so the rest of this class is unchanged.
-            config_cls = determine_confluence_class(config)
+            # Pick the variant based on the supplied config. `self.subtype`
+            # (top-level YAML field set by the frontend when a user picks a
+            # variant in the config form) wins when present. Otherwise fall
+            # back to URL + auth_type field-shape inference for back-compat
+            # with existing YAMLs written before `subtype:` existed. All
+            # three variants share the same runtime contract (same attribute
+            # names) so the rest of this class is unchanged.
+            config_cls = determine_confluence_class(config, self.subtype)
             self.config = config_cls(**config)
             self._gateway_base_url = None
 

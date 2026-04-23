@@ -10,11 +10,14 @@ Works with both **Confluence Cloud** and **Confluence Data Center / Server**.
 
 HolmesGPT supports three ways to connect to Confluence. Pick the one that matches your setup:
 
-| Setup | When to use |
-|-------|-------------|
-| [Confluence Cloud](#confluence-cloud) (recommended) | Atlassian-hosted Confluence at `<your-company>.atlassian.net` |
-| [Confluence Data Center - Personal Access Token](#confluence-data-center-personal-access-token) | Self-hosted Confluence Data Center / Server using a PAT (recommended for DC) |
-| [Confluence Data Center - Basic Auth](#confluence-data-center-basic-auth) | Self-hosted Confluence Data Center / Server using username + password |
+| Setup | `subtype` value | When to use |
+|-------|-----------------|-------------|
+| [Confluence Cloud](#confluence-cloud) (recommended) | `cloud` | Atlassian-hosted Confluence at `<your-company>.atlassian.net` |
+| [Confluence Data Center - Personal Access Token](#confluence-data-center-personal-access-token) | `dc-pat` | Self-hosted Confluence Data Center / Server using a PAT (recommended for DC) |
+| [Confluence Data Center - Basic Auth](#confluence-data-center-basic-auth) | `dc-basic` | Self-hosted Confluence Data Center / Server using username + password |
+
+!!! note "About `subtype`"
+    The top-level `subtype:` field in each example tells HolmesGPT which Confluence variant you're connecting to. Setting it is recommended — it picks the correct auth mode automatically (so you don't need to set `auth_type` or `api_path_prefix` by hand) and makes the resulting toolset card light up under the correct integration in the UI. If you omit `subtype`, HolmesGPT will fall back to inferring the variant from the URL and `auth_type` field for backwards compatibility.
 
 ### Confluence Cloud
 
@@ -32,6 +35,7 @@ Go to [Atlassian API Tokens](https://id.atlassian.com/manage/api-tokens){:target
     toolsets:
       confluence:
         enabled: true
+        subtype: cloud
         config:
           api_url: "https://yourcompany.atlassian.net"
           user: "your-email@example.com"
@@ -63,6 +67,7 @@ Go to [Atlassian API Tokens](https://id.atlassian.com/manage/api-tokens){:target
       toolsets:
         confluence:
           enabled: true
+          subtype: cloud
           config:
             api_url: "{{ env.CONFLUENCE_API_URL }}"
             user: "{{ env.CONFLUENCE_USER }}"
@@ -90,10 +95,10 @@ In Confluence Data Center, go to your **Profile** > **Personal Access Tokens** >
     toolsets:
       confluence:
         enabled: true
+        subtype: dc-pat
         config:
           api_url: "https://confluence.yourcompany.com"
           api_key: "your-personal-access-token"
-          auth_type: "bearer"
     ```
 
     --8<-- "snippets/toolset_refresh_warning.md"
@@ -113,10 +118,10 @@ In Confluence Data Center, go to your **Profile** > **Personal Access Tokens** >
       toolsets:
         confluence:
           enabled: true
+          subtype: dc-pat
           config:
             api_url: "{{ env.CONFLUENCE_API_URL }}"
             api_key: "{{ env.CONFLUENCE_PAT }}"
-            auth_type: "bearer"
     ```
 
     --8<-- "snippets/helm_upgrade_command.md"
@@ -133,6 +138,7 @@ HolmesGPT authenticates to a self-hosted Confluence Data Center (or Server) inst
     toolsets:
       confluence:
         enabled: true
+        subtype: dc-basic
         config:
           api_url: "https://confluence.yourcompany.com"
           user: "your-username"
@@ -158,6 +164,7 @@ HolmesGPT authenticates to a self-hosted Confluence Data Center (or Server) inst
       toolsets:
         confluence:
           enabled: true
+          subtype: dc-basic
           config:
             api_url: "{{ env.CONFLUENCE_API_URL }}"
             user: "{{ env.CONFLUENCE_USER }}"

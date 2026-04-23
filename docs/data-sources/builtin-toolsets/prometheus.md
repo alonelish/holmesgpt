@@ -13,6 +13,7 @@ Connect HolmesGPT to Prometheus for metrics analysis and query generation.
 toolsets:
     prometheus/metrics:
         enabled: true
+        subtype: prometheus
         config:
             prometheus_url: http://<your-prometheus-service>:9090
 
@@ -20,6 +21,9 @@ toolsets:
             #additional_headers:
             #    Authorization: "Basic <base_64_encoded_string>"
 ```
+
+!!! note "About `subtype`"
+    The `subtype:` field tells HolmesGPT which Prometheus variant you're connecting to. For a plain self-hosted Prometheus use `prometheus`; variant-specific values (`victoriametrics`, `coralogix`, `grafana-cloud`, `aws-managed-prometheus`, `azure-managed-prometheus`, `google-managed-prometheus`) are shown in the sections below. The field is optional — HolmesGPT will infer the variant from the configuration fields when you omit it — but setting it makes the resulting toolset card light up under the correct integration in the UI.
 
 ### Finding your Prometheus URL
 
@@ -73,6 +77,7 @@ To use a Coralogix PromQL endpoint with HolmesGPT:
       toolsets:
         prometheus/metrics:
           enabled: true
+          subtype: coralogix
           config:
             prometheus_url: "https://prom-api.eu2.coralogix.com"  # Use your region's endpoint
             additional_headers:
@@ -92,6 +97,7 @@ holmes:
   toolsets:
     prometheus/metrics:
       enabled: true
+      subtype: aws-managed-prometheus
       config:
         prometheus_url: https://aps-workspaces.us-east-1.amazonaws.com/workspaces/ws-xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx/
         aws_region: us-east-1
@@ -128,6 +134,7 @@ holmes:
   toolsets:
     prometheus/metrics:
       enabled: true
+      subtype: google-managed-prometheus
       config:
         # Set this to the URL of your Prometheus Frontend endpoint, it may change based on the namespace you deployed frontend to.
         prometheus_url: http://frontend.default.svc.cluster.local:9090
@@ -153,6 +160,7 @@ holmes:
   toolsets:
     prometheus/metrics:
       enabled: true
+      subtype: azure-managed-prometheus
       config:
         prometheus_url: "https://<your-workspace>.<region>.prometheus.monitor.azure.com:443/"
   additionalEnvVars:
@@ -194,6 +202,7 @@ The query endpoint URL format is: `https://prometheus-prod-XX-prod-REGION.grafan
     toolsets:
       prometheus/metrics:
         enabled: true
+        subtype: grafana-cloud
         config:
           prometheus_url: https://prometheus-prod-XX-prod-REGION.grafana.net/api/prom
           additional_headers:
@@ -227,6 +236,7 @@ The query endpoint URL format is: `https://prometheus-prod-XX-prod-REGION.grafan
     toolsets:
       prometheus/metrics:
         enabled: true
+        subtype: grafana-cloud
         config:
           prometheus_url: "https://prometheus-prod-XX-prod-REGION.grafana.net/api/prom"
           additional_headers:
@@ -256,6 +266,7 @@ The query endpoint URL format is: `https://prometheus-prod-XX-prod-REGION.grafan
       toolsets:
         prometheus/metrics:
           enabled: true
+          subtype: grafana-cloud
           config:
             prometheus_url: "https://prometheus-prod-XX-prod-REGION.grafana.net/api/prom"
             additional_headers:
@@ -288,6 +299,7 @@ curl -H "Authorization: Bearer YOUR_GLSA_TOKEN" \
     toolsets:
       prometheus/metrics:
         enabled: true
+        subtype: grafana-cloud
         config:
           prometheus_url: https://YOUR-INSTANCE.grafana.net/api/datasources/proxy/uid/PROMETHEUS_DATASOURCE_UID
           additional_headers:
@@ -318,6 +330,7 @@ curl -H "Authorization: Bearer YOUR_GLSA_TOKEN" \
     toolsets:
       prometheus/metrics:
         enabled: true
+        subtype: grafana-cloud
         config:
           prometheus_url: "https://YOUR-INSTANCE.grafana.net/api/datasources/proxy/uid/PROMETHEUS_DATASOURCE_UID"
           additional_headers:
@@ -346,6 +359,7 @@ curl -H "Authorization: Bearer YOUR_GLSA_TOKEN" \
       toolsets:
         prometheus/metrics:
           enabled: true
+          subtype: grafana-cloud
           config:
             prometheus_url: "https://YOUR-INSTANCE.grafana.net/api/datasources/proxy/uid/PROMETHEUS_DATASOURCE_UID"
             additional_headers:
