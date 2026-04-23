@@ -1982,18 +1982,21 @@ class PrometheusToolset(Toolset):
             },
         )
 
-    # Map PrometheusSubtype -> concrete config class. Kept alongside the
-    # toolset so adding a new variant is a two-line change: add an enum
-    # member and map it here.
-    _SUBTYPE_TO_CONFIG_CLASS: ClassVar[Dict[str, Type[PrometheusConfig]]] = {
-        PrometheusSubtype.PROMETHEUS.value: PrometheusConfig,
-        PrometheusSubtype.CORALOGIX.value: CoralogixPrometheusConfig,
-        PrometheusSubtype.GOOGLE_MANAGED_PROMETHEUS.value: GooglePrometheusConfig,
-        PrometheusSubtype.GRAFANA_CLOUD.value: GrafanaCloudPrometheusConfig,
-        PrometheusSubtype.VICTORIAMETRICS.value: VictoriaMetricsConfig,
-        PrometheusSubtype.AWS_MANAGED_PROMETHEUS.value: AMPConfig,
-        PrometheusSubtype.AZURE_MANAGED_PROMETHEUS.value: AzurePrometheusConfig,
-    }
+    @classmethod
+    def _subtype_to_config_class(cls) -> Dict[str, Type[PrometheusConfig]]:
+        """Derive the subtype -> config class map from ``config_classes``.
+
+        Each variant declares its own ``_subtype`` ClassVar, so there's a
+        single source of truth (the class itself). Building the map on the
+        fly avoids the hand-maintained dict/enum drift risk: adding a new
+        variant is a one-step change (append to ``config_classes``) rather
+        than two (which invites forgetting the second).
+        """
+        return {
+            cls_._subtype: cls_  # type: ignore[misc]
+            for cls_ in cls.config_classes
+            if getattr(cls_, "_subtype", None)
+        }
 
     def determine_prometheus_class(
         self, config: dict[str, Any], subtype: Optional[str] = None
@@ -2009,7 +2012,19 @@ class PrometheusToolset(Toolset):
                     f"Valid values: {valid}. "
                     "Omit `subtype` to auto-detect from the configuration fields."
                 ) from exc
-            return self._SUBTYPE_TO_CONFIG_CLASS[resolved.value]
+            mapping = self._subtype_to_config_class()
+            config_cls = mapping.get(resolved.value)
+            if config_cls is None:
+                # Every PrometheusSubtype should have a matching config class
+                # registered in ``config_classes``. If this fires, the enum
+                # and the registered variants have drifted — fix by adding
+                # the missing config class rather than catching this error.
+                raise RuntimeError(
+                    f"PrometheusSubtype '{resolved.value}' has no registered "
+                    f"config class in PrometheusToolset.config_classes. "
+                    f"Known subtypes: {sorted(mapping)}."
+                )
+            return config_cls
 
         has_aws_fields = "aws_region" in config
         if has_aws_fields:
@@ -2055,6 +2070,14 @@ class PrometheusToolset(Toolset):
             # in-cluster service discovery. This lets a user override
             # settings like `verify_ssl` or timeouts while still relying
             # on auto-discovery for the URL.
+            #
+            # We use `type(...) is PrometheusConfig` (not isinstance) on
+            # purpose: every sibling variant (VictoriaMetrics, AMP, Azure,
+            # etc.) redeclares `prometheus_url` as required, so an instance
+            # of those classes can never reach this branch with a missing
+            # URL — Pydantic already rejected it. Restricting discovery to
+            # the exact generic class avoids silently auto-filling a URL
+            # for a variant whose user *wanted* an explicit value.
             if (
                 not self.config.prometheus_url
                 and type(self.config) is PrometheusConfig
