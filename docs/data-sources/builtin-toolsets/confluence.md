@@ -94,7 +94,6 @@ In Confluence Data Center, go to your **Profile** > **Personal Access Tokens** >
           api_url: "https://confluence.yourcompany.com"
           api_key: "your-personal-access-token"
           auth_type: "bearer"
-          api_path_prefix: ""
     ```
 
     --8<-- "snippets/toolset_refresh_warning.md"
@@ -118,7 +117,6 @@ In Confluence Data Center, go to your **Profile** > **Personal Access Tokens** >
             api_url: "{{ env.CONFLUENCE_API_URL }}"
             api_key: "{{ env.CONFLUENCE_PAT }}"
             auth_type: "bearer"
-            api_path_prefix: ""
     ```
 
     --8<-- "snippets/helm_upgrade_command.md"
@@ -139,7 +137,6 @@ HolmesGPT authenticates to a self-hosted Confluence Data Center (or Server) inst
           api_url: "https://confluence.yourcompany.com"
           user: "your-username"
           api_key: "your-password"
-          api_path_prefix: ""
     ```
 
     --8<-- "snippets/toolset_refresh_warning.md"
@@ -165,7 +162,6 @@ HolmesGPT authenticates to a self-hosted Confluence Data Center (or Server) inst
             api_url: "{{ env.CONFLUENCE_API_URL }}"
             user: "{{ env.CONFLUENCE_USER }}"
             api_key: "{{ env.CONFLUENCE_PASSWORD }}"
-            api_path_prefix: ""
     ```
 
     --8<-- "snippets/helm_upgrade_command.md"
