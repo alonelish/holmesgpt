@@ -269,7 +269,8 @@
       "docsUrl": "https://holmesgpt.dev/latest/data-sources/builtin-toolsets/victoriametrics/?tab=robusta-helm-chart",
       "configType": "native",
       "backendToolsetNames": ["prometheus/metrics"],
-      "metaFilter": {"subtype": "victoriametrics"}
+      "metaFilter": {"subtype": "victoriametrics"},
+      "variantKey": "VictoriaMetricsConfig"
     },
     {
       "id": "datadog/metrics",
