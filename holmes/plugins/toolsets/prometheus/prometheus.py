@@ -3,7 +3,7 @@ import logging
 import os
 import time
 from enum import Enum
-from typing import Any, ClassVar, Dict, Optional, Tuple, Type, Union
+from typing import Any, ClassVar, Dict, List, Optional, Tuple, Type, Union
 from urllib.parse import urljoin
 
 import dateutil.parser
@@ -382,6 +382,16 @@ class AzurePrometheusConfig(PrometheusConfig):
     _icon_url: ClassVar[Optional[str]] = "https://raw.githubusercontent.com/gilbarbara/logos/de2c1f96ff6e74ea7ea979b43202e8d4b863c655/logos/microsoft-azure.svg"
     _docs_anchor: ClassVar[Optional[str]] = "azure-managed-prometheus"
     _subtype: ClassVar[Optional[str]] = PrometheusSubtype.AZURE_MANAGED_PROMETHEUS.value
+    # These fields are Optional at the Pydantic level so managed identity
+    # (azure_use_managed_id=True) and the env-var fallback in __init__ keep
+    # working, but the UI form requires them — users configuring this
+    # through the frontend are expected to paste values directly. CLI/Helm
+    # users can omit them and rely on env vars or managed identity.
+    _ui_required_fields: ClassVar[List[str]] = [
+        "azure_client_id",
+        "azure_client_secret",
+        "azure_tenant_id",
+    ]
 
     prometheus_url: str = Field(  # type: ignore[assignment]
         title="URL",
@@ -394,17 +404,21 @@ class AzurePrometheusConfig(PrometheusConfig):
     azure_metadata_endpoint: Optional[str] = None
     azure_token_endpoint: Optional[str] = None
     azure_use_managed_id: bool = False
-    azure_client_id: str = Field(
+    azure_client_id: Optional[str] = Field(
+        default=None,
         title="Client ID",
         description="Azure AD application client ID",
         examples=["00000000-0000-0000-0000-000000000000"],
     )
-    azure_client_secret: str = Field(
+    azure_client_secret: Optional[str] = Field(
+        default=None,
         title="Client Secret",
         description="Azure AD application client secret",
         examples=["{{ env.AZURE_CLIENT_SECRET }}"],
+        json_schema_extra={"format": "password"},
     )
-    azure_tenant_id: str = Field(
+    azure_tenant_id: Optional[str] = Field(
+        default=None,
         title="Tenant ID",
         description="Azure AD tenant ID",
         examples=["00000000-0000-0000-0000-000000000000"],
@@ -464,6 +478,30 @@ class AzurePrometheusConfig(PrometheusConfig):
             self.azure_use_managed_id = os.environ.get(
                 "AZURE_USE_MANAGED_ID", "false"
             ).lower() in ("true", "1")
+
+        # Runtime semantics: if we're NOT using managed identity, then after
+        # the env-var fallback above, client_id / tenant_id / client_secret
+        # must be populated. Raise a clear error here rather than letting
+        # prometrix fail later with an opaque auth error. (UI users see the
+        # Pydantic/schema-level `required` marker via _ui_required_fields;
+        # this check catches CLI/Helm users whose env vars are also empty.)
+        if not self.azure_use_managed_id:
+            missing = [
+                name
+                for name, value in (
+                    ("azure_client_id", self.azure_client_id),
+                    ("azure_tenant_id", self.azure_tenant_id),
+                    ("azure_client_secret", self.azure_client_secret),
+                )
+                if not value
+            ]
+            if missing:
+                raise ValueError(
+                    f"Azure Managed Prometheus: missing credentials {missing}. "
+                    "Either set these fields in the config, set the matching "
+                    "AZURE_CLIENT_ID / AZURE_TENANT_ID / AZURE_CLIENT_SECRET env "
+                    "vars, or set `azure_use_managed_id: true` to use managed identity."
+                )
 
         # Convert None to empty string for prometrix compatibility (prometrix checks != "")
         azure_client_id = self.azure_client_id or ""

@@ -129,9 +129,13 @@ class DirectLokiConfig(GrafanaConfig):
         examples=["http://loki.monitoring.svc.cluster.local:3100"],
     )
     additional_headers: Dict[str, str] = Field(
-        default={"X-Scope-OrgID": "<tenant id>"},
+        default_factory=dict,
         title="Additional Headers",
-        description="Additional HTTP headers to include in requests",
+        description=(
+            "Optional HTTP headers to include in requests. "
+            "For multi-tenant Loki, set `X-Scope-OrgID` to your tenant ID."
+        ),
+        examples=[{"X-Scope-OrgID": "<tenant id>"}],
     )
 
 
@@ -231,9 +235,13 @@ class DirectTempoConfig(GrafanaTempoConfig):
         examples=["http://tempo.monitoring.svc.cluster.local:3200"],
     )
     additional_headers: Dict[str, str] = Field(
-        default={"X-Scope-OrgID": "<tenant id>"},
+        default_factory=dict,
         title="Additional Headers",
-        description="Additional HTTP headers to include in requests",
+        description=(
+            "Optional HTTP headers to include in requests. "
+            "For multi-tenant Tempo, set `X-Scope-OrgID` to your tenant ID."
+        ),
+        examples=[{"X-Scope-OrgID": "<tenant id>"}],
     )
 
 

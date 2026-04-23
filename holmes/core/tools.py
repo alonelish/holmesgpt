@@ -1075,6 +1075,11 @@ class Toolset(BaseModel):
         Fields listed in the config class's `_hidden_fields` ClassVar are stripped from
         the schema's `properties` and `required` so the frontend doesn't render them.
         They remain valid at runtime (inherited fields still accept values).
+
+        Fields listed in `_ui_required_fields` are added to the schema's `required`
+        array even when they're Optional at the Pydantic level. Use this when a
+        field MUST be filled via the UI form but the backend needs to accept it
+        missing (env var / managed identity / runtime fallback populates it).
         """
         if not self.config_classes:
             return None
@@ -1091,6 +1096,20 @@ class Toolset(BaseModel):
                     raw_schema["required"] = [
                         r for r in raw_schema["required"] if r not in hidden
                     ]
+            ui_required = list(getattr(config_cls, "_ui_required_fields", []) or [])
+            # Don't re-mark fields that were just hidden as required.
+            ui_required = [f for f in ui_required if f not in hidden]
+            if ui_required:
+                existing = list(raw_schema.get("required", []))
+                # Preserve declaration order: keep existing entries first,
+                # then append any ui_required fields that aren't already
+                # required. De-dup while preserving order.
+                seen = set(existing)
+                for name in ui_required:
+                    if name not in seen:
+                        existing.append(name)
+                        seen.add(name)
+                raw_schema["required"] = existing
             result[config_cls.__name__] = {
                 "schema": raw_schema,
                 "name": getattr(config_cls, "_name", None) or config_cls.__name__,

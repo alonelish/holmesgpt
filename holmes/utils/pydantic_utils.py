@@ -57,6 +57,14 @@ class ToolsetConfig(BaseModel):
     _icon_url: ClassVar[Optional[str]] = None
     _docs_anchor: ClassVar[Optional[str]] = None
     _hidden_fields: ClassVar[List[str]] = []
+    # Fields that should appear as required in the exported JSON schema
+    # even though they're declared Optional at the Pydantic level. Use this
+    # when a field MUST be filled in via the frontend form, but the backend
+    # needs to accept it missing (e.g. because an env var, managed identity,
+    # or runtime fallback populates it later). The UI marks the field as
+    # required; Pydantic stays permissive so CLI / Helm configs with
+    # alternative credential sources keep working.
+    _ui_required_fields: ClassVar[List[str]] = []
     _recommended: ClassVar[bool] = False
     # Stable identifier for this variant, used to populate meta.subtype on the
     # synced HolmesToolsStatus row so the frontend can distinguish catalog
