@@ -2,6 +2,7 @@ import json
 import logging
 import re
 from typing import Any, ClassVar, Dict, Set, Tuple
+from urllib.parse import urlparse
 
 from holmes.core.tools import (
     StructuredToolResult,
@@ -16,6 +17,24 @@ from holmes.plugins.toolsets.internet.internet import (
     scrape,
 )
 from holmes.plugins.toolsets.utils import toolset_name_for_one_liner
+
+# Hosts we're willing to send the Notion `Authorization` header to. Anything
+# else is rejected before the request is made — otherwise a caller who passes
+# a non-Notion URL (and the URL-rewrite below doesn't rewrite it) would leak
+# the auth token to whatever host `scrape()` ends up hitting.
+NOTION_ALLOWED_HOSTS: frozenset[str] = frozenset({
+    "api.notion.com",
+    "www.notion.so",
+    "notion.so",
+})
+
+# Notion page IDs come in two forms:
+#   - dashless 32-char hex (what Notion URLs embed)
+#   - 8-4-4-4-12 dashed hex UUID (what the API returns / accepts)
+# Match either, strictly hex-only (no `_` or other `\w` chars), at end-of-URL.
+_NOTION_ID_RE = re.compile(
+    r"([0-9a-fA-F]{32}|[0-9a-fA-F]{8}(?:-[0-9a-fA-F]{4}){3}-[0-9a-fA-F]{12})$"
+)
 
 
 class FetchNotion(Tool):
@@ -38,11 +57,11 @@ class FetchNotion(Tool):
     def convert_notion_url(self, url):
         if "api.notion.com" in url:
             return url
-        # Strip query parameters before extracting ID
-        url_without_params = url.split("?")[0].rstrip("/")
-        match = re.search(r"-?(\w{32})$", url_without_params)
+        # Strip query parameters / fragments before extracting ID
+        url_without_params = url.split("?")[0].split("#")[0].rstrip("/")
+        match = _NOTION_ID_RE.search(url_without_params)
         if match:
-            raw_id = match.group(1)
+            raw_id = match.group(1).replace("-", "")
             # Format as UUID (Notion API requires dashed format)
             notion_id = f"{raw_id[:8]}-{raw_id[8:12]}-{raw_id[12:16]}-{raw_id[16:20]}-{raw_id[20:]}"
             return f"https://api.notion.com/v1/blocks/{notion_id}/children"
@@ -58,32 +77,95 @@ class FetchNotion(Tool):
         # Notion API requires a version header
         additional_headers["Notion-Version"] = "2022-06-28"
         url = self.convert_notion_url(url)
+
+        # Fail-closed: refuse to send the Notion Authorization header to
+        # anything but a known Notion host. Without this guard a caller can
+        # point the tool at an arbitrary URL (convert_notion_url passes
+        # non-matching URLs through unchanged) and exfiltrate the token.
+        host = (urlparse(url).hostname or "").lower()
+        if host not in NOTION_ALLOWED_HOSTS:
+            logging.warning(
+                "Refusing Notion request to non-Notion host: %s", host or "<empty>"
+            )
+            return StructuredToolResult(
+                status=StructuredToolResultStatus.ERROR,
+                error=(
+                    f"Refusing to send Notion credentials to '{host or url}'. "
+                    f"Only these hosts are allowed: {sorted(NOTION_ALLOWED_HOSTS)}. "
+                    "Pass a URL that points to a Notion page (e.g. "
+                    "https://www.notion.so/... or https://api.notion.com/...)."
+                ),
+                params=params,
+            )
+
         content, _ = scrape(url, additional_headers)
 
         if not content:
-            logging.error(f"Failed to retrieve content from {url}")
+            logging.error("Failed to retrieve Notion content (empty response) for %s", url)
             return StructuredToolResult(
                 status=StructuredToolResultStatus.ERROR,
                 error=f"Failed to retrieve content from {url}",
                 params=params,
             )
 
-        # scrape() returns error message strings on HTTP failures - check if content is valid JSON
+        # scrape() returns error message strings on HTTP failures — check if content is valid JSON
         try:
             parsed = json.loads(content)
         except json.JSONDecodeError:
-            logging.error(f"Notion API returned non-JSON response for {url}: {content[:200]}")
+            # Log URL only — the body may contain authenticated page text.
+            logging.error("Notion API returned non-JSON response for %s", url)
             return StructuredToolResult(
                 status=StructuredToolResultStatus.ERROR,
-                error=f"Notion API error: {content[:500]}",
+                error=f"Notion API returned non-JSON response for {url}",
                 params=params,
             )
 
-        logging.info(f"Notion API response for {url}: {json.dumps(parsed)[:500]}")
+        # Surface Notion's structured error responses rather than silently
+        # parsing them as empty successes. Shape (per Notion API docs):
+        #   {"object": "error", "status": 401, "code": "unauthorized",
+        #    "message": "API token is invalid."}
+        if isinstance(parsed, dict) and parsed.get("object") == "error":
+            status_code = parsed.get("status")
+            code = parsed.get("code")
+            message = parsed.get("message")
+            logging.warning(
+                "Notion API error for %s: status=%s code=%s", url, status_code, code
+            )
+            return StructuredToolResult(
+                status=StructuredToolResultStatus.ERROR,
+                error=(
+                    f"Notion API error for {url}: "
+                    f"HTTP {status_code} {code} — {message}"
+                ),
+                params=params,
+            )
+
+        # Log metadata only. Response body may include authenticated page
+        # text, so never log `content` or `parsed` directly.
+        top_level_keys = list(parsed.keys()) if isinstance(parsed, dict) else []
+        block_count = len(parsed.get("results", [])) if isinstance(parsed, dict) else 0
+        logging.info(
+            "Notion API response for %s: top_level_keys=%s, block_count=%d",
+            url,
+            top_level_keys,
+            block_count,
+        )
 
         result_data = self.parse_notion_content_from_dict(parsed)
         if not result_data:
-            logging.warning(f"Notion page parsed to empty content. Raw response keys: {list(parsed.keys())}, results count: {len(parsed.get('results', []))}, block types: {[r.get('type') for r in parsed.get('results', [])]}")
+            block_types = (
+                [r.get("type") for r in parsed.get("results", [])]
+                if isinstance(parsed, dict)
+                else []
+            )
+            logging.warning(
+                "Notion page parsed to empty content for %s: top_level_keys=%s, "
+                "block_count=%d, block_types=%s",
+                url,
+                top_level_keys,
+                block_count,
+                block_types,
+            )
 
         return StructuredToolResult(
             status=StructuredToolResultStatus.SUCCESS,
