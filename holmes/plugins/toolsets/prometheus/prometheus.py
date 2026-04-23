@@ -2,6 +2,7 @@ import json
 import logging
 import os
 import time
+from enum import Enum
 from typing import Any, ClassVar, Dict, Optional, Tuple, Type, Union
 from urllib.parse import urljoin
 
@@ -59,6 +60,23 @@ MAX_METADATA_TIMEOUT_SECONDS = 60
 DEFAULT_METADATA_TIME_WINDOW_HRS = 1
 
 
+class PrometheusSubtype(str, Enum):
+    """Stable identifiers for the Prometheus toolset variants.
+
+    Exposed to users as the top-level `subtype:` YAML field on the
+    `prometheus/metrics` toolset. Mirrors the `DatabaseSubtype` pattern
+    used by the Database toolset.
+    """
+
+    PROMETHEUS = "prometheus"
+    CORALOGIX = "coralogix"
+    GOOGLE_MANAGED_PROMETHEUS = "google-managed-prometheus"
+    GRAFANA_CLOUD = "grafana-cloud"
+    VICTORIAMETRICS = "victoriametrics"
+    AWS_MANAGED_PROMETHEUS = "aws-managed-prometheus"
+    AZURE_MANAGED_PROMETHEUS = "azure-managed-prometheus"
+
+
 def format_ssl_error_message(prometheus_url: str, error: SSLError) -> str:
     """Format a clear SSL error message with remediation steps."""
     return (
@@ -80,7 +98,7 @@ class PrometheusConfig(ToolsetConfig):
     _description: ClassVar[Optional[str]] = "Connect to a self-hosted Prometheus server."
     _icon_url: ClassVar[Optional[str]] = "https://raw.githubusercontent.com/gilbarbara/logos/de2c1f96ff6e74ea7ea979b43202e8d4b863c655/logos/prometheus.svg"
     _docs_anchor: ClassVar[Optional[str]] = "configuration"
-    _subtype: ClassVar[Optional[str]] = "prometheus"
+    _subtype: ClassVar[Optional[str]] = PrometheusSubtype.PROMETHEUS.value
 
     _deprecated_mappings: ClassVar[Dict[str, Optional[str]]] = {
         "headers": "additional_headers",
@@ -204,7 +222,7 @@ class CoralogixPrometheusConfig(PrometheusConfig):
     _description: ClassVar[Optional[str]] = "Connect to Coralogix's Prometheus-compatible endpoint."
     _icon_url: ClassVar[Optional[str]] = "https://avatars.githubusercontent.com/u/35295744?s=200&v=4"
     _docs_anchor: ClassVar[Optional[str]] = "coralogix-prometheus"
-    _subtype: ClassVar[Optional[str]] = "coralogix"
+    _subtype: ClassVar[Optional[str]] = PrometheusSubtype.CORALOGIX.value
 
     prometheus_url: str = Field(  # type: ignore[assignment]
         title="URL",
@@ -235,7 +253,7 @@ class GooglePrometheusConfig(PrometheusConfig):
     _description: ClassVar[Optional[str]] = "Connect to Google Cloud Managed Prometheus using Workload Identity."
     _icon_url: ClassVar[Optional[str]] = "https://raw.githubusercontent.com/gilbarbara/logos/de2c1f96ff6e74ea7ea979b43202e8d4b863c655/logos/google-cloud.svg"
     _docs_anchor: ClassVar[Optional[str]] = "google-managed-prometheus"
-    _subtype: ClassVar[Optional[str]] = "google-managed-prometheus"
+    _subtype: ClassVar[Optional[str]] = PrometheusSubtype.GOOGLE_MANAGED_PROMETHEUS.value
 
     prometheus_url: str = Field(  # type: ignore[assignment]
         title="URL",
@@ -253,7 +271,7 @@ class GrafanaCloudPrometheusConfig(PrometheusConfig):
     _description: ClassVar[Optional[str]] = "Connect to Grafana Cloud's Prometheus (Mimir) endpoint."
     _icon_url: ClassVar[Optional[str]] = "https://raw.githubusercontent.com/gilbarbara/logos/de2c1f96ff6e74ea7ea979b43202e8d4b863c655/logos/grafana.svg"
     _docs_anchor: ClassVar[Optional[str]] = "grafana-cloud-mimir"
-    _subtype: ClassVar[Optional[str]] = "grafana-cloud"
+    _subtype: ClassVar[Optional[str]] = PrometheusSubtype.GRAFANA_CLOUD.value
 
     prometheus_url: str = Field(  # type: ignore[assignment]
         title="URL",
@@ -282,7 +300,7 @@ class VictoriaMetricsConfig(PrometheusConfig):
     )
     _icon_url: ClassVar[Optional[str]] = "https://cdn.simpleicons.org/victoriametrics/621773"
     _docs_anchor: ClassVar[Optional[str]] = "configuration"
-    _subtype: ClassVar[Optional[str]] = "victoriametrics"
+    _subtype: ClassVar[Optional[str]] = PrometheusSubtype.VICTORIAMETRICS.value
 
     prometheus_url: str = Field(  # type: ignore[assignment]
         title="URL",
@@ -302,7 +320,7 @@ class AMPConfig(PrometheusConfig):
     _description: ClassVar[Optional[str]] = "Connect to AWS Managed Service for Prometheus using IAM credentials."
     _icon_url: ClassVar[Optional[str]] = "https://raw.githubusercontent.com/gilbarbara/logos/de2c1f96ff6e74ea7ea979b43202e8d4b863c655/logos/aws.svg"
     _docs_anchor: ClassVar[Optional[str]] = "aws-managed-prometheus-amp"
-    _subtype: ClassVar[Optional[str]] = "aws-managed-prometheus"
+    _subtype: ClassVar[Optional[str]] = PrometheusSubtype.AWS_MANAGED_PROMETHEUS.value
 
     prometheus_url: str = Field(  # type: ignore[assignment]
         title="URL",
@@ -363,7 +381,7 @@ class AzurePrometheusConfig(PrometheusConfig):
     _description: ClassVar[Optional[str]] = "Connect to Azure Monitor Managed Prometheus using Azure AD."
     _icon_url: ClassVar[Optional[str]] = "https://raw.githubusercontent.com/gilbarbara/logos/de2c1f96ff6e74ea7ea979b43202e8d4b863c655/logos/microsoft-azure.svg"
     _docs_anchor: ClassVar[Optional[str]] = "azure-managed-prometheus"
-    _subtype: ClassVar[Optional[str]] = "azure-managed-prometheus"
+    _subtype: ClassVar[Optional[str]] = PrometheusSubtype.AZURE_MANAGED_PROMETHEUS.value
 
     prometheus_url: str = Field(  # type: ignore[assignment]
         title="URL",
@@ -1964,9 +1982,35 @@ class PrometheusToolset(Toolset):
             },
         )
 
+    # Map PrometheusSubtype -> concrete config class. Kept alongside the
+    # toolset so adding a new variant is a two-line change: add an enum
+    # member and map it here.
+    _SUBTYPE_TO_CONFIG_CLASS: ClassVar[Dict[str, Type[PrometheusConfig]]] = {
+        PrometheusSubtype.PROMETHEUS.value: PrometheusConfig,
+        PrometheusSubtype.CORALOGIX.value: CoralogixPrometheusConfig,
+        PrometheusSubtype.GOOGLE_MANAGED_PROMETHEUS.value: GooglePrometheusConfig,
+        PrometheusSubtype.GRAFANA_CLOUD.value: GrafanaCloudPrometheusConfig,
+        PrometheusSubtype.VICTORIAMETRICS.value: VictoriaMetricsConfig,
+        PrometheusSubtype.AWS_MANAGED_PROMETHEUS.value: AMPConfig,
+        PrometheusSubtype.AZURE_MANAGED_PROMETHEUS.value: AzurePrometheusConfig,
+    }
+
     def determine_prometheus_class(
-        self, config: dict[str, Any]
-    ) -> Type[Union[PrometheusConfig, AMPConfig, AzurePrometheusConfig]]:
+        self, config: dict[str, Any], subtype: Optional[str] = None
+    ) -> Type[PrometheusConfig]:
+        # Explicit `subtype:` on the toolset YAML wins over field-shape detection.
+        if subtype:
+            try:
+                resolved = PrometheusSubtype(subtype)
+            except ValueError as exc:
+                valid = ", ".join(s.value for s in PrometheusSubtype)
+                raise ValueError(
+                    f"Unknown prometheus subtype '{subtype}'. "
+                    f"Valid values: {valid}. "
+                    "Omit `subtype` to auto-detect from the configuration fields."
+                ) from exc
+            return self._SUBTYPE_TO_CONFIG_CLASS[resolved.value]
+
         has_aws_fields = "aws_region" in config
         if has_aws_fields:
             return AMPConfig
@@ -1999,7 +2043,7 @@ class PrometheusToolset(Toolset):
     def prerequisites_callable(self, config: dict[str, Any]) -> Tuple[bool, str]:
         try:
             if config:
-                config_cls = self.determine_prometheus_class(config)
+                config_cls = self.determine_prometheus_class(config, self.subtype)
                 self.config = config_cls(**config)  # type: ignore
                 self._set_meta_from_config()
                 if isinstance(self.config, AzurePrometheusConfig):

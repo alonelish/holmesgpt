@@ -780,6 +780,12 @@ class Toolset(BaseModel):
     error: Optional[str] = None
     meta: Optional[Dict[str, Any]] = None
 
+    # Optional top-level YAML disambiguator for multi-variant toolsets
+    # (e.g. Database: `subtype: mysql`; Prometheus: `subtype: victoriametrics`).
+    # The value is toolset-specific; consult the toolset's documentation for
+    # accepted values. Toolsets that don't support variants ignore this field.
+    subtype: Optional[str] = None
+
     def override_with(self, override: "Toolset") -> None:
         """
         Overrides the current attributes with values from the Toolset loaded from custom config

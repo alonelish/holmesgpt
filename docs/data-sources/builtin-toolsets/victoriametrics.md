@@ -15,15 +15,18 @@ Connect HolmesGPT to VictoriaMetrics, a Prometheus-compatible time-series databa
 
 ## Configuration
 
-HolmesGPT uses its built-in Prometheus toolset to query VictoriaMetrics — VM's HTTP API implements the Prometheus query API, so no separate toolset is required.
+HolmesGPT uses its built-in Prometheus toolset to query VictoriaMetrics — VM's HTTP API implements the Prometheus query API, so no separate toolset is required. Set `subtype: victoriametrics` so the UI shows this as a VictoriaMetrics integration (not a generic Prometheus one):
 
 ```yaml-toolset-config
 toolsets:
   prometheus/metrics:
     enabled: true
+    subtype: victoriametrics
     config:
       prometheus_url: "http://vmsingle-vmsingle.monitoring.svc.cluster.local:8428"
 ```
+
+The `subtype` field is optional — omitting it still works, but the frontend catalog will display the integration under the generic "Prometheus" card rather than the dedicated "VictoriaMetrics" one.
 
 For the complete list of supported configuration fields (authentication headers, timeouts, label filters, SSL verification, etc.), see the [Prometheus toolset configuration reference](prometheus.md#configuration).
 
