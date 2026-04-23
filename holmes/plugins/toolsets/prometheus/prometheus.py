@@ -2041,41 +2041,50 @@ class PrometheusToolset(Toolset):
         self.meta = {"type": "prometheus", "subtype": subtype}
 
     def prerequisites_callable(self, config: dict[str, Any]) -> Tuple[bool, str]:
+        # Normalize: a missing config block is equivalent to an empty dict.
+        # Either way we want to build a PrometheusConfig (possibly with
+        # auto-discovered URL) rather than short-circuit.
+        config = config or {}
         try:
-            if config:
-                config_cls = self.determine_prometheus_class(config, self.subtype)
-                self.config = config_cls(**config)  # type: ignore
-                self._set_meta_from_config()
-                if isinstance(self.config, AzurePrometheusConfig):
-                    self._disable_azure_incompatible_tools()
-                self._reload_llm_instructions()
-                return self._is_healthy()
-        except Exception as e:
-            logging.exception("Failed to create prometheus config")
-            return False, f"Invalid Prometheus configuration: {e}"
-        try:
-            prometheus_url = os.environ.get("PROMETHEUS_URL")
-            if not prometheus_url:
-                prometheus_url = self.auto_detect_prometheus_url()
-                if not prometheus_url:
+            config_cls = self.determine_prometheus_class(config, self.subtype)
+            self.config = config_cls(**config)  # type: ignore
+
+            # Auto-discovery fallback: if the user didn't provide a URL AND
+            # they're on the generic PrometheusConfig (sibling variants
+            # make the URL required at validation time), try env var then
+            # in-cluster service discovery. This lets a user override
+            # settings like `verify_ssl` or timeouts while still relying
+            # on auto-discovery for the URL.
+            if (
+                not self.config.prometheus_url
+                and type(self.config) is PrometheusConfig
+            ):
+                discovered = (
+                    os.environ.get("PROMETHEUS_URL")
+                    or self.auto_detect_prometheus_url()
+                )
+                if not discovered:
                     return (
                         False,
                         "Unable to auto-detect prometheus. Define prometheus_url in the configuration for tool prometheus/metrics",
                     )
+                self.config.prometheus_url = discovered
+                # Respect PROMETHEUS_AUTH_HEADER only when the user didn't
+                # supply their own additional_headers.
+                if not self.config.additional_headers:
+                    self.config.additional_headers = add_prometheus_auth(
+                        os.environ.get("PROMETHEUS_AUTH_HEADER")
+                    )
+                logging.info(f"Prometheus auto discovered at url {discovered}")
 
-            self.config = PrometheusConfig(
-                prometheus_url=prometheus_url,
-                additional_headers=add_prometheus_auth(
-                    os.environ.get("PROMETHEUS_AUTH_HEADER")
-                ),
-            )
             self._set_meta_from_config()
-            logging.info(f"Prometheus auto discovered at url {prometheus_url}")
+            if isinstance(self.config, AzurePrometheusConfig):
+                self._disable_azure_incompatible_tools()
             self._reload_llm_instructions()
             return self._is_healthy()
         except Exception as e:
             logging.exception("Failed to set up prometheus")
-            return False, f"Failed to set up Prometheus toolset: {e}"
+            return False, f"Invalid Prometheus configuration: {e}"
 
     def auto_detect_prometheus_url(self) -> Optional[str]:
         url: Optional[str] = PrometheusDiscovery.find_prometheus_url()
