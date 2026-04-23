@@ -30,22 +30,6 @@ The `subtype` field is optional — omitting it still works, but the frontend ca
 
 For the complete list of supported configuration fields (authentication headers, timeouts, label filters, SSL verification, etc.), see the [Prometheus toolset configuration reference](prometheus.md#configuration).
 
-## Quick Install with Helm
-
-If you don't already have VictoriaMetrics running in your cluster:
-
-```bash
-helm repo add vm https://victoriametrics.github.io/helm-charts/
-helm repo update
-
-helm upgrade --install vmsingle vm/victoria-metrics-single \
-  --namespace monitoring --create-namespace
-```
-
-This deploys a standalone `vmsingle` pod (~200–300MB RAM). The service is reachable at `http://vmsingle-vmsingle.monitoring.svc.cluster.local:8428`.
-
-For production deployments with scraping, long-term storage, and alerting, use the heavier `victoria-metrics-k8s-stack` chart instead — see the [VictoriaMetrics Helm charts documentation](https://docs.victoriametrics.com/helm/).
-
 ## Compatibility Notes
 
 VictoriaMetrics implements the Prometheus query API, but a few less-common endpoints that Holmes uses have partial or no support:
