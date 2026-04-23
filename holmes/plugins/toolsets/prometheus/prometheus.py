@@ -269,6 +269,29 @@ class GrafanaCloudPrometheusConfig(PrometheusConfig):
     )
 
 
+class VictoriaMetricsConfig(PrometheusConfig):
+    """VictoriaMetrics — Prometheus-compatible TSDB (vmsingle / vmselect)."""
+
+    _name: ClassVar[Optional[str]] = "VictoriaMetrics"
+    _description: ClassVar[Optional[str]] = (
+        "Connect to VictoriaMetrics, a Prometheus-compatible TSDB."
+    )
+    _icon_url: ClassVar[Optional[str]] = "https://cdn.simpleicons.org/victoriametrics/621773"
+    _docs_anchor: ClassVar[Optional[str]] = "configuration"
+
+    prometheus_url: str = Field(  # type: ignore[assignment]
+        title="URL",
+        description=(
+            "VictoriaMetrics HTTP API endpoint. Typically port 8428 for vmsingle, "
+            "8481 for vmselect."
+        ),
+        examples=[
+            "http://vmsingle-vmsingle.monitoring.svc.cluster.local:8428",
+            "http://vmselect.monitoring.svc.cluster.local:8481/select/0/prometheus",
+        ],
+    )
+
+
 class AMPConfig(PrometheusConfig):
     _name: ClassVar[Optional[str]] = "AWS Managed Prometheus"
     _description: ClassVar[Optional[str]] = "Connect to AWS Managed Service for Prometheus using IAM credentials."
@@ -1892,9 +1915,9 @@ class ExecuteRangeQuery(BasePrometheusTool):
 
 class PrometheusToolset(Toolset):
     config_classes: ClassVar[
-        list[Type[Union[PrometheusConfig, CoralogixPrometheusConfig, GooglePrometheusConfig, GrafanaCloudPrometheusConfig, AMPConfig, AzurePrometheusConfig]]]
-    ] = [PrometheusConfig, CoralogixPrometheusConfig, GooglePrometheusConfig, GrafanaCloudPrometheusConfig, AMPConfig, AzurePrometheusConfig]
-    config: Optional[Union[PrometheusConfig, CoralogixPrometheusConfig, GooglePrometheusConfig, GrafanaCloudPrometheusConfig, AMPConfig, AzurePrometheusConfig]] = None
+        list[Type[Union[PrometheusConfig, CoralogixPrometheusConfig, GooglePrometheusConfig, GrafanaCloudPrometheusConfig, VictoriaMetricsConfig, AMPConfig, AzurePrometheusConfig]]]
+    ] = [PrometheusConfig, CoralogixPrometheusConfig, GooglePrometheusConfig, GrafanaCloudPrometheusConfig, VictoriaMetricsConfig, AMPConfig, AzurePrometheusConfig]
+    config: Optional[Union[PrometheusConfig, CoralogixPrometheusConfig, GooglePrometheusConfig, GrafanaCloudPrometheusConfig, VictoriaMetricsConfig, AMPConfig, AzurePrometheusConfig]] = None
 
     def __init__(self):
         super().__init__(

@@ -261,6 +261,16 @@
       "backendToolsetNames": ["prometheus/metrics"]
     },
     {
+      "id": "victoriametrics",
+      "name": "VictoriaMetrics",
+      "description": "Query VictoriaMetrics (Prometheus-compatible TSDB)",
+      "categories": ["metrics"],
+      "iconUrl": "https://cdn.simpleicons.org/victoriametrics/621773",
+      "docsUrl": "https://holmesgpt.dev/latest/data-sources/builtin-toolsets/victoriametrics/?tab=robusta-helm-chart",
+      "configType": "native",
+      "backendToolsetNames": ["prometheus/metrics"]
+    },
+    {
       "id": "datadog/metrics",
       "name": "Datadog Metrics",
       "description": "Query Datadog metrics",
