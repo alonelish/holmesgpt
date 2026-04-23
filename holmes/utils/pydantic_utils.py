@@ -58,6 +58,11 @@ class ToolsetConfig(BaseModel):
     _docs_anchor: ClassVar[Optional[str]] = None
     _hidden_fields: ClassVar[List[str]] = []
     _recommended: ClassVar[bool] = False
+    # Stable identifier for this variant, used to populate meta.subtype on the
+    # synced HolmesToolsStatus row so the frontend can distinguish catalog
+    # cards that share a backend toolset name (e.g. Prometheus vs VictoriaMetrics,
+    # both backed by prometheus/metrics).
+    _subtype: ClassVar[Optional[str]] = None
 
     @classmethod
     def has_required_fields(cls) -> bool:

@@ -80,6 +80,7 @@ class PrometheusConfig(ToolsetConfig):
     _description: ClassVar[Optional[str]] = "Connect to a self-hosted Prometheus server."
     _icon_url: ClassVar[Optional[str]] = "https://raw.githubusercontent.com/gilbarbara/logos/de2c1f96ff6e74ea7ea979b43202e8d4b863c655/logos/prometheus.svg"
     _docs_anchor: ClassVar[Optional[str]] = "configuration"
+    _subtype: ClassVar[Optional[str]] = "prometheus"
 
     _deprecated_mappings: ClassVar[Dict[str, Optional[str]]] = {
         "headers": "additional_headers",
@@ -203,6 +204,7 @@ class CoralogixPrometheusConfig(PrometheusConfig):
     _description: ClassVar[Optional[str]] = "Connect to Coralogix's Prometheus-compatible endpoint."
     _icon_url: ClassVar[Optional[str]] = "https://avatars.githubusercontent.com/u/35295744?s=200&v=4"
     _docs_anchor: ClassVar[Optional[str]] = "coralogix-prometheus"
+    _subtype: ClassVar[Optional[str]] = "coralogix"
 
     prometheus_url: str = Field(  # type: ignore[assignment]
         title="URL",
@@ -233,6 +235,7 @@ class GooglePrometheusConfig(PrometheusConfig):
     _description: ClassVar[Optional[str]] = "Connect to Google Cloud Managed Prometheus using Workload Identity."
     _icon_url: ClassVar[Optional[str]] = "https://raw.githubusercontent.com/gilbarbara/logos/de2c1f96ff6e74ea7ea979b43202e8d4b863c655/logos/google-cloud.svg"
     _docs_anchor: ClassVar[Optional[str]] = "google-managed-prometheus"
+    _subtype: ClassVar[Optional[str]] = "google-managed-prometheus"
 
     prometheus_url: str = Field(  # type: ignore[assignment]
         title="URL",
@@ -250,6 +253,7 @@ class GrafanaCloudPrometheusConfig(PrometheusConfig):
     _description: ClassVar[Optional[str]] = "Connect to Grafana Cloud's Prometheus (Mimir) endpoint."
     _icon_url: ClassVar[Optional[str]] = "https://raw.githubusercontent.com/gilbarbara/logos/de2c1f96ff6e74ea7ea979b43202e8d4b863c655/logos/grafana.svg"
     _docs_anchor: ClassVar[Optional[str]] = "grafana-cloud-mimir"
+    _subtype: ClassVar[Optional[str]] = "grafana-cloud"
 
     prometheus_url: str = Field(  # type: ignore[assignment]
         title="URL",
@@ -278,6 +282,7 @@ class VictoriaMetricsConfig(PrometheusConfig):
     )
     _icon_url: ClassVar[Optional[str]] = "https://cdn.simpleicons.org/victoriametrics/621773"
     _docs_anchor: ClassVar[Optional[str]] = "configuration"
+    _subtype: ClassVar[Optional[str]] = "victoriametrics"
 
     prometheus_url: str = Field(  # type: ignore[assignment]
         title="URL",
@@ -297,6 +302,7 @@ class AMPConfig(PrometheusConfig):
     _description: ClassVar[Optional[str]] = "Connect to AWS Managed Service for Prometheus using IAM credentials."
     _icon_url: ClassVar[Optional[str]] = "https://raw.githubusercontent.com/gilbarbara/logos/de2c1f96ff6e74ea7ea979b43202e8d4b863c655/logos/aws.svg"
     _docs_anchor: ClassVar[Optional[str]] = "aws-managed-prometheus-amp"
+    _subtype: ClassVar[Optional[str]] = "aws-managed-prometheus"
 
     prometheus_url: str = Field(  # type: ignore[assignment]
         title="URL",
@@ -357,6 +363,7 @@ class AzurePrometheusConfig(PrometheusConfig):
     _description: ClassVar[Optional[str]] = "Connect to Azure Monitor Managed Prometheus using Azure AD."
     _icon_url: ClassVar[Optional[str]] = "https://raw.githubusercontent.com/gilbarbara/logos/de2c1f96ff6e74ea7ea979b43202e8d4b863c655/logos/microsoft-azure.svg"
     _docs_anchor: ClassVar[Optional[str]] = "azure-managed-prometheus"
+    _subtype: ClassVar[Optional[str]] = "azure-managed-prometheus"
 
     prometheus_url: str = Field(  # type: ignore[assignment]
         title="URL",
@@ -1982,11 +1989,19 @@ class PrometheusToolset(Toolset):
         }
         self.tools = [t for t in self.tools if t.name not in incompatible]
 
+    def _set_meta_from_config(self) -> None:
+        """Set self.meta with type/subtype so the frontend can distinguish
+        catalog cards that share the `prometheus/metrics` backend toolset
+        (e.g. Prometheus vs VictoriaMetrics vs Coralogix)."""
+        subtype = getattr(type(self.config), "_subtype", None) if self.config else None
+        self.meta = {"type": "prometheus", "subtype": subtype}
+
     def prerequisites_callable(self, config: dict[str, Any]) -> Tuple[bool, str]:
         try:
             if config:
                 config_cls = self.determine_prometheus_class(config)
                 self.config = config_cls(**config)  # type: ignore
+                self._set_meta_from_config()
                 if isinstance(self.config, AzurePrometheusConfig):
                     self._disable_azure_incompatible_tools()
                 self._reload_llm_instructions()
@@ -2010,6 +2025,7 @@ class PrometheusToolset(Toolset):
                     os.environ.get("PROMETHEUS_AUTH_HEADER")
                 ),
             )
+            self._set_meta_from_config()
             logging.info(f"Prometheus auto discovered at url {prometheus_url}")
             self._reload_llm_instructions()
             return self._is_healthy()
