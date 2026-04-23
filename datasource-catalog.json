@@ -258,8 +258,7 @@
       "iconUrl": "https://raw.githubusercontent.com/gilbarbara/logos/de2c1f96ff6e74ea7ea979b43202e8d4b863c655/logos/prometheus.svg",
       "docsUrl": "https://holmesgpt.dev/latest/data-sources/builtin-toolsets/prometheus/?tab=robusta-helm-chart",
       "configType": "native",
-      "backendToolsetNames": ["prometheus/metrics"],
-      "metaFilter": {"subtype": "prometheus"}
+      "backendToolsetNames": ["prometheus/metrics"]
     },
     {
       "id": "victoriametrics",
