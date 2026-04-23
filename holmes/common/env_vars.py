@@ -8,6 +8,9 @@ from typing import Optional
 RECOMMENDED_OPENAI_MODEL = "gpt-4.1"
 RECOMMENDED_ANTHROPIC_MODEL = "anthropic/claude-opus-4-1-20250805"
 
+# Default user_id for CLI mode (no authenticated user)
+DEFAULT_CLI_USER = "__no_user__"
+
 # Default model for HolmesGPT
 DEFAULT_MODEL = RECOMMENDED_OPENAI_MODEL
 FALLBACK_CONTEXT_WINDOW_SIZE = (
@@ -45,8 +48,8 @@ LOG_PERFORMANCE = os.environ.get("LOG_PERFORMANCE", None)
 
 
 AZURE_AD_TOKEN_AUTH = load_bool("AZURE_AD_TOKEN_AUTH", False)
-# Override the default scope used when acquiring Entra ID tokens for Azure OpenAI/Foundry endpoints
-# Default aligns with Azure Cognitive Services (Azure OpenAI)
+# Override the default scope used when acquiring Entra ID tokens for Azure AI Foundry endpoints
+# Default aligns with Azure Cognitive Services (Azure AI Foundry)
 AZURE_COGNITIVE_SERVICES_SCOPE = os.environ.get(
     "AZURE_COGNITIVE_SERVICES_SCOPE",
     "https://cognitiveservices.azure.com/.default",

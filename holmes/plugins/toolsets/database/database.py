@@ -18,6 +18,7 @@ from holmes.core.tools import (
     ToolParameter,
     Toolset,
     ToolsetTag,
+    ToolsetType,
 )
 from holmes.plugins.toolsets.utils import toolset_name_for_one_liner
 from holmes.utils.pydantic_utils import ToolsetConfig
@@ -59,6 +60,7 @@ class DatabaseSubtype(str, Enum):
 @dataclass
 class DatabaseDriverInfo:
     """Holds the database subtype and the preferred SQLAlchemy driver override."""
+
     subtype: DatabaseSubtype
     driver: Optional[str]  # SQLAlchemy driver string, None = use URL as-is
 
@@ -195,6 +197,7 @@ class DatabaseToolset(Toolset):
             name=name,
             enabled=enabled,
             description=description,
+            type=ToolsetType.DATABASE,
             docs_url="https://holmesgpt.dev/data-sources/builtin-toolsets/database/",
             icon_url="https://raw.githubusercontent.com/gilbarbara/logos/de2c1f96ff6e74ea7ea979b43202e8d4b863c655/logos/postgresql.svg",
             prerequisites=[CallablePrerequisite(callable=self.prerequisites_callable)],
@@ -217,15 +220,10 @@ class DatabaseToolset(Toolset):
         if subtype_str:
             try:
                 self._subtype = DatabaseSubtype(subtype_str)
-            except ValueError as exc:
-                valid_subtypes = sorted(
-                    s.value for s in DatabaseSubtype if s != DatabaseSubtype.UNKNOWN
+            except ValueError:
+                logger.warning(
+                    f"Unknown database subtype '{subtype_str}', using UNKNOWN"
                 )
-                raise ValueError(
-                    f"Unknown database subtype '{subtype_str}'. "
-                    f"Valid values: {', '.join(valid_subtypes)}. "
-                    "Omit `subtype` to auto-detect from the connection URL."
-                ) from exc
 
         # Set initial meta — updated with detected subtype in prerequisites_callable
         self.meta = {"type": "database", "subtype": self._subtype.value}
@@ -238,7 +236,6 @@ class DatabaseToolset(Toolset):
                 + "\n\n## Database-Specific Instructions\n\n"
                 + self._user_llm_instructions
             )
-
 
     def prerequisites_callable(self, config: Dict[str, Any]) -> Tuple[bool, str]:
         try:
@@ -294,9 +291,7 @@ class DatabaseToolset(Toolset):
                 connect_args["TrustServerCertificate"] = "yes"
 
         return sqlalchemy.create_engine(
-            url,
-            pool_pre_ping=True,
-            connect_args=connect_args
+            url, pool_pre_ping=True, connect_args=connect_args
         )
 
     @property
@@ -330,7 +325,9 @@ class DatabaseToolset(Toolset):
                     f"Received: {sql[:80]}"
                 )
 
-        effective_limit = min(limit or self.database_config.max_rows, self.database_config.max_rows)
+        effective_limit = min(
+            limit or self.database_config.max_rows, self.database_config.max_rows
+        )
         url = _normalise_url(self.database_config.connection_url)
         engine = self._create_engine(url)
         try:
@@ -366,7 +363,9 @@ class DatabaseToolset(Toolset):
                         "rows": [],
                         "row_count": 0,
                         "truncated": False,
-                        "rows_affected": result.rowcount if result.rowcount >= 0 else None,
+                        "rows_affected": result.rowcount
+                        if result.rowcount >= 0
+                        else None,
                     }
         finally:
             engine.dispose()
