@@ -175,13 +175,16 @@ HolmesGPT authenticates to a self-hosted Confluence Data Center (or Server) inst
 
 ## Configuration Reference
 
+`subtype` is set at the toolset level (sibling of `enabled:` and `config:`); the rest of the fields below go inside `config:`.
+
 | Option | Default | Description |
 |--------|---------|-------------|
+| `subtype` | (inferred) | Top-level field — picks the Confluence variant. One of `cloud`, `dc-pat`, `dc-basic`. Setting it is recommended; if omitted, HolmesGPT infers the variant from the URL pattern and `auth_type` for backwards compatibility. |
 | `api_url` | (required) | Base URL of the Confluence instance |
 | `api_key` | (required) | API token (Cloud), Personal Access Token, or password (Data Center) |
-| `user` | `null` | User email (Cloud) or username (Data Center). Required for basic auth. |
-| `auth_type` | `basic` | `basic` for Cloud or Data Center username/password. `bearer` for Data Center PATs. |
-| `api_path_prefix` | `/wiki` | Path prefix before `/rest/api`. Cloud uses `/wiki`. Data Center typically uses `""` (empty). |
+| `user` | `null` | User email (Cloud) or username (Data Center). Required for `cloud` and `dc-basic`; not used by `dc-pat`. |
+| `auth_type` | per `subtype` | `basic` (for `cloud` and `dc-basic`) or `bearer` (for `dc-pat`). Set automatically by the chosen `subtype` — override only if your deployment needs something non-standard. |
+| `api_path_prefix` | per `subtype` | `/wiki` for `cloud`, `""` for `dc-pat` and `dc-basic`. Set automatically by the chosen `subtype` — override only if your Data Center install uses a custom context path. |
 | `cloud_id` | `null` | Atlassian Cloud ID for the API gateway. Auto-detected for Cloud URLs when needed (scoped tokens / service accounts). |
 
 ## Tools
