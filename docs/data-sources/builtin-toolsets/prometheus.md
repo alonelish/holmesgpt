@@ -430,7 +430,7 @@ These fields are only valid for specific `subtype` values:
 | `aws_access_key` / `aws_secret_access_key` | `aws-managed-prometheus` | No | Falls back to default AWS credential chain when omitted |
 | `aws_service_name` | `aws-managed-prometheus` | No (default `aps`) | AWS service name for SigV4 |
 | `assume_role_arn` | `aws-managed-prometheus` | No | IAM role to assume for cross-account access |
-| `refresh_interval_seconds` | `aws-managed-prometheus` | No (default `900`) | How often to refresh AWS credentials |
+| `refresh_interval_seconds` | `aws-managed-prometheus`, `azure-managed-prometheus` | No (default `900`) | How often to refresh credentials — AWS STS creds for AMP, Azure AD bearer token for Azure |
 | `azure_client_id` / `azure_client_secret` / `azure_tenant_id` | `azure-managed-prometheus` | UI-required | Azure AD service principal. CLI/Helm: omit to use managed identity (`azure_use_managed_id: true`) or `AZURE_*` env vars. |
 | `azure_use_managed_id` | `azure-managed-prometheus` | No (default `false`) | Set `true` to use Azure managed identity instead of a service principal |
 | `azure_resource` / `azure_metadata_endpoint` / `azure_token_endpoint` | `azure-managed-prometheus` | No | Azure AD endpoints — sensible defaults are applied automatically |
