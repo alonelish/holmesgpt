@@ -50,6 +50,42 @@ Go to [Atlassian API Tokens](https://id.atlassian.com/manage/api-tokens){:target
 
     --8<-- "snippets/toolset_refresh_warning.md"
 
+=== "Holmes Helm Chart"
+
+    First, create a Kubernetes secret with your API token:
+
+    ```bash
+    kubectl create secret generic confluence-credentials \
+      --from-literal=api-key=your-api-token \
+      -n holmes
+    ```
+
+    --8<-- "snippets/secret_namespace_note.md"
+
+    Then add to your Holmes Helm values:
+
+    ```yaml
+    additionalEnvVars:
+      - name: CONFLUENCE_API_URL
+        value: "https://yourcompany.atlassian.net"
+      - name: CONFLUENCE_USER
+        value: "your-email@example.com"
+      - name: CONFLUENCE_API_KEY
+        valueFrom:
+          secretKeyRef:
+            name: confluence-credentials
+            key: api-key
+
+    toolsets:
+      confluence:
+        enabled: true
+        subtype: cloud
+        config:
+          api_url: "{{ env.CONFLUENCE_API_URL }}"
+          user: "{{ env.CONFLUENCE_USER }}"
+          api_key: "{{ env.CONFLUENCE_API_KEY }}"
+    ```
+
 === "Robusta Helm Chart"
 
     First, create a Kubernetes secret with your API token:
@@ -115,6 +151,39 @@ In Confluence Data Center, go to your **Profile** > **Personal Access Tokens** >
 
     --8<-- "snippets/toolset_refresh_warning.md"
 
+=== "Holmes Helm Chart"
+
+    First, create a Kubernetes secret with your Personal Access Token:
+
+    ```bash
+    kubectl create secret generic confluence-credentials \
+      --from-literal=pat=your-personal-access-token \
+      -n holmes
+    ```
+
+    --8<-- "snippets/secret_namespace_note.md"
+
+    Then add to your Holmes Helm values:
+
+    ```yaml
+    additionalEnvVars:
+      - name: CONFLUENCE_API_URL
+        value: "https://confluence.yourcompany.com"
+      - name: CONFLUENCE_PAT
+        valueFrom:
+          secretKeyRef:
+            name: confluence-credentials
+            key: pat
+
+    toolsets:
+      confluence:
+        enabled: true
+        subtype: dc-pat
+        config:
+          api_url: "{{ env.CONFLUENCE_API_URL }}"
+          api_key: "{{ env.CONFLUENCE_PAT }}"
+    ```
+
 === "Robusta Helm Chart"
 
     First, create a Kubernetes secret with your Personal Access Token:
@@ -170,6 +239,42 @@ HolmesGPT authenticates to a self-hosted Confluence Data Center (or Server) inst
     ```
 
     --8<-- "snippets/toolset_refresh_warning.md"
+
+=== "Holmes Helm Chart"
+
+    First, create a Kubernetes secret with your password:
+
+    ```bash
+    kubectl create secret generic confluence-credentials \
+      --from-literal=password=your-password \
+      -n holmes
+    ```
+
+    --8<-- "snippets/secret_namespace_note.md"
+
+    Then add to your Holmes Helm values:
+
+    ```yaml
+    additionalEnvVars:
+      - name: CONFLUENCE_API_URL
+        value: "https://confluence.yourcompany.com"
+      - name: CONFLUENCE_USER
+        value: "your-username"
+      - name: CONFLUENCE_PASSWORD
+        valueFrom:
+          secretKeyRef:
+            name: confluence-credentials
+            key: password
+
+    toolsets:
+      confluence:
+        enabled: true
+        subtype: dc-basic
+        config:
+          api_url: "{{ env.CONFLUENCE_API_URL }}"
+          user: "{{ env.CONFLUENCE_USER }}"
+          api_key: "{{ env.CONFLUENCE_PASSWORD }}"
+    ```
 
 === "Robusta Helm Chart"
 

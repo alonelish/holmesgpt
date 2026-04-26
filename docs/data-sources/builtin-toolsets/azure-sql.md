@@ -55,6 +55,72 @@ By enabling this toolset, HolmesGPT can analyze Azure SQL Database performance, 
 
     --8<-- "snippets/toolset_refresh_warning.md"
 
+=== "Holmes Helm Chart"
+
+    **Azure AD Workload Identity**
+
+    No Kubernetes secret is needed in this mode — credentials come from the workload identity.
+
+    ```yaml
+    toolsets:
+      azure/sql:
+        enabled: true
+        config:
+          database:
+            subscription_id: "your-subscription-id"
+            resource_group: "your-resource-group"
+            server_name: "your-azure-sql-server-name"
+            database_name: "your-azure-sql-database-name"
+    ```
+
+    **Service Principal**
+
+    First, create a Kubernetes secret with the service principal credentials:
+
+    ```bash
+    kubectl create secret generic azure-sql-credentials \
+      --from-literal=tenant-id=your-tenant-id \
+      --from-literal=client-id=your-client-id \
+      --from-literal=client-secret=your-client-secret \
+      -n holmes
+    ```
+
+    --8<-- "snippets/secret_namespace_note.md"
+
+    Then add to your Holmes Helm values:
+
+    ```yaml
+    additionalEnvVars:
+      - name: AZURE_SQL_TENANT_ID
+        valueFrom:
+          secretKeyRef:
+            name: azure-sql-credentials
+            key: tenant-id
+      - name: AZURE_SQL_CLIENT_ID
+        valueFrom:
+          secretKeyRef:
+            name: azure-sql-credentials
+            key: client-id
+      - name: AZURE_SQL_CLIENT_SECRET
+        valueFrom:
+          secretKeyRef:
+            name: azure-sql-credentials
+            key: client-secret
+
+    toolsets:
+      azure/sql:
+        enabled: true
+        config:
+          tenant_id: "{{ env.AZURE_SQL_TENANT_ID }}"
+          client_id: "{{ env.AZURE_SQL_CLIENT_ID }}"
+          client_secret: "{{ env.AZURE_SQL_CLIENT_SECRET }}"
+          database:
+            subscription_id: "your-subscription-id"
+            resource_group: "your-resource-group"
+            server_name: "your-azure-sql-server-name"
+            database_name: "your-azure-sql-database-name"
+    ```
+
 === "Robusta Helm Chart"
 
     **Azure AD Workload Identity**

@@ -102,6 +102,44 @@ You should receive a JSON response. If you get an authentication error, check yo
     holmes ask "Show me all change requests from the last 24 hours"
     ```
 
+=== "Holmes Helm Chart"
+
+    First, create a Kubernetes secret with your ServiceNow API key:
+
+    ```bash
+    kubectl create secret generic servicenow-credentials \
+      --from-literal=api-key=your-servicenow-api-key \
+      -n holmes
+    ```
+
+    --8<-- "snippets/secret_namespace_note.md"
+
+    Then add to your Holmes Helm values:
+
+    ```yaml
+    additionalEnvVars:
+      - name: SERVICENOW_API_KEY
+        valueFrom:
+          secretKeyRef:
+            name: servicenow-credentials
+            key: api-key
+
+    toolsets:
+      servicenow/tables:
+        enabled: true
+        config:
+          api_url: <your servicenow instance URL>  # e.g. https://dev12345.service-now.com
+          api_key: "{{ env.SERVICENOW_API_KEY }}"
+          # Alternative: use basic auth instead of api_key
+          # username: "your-username"
+          # password: "{{ env.SERVICENOW_PASSWORD }}"
+
+          # Optional
+          api_key_header: x-sn-apikey  # HTTP header name for the API key (default: x-sn-apikey)
+          health_check_table: sys_user  # Table used to verify connectivity on startup (default: sys_user)
+          api_version: v2  # Table API version: 'v2' (default) or '' for unversioned path
+    ```
+
 === "Robusta Helm Chart"
 
     First, create a Kubernetes secret with your ServiceNow API key:
