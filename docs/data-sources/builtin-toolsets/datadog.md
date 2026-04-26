@@ -60,8 +60,11 @@ You'll need two keys and your site URL from your Datadog account:
     ```bash
     kubectl create secret generic holmes-datadog-secrets \
       --from-literal=datadog-api-key=your-datadog-api-key \
-      --from-literal=datadog-app-key=your-datadog-app-key
+      --from-literal=datadog-app-key=your-datadog-app-key \
+      -n holmes
     ```
+
+    --8<-- "snippets/secret_namespace_note.md"
 
     Then add to your Holmes Helm values:
     ```yaml
@@ -115,8 +118,11 @@ You'll need two keys and your site URL from your Datadog account:
     ```bash
     kubectl create secret generic holmes-datadog-secrets \
       --from-literal=datadog-api-key=your-datadog-api-key \
-      --from-literal=datadog-app-key=your-datadog-app-key
+      --from-literal=datadog-app-key=your-datadog-app-key \
+      -n default
     ```
+
+    --8<-- "snippets/secret_namespace_note.md"
 
     Then add to your Robusta Helm values:
     ```yaml
