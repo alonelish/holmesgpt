@@ -1,55 +1,14 @@
 import json
-import logging
-import os
 import yaml
+import logging
 from datetime import datetime
-from functools import lru_cache
-from pathlib import Path
-from typing import Any, List, Optional
+from typing import Any, List
 
 from holmes.config import Config
 from holmes.core.supabase_dal import SupabaseDal
 from holmes.core.tools import PrerequisiteCacheMode, Toolset, ToolsetDBModel, ToolsetTag
 from holmes.plugins.prompts import load_and_render_prompt
 from holmes.plugins.toolsets.mcp.toolset_mcp import RemoteMCPToolset
-
-# Default in-pod path mounted by Kubernetes for every Pod with a service
-# account token (the default). Used as the fallback when POD_NAMESPACE isn't
-# wired up via the downward API.
-_SERVICEACCOUNT_NAMESPACE_FILE = Path(
-    "/var/run/secrets/kubernetes.io/serviceaccount/namespace"
-)
-
-
-@lru_cache(maxsize=1)
-def _detect_runner_namespace() -> Optional[str]:
-    """Best-effort detection of the namespace the Holmes runner Pod is in.
-
-    Order of preference:
-        1. ``POD_NAMESPACE`` env var (set via the Kubernetes downward API:
-           ``valueFrom.fieldRef.fieldPath: metadata.namespace``). Preferred
-           because it's explicit and easy to override in tests.
-        2. The service-account namespace file mounted by default into every
-           Pod that has a service account token, ``/var/run/secrets/...``.
-
-    Returns ``None`` when neither is available — i.e. when Holmes runs
-    outside Kubernetes (CLI / local dev). Callers should omit the key
-    rather than fabricate a value in that case.
-
-    Cached because the namespace is invariant for the lifetime of the
-    process, and the sync function may run repeatedly.
-    """
-    env_val = os.environ.get("POD_NAMESPACE")
-    if env_val and env_val.strip():
-        return env_val.strip()
-    try:
-        if _SERVICEACCOUNT_NAMESPACE_FILE.is_file():
-            content = _SERVICEACCOUNT_NAMESPACE_FILE.read_text(encoding="utf-8").strip()
-            if content:
-                return content
-    except OSError as exc:
-        logging.debug(f"Failed to read service-account namespace file: {exc}")
-    return None
 
 
 def log_toolsets_statuses(toolsets: List[Toolset]):
@@ -89,7 +48,6 @@ def holmes_sync_toolsets_status(dal: SupabaseDal, config: Config) -> None:
 
     db_toolsets = []
     updated_at = datetime.now().isoformat()
-    runner_namespace = _detect_runner_namespace()
     for toolset in tool_executor.toolsets:
         # hiding disabled experimental toolsets from the docs
         if toolset.experimental and not toolset.enabled:
@@ -108,13 +66,6 @@ def holmes_sync_toolsets_status(dal: SupabaseDal, config: Config) -> None:
             if oauth_config:
                 meta = meta or {}
                 meta["oauth_config"] = oauth_config
-
-        # Tag every synced row with the runner's own namespace so downstream
-        # consumers (frontend / debugging tooling) can tell where the
-        # status row came from. Skipped when running outside Kubernetes.
-        if runner_namespace:
-            meta = meta or {}
-            meta["namespace"] = runner_namespace
 
         db_toolsets.append(
             ToolsetDBModel(
