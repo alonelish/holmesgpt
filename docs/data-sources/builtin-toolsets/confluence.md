@@ -52,6 +52,18 @@ Go to [Atlassian API Tokens](https://id.atlassian.com/manage/api-tokens){:target
 
 === "Robusta Helm Chart"
 
+    First, create a Kubernetes secret with your API token:
+
+    ```bash
+    kubectl create secret generic confluence-credentials \
+      --from-literal=api-key=your-api-token \
+      -n default
+    ```
+
+    --8<-- "snippets/secret_namespace_note.md"
+
+    Then add to your Robusta Helm values:
+
     ```yaml
     holmes:
       additionalEnvVars:
@@ -105,6 +117,18 @@ In Confluence Data Center, go to your **Profile** > **Personal Access Tokens** >
 
 === "Robusta Helm Chart"
 
+    First, create a Kubernetes secret with your Personal Access Token:
+
+    ```bash
+    kubectl create secret generic confluence-credentials \
+      --from-literal=pat=your-personal-access-token \
+      -n default
+    ```
+
+    --8<-- "snippets/secret_namespace_note.md"
+
+    Then add to your Robusta Helm values:
+
     ```yaml
     holmes:
       additionalEnvVars:
@@ -148,6 +172,18 @@ HolmesGPT authenticates to a self-hosted Confluence Data Center (or Server) inst
     --8<-- "snippets/toolset_refresh_warning.md"
 
 === "Robusta Helm Chart"
+
+    First, create a Kubernetes secret with your password:
+
+    ```bash
+    kubectl create secret generic confluence-credentials \
+      --from-literal=password=your-password \
+      -n default
+    ```
+
+    --8<-- "snippets/secret_namespace_note.md"
+
+    Then add to your Robusta Helm values:
 
     ```yaml
     holmes:

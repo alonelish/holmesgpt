@@ -43,6 +43,18 @@ In the same UI, click your profile icon (bottom-left) → **Administration** →
 
 === "Robusta Helm Chart"
 
+    First, create a Kubernetes secret with your User API Key:
+
+    ```bash
+    kubectl create secret generic newrelic-credentials \
+      --from-literal=api-key=your-new-relic-user-api-key \
+      -n default
+    ```
+
+    --8<-- "snippets/secret_namespace_note.md"
+
+    Then add to your Robusta Helm values:
+
     ```yaml
     holmes:
       additionalEnvVars:
