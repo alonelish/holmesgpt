@@ -59,6 +59,8 @@ By enabling this toolset, HolmesGPT can analyze Azure SQL Database performance, 
 
     **Azure AD Workload Identity**
 
+    No Kubernetes secret is needed in this mode — credentials come from the workload identity.
+
     ```yaml
     holmes:
       toolsets:
@@ -74,21 +76,53 @@ By enabling this toolset, HolmesGPT can analyze Azure SQL Database performance, 
 
     **Service Principal**
 
+    First, create a Kubernetes secret with the service principal credentials:
+
+    ```bash
+    kubectl create secret generic azure-sql-credentials \
+      --from-literal=tenant-id=your-tenant-id \
+      --from-literal=client-id=your-client-id \
+      --from-literal=client-secret=your-client-secret \
+      -n default
+    ```
+
+    --8<-- "snippets/secret_namespace_note.md"
+
+    Then add to your Robusta Helm values:
+
     ```yaml
     holmes:
+      additionalEnvVars:
+        - name: AZURE_SQL_TENANT_ID
+          valueFrom:
+            secretKeyRef:
+              name: azure-sql-credentials
+              key: tenant-id
+        - name: AZURE_SQL_CLIENT_ID
+          valueFrom:
+            secretKeyRef:
+              name: azure-sql-credentials
+              key: client-id
+        - name: AZURE_SQL_CLIENT_SECRET
+          valueFrom:
+            secretKeyRef:
+              name: azure-sql-credentials
+              key: client-secret
       toolsets:
         azure/sql:
           enabled: true
           config:
-            tenant_id: "your-tenant-id"
-            client_id: "your-client-id"
-            client_secret: "your-client-secret"
+            tenant_id: "{{ env.AZURE_SQL_TENANT_ID }}"
+            client_id: "{{ env.AZURE_SQL_CLIENT_ID }}"
+            client_secret: "{{ env.AZURE_SQL_CLIENT_SECRET }}"
             database:
               subscription_id: "your-subscription-id"
               resource_group: "your-resource-group"
               server_name: "your-azure-sql-server-name"
               database_name: "your-azure-sql-database-name"
     ```
+
+    --8<-- "snippets/helm_upgrade_command.md"
 
 ## Roles / Access controls
 
