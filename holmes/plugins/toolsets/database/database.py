@@ -215,15 +215,22 @@ class DatabaseToolset(Toolset):
             os.path.dirname(__file__), "instructions.jinja2"
         )
 
-        # Resolve subtype: explicit config > auto-detect later from connection URL
+        # Resolve subtype: explicit config > auto-detect later from connection URL.
+        # Unknown subtypes are user typos with no legitimate interpretation —
+        # raise so they surface as a visible failed toolset in the UI rather
+        # than silently falling back to UNKNOWN (which would then auto-detect
+        # from the URL, making the typo completely invisible).
         self._subtype: DatabaseSubtype = DatabaseSubtype.UNKNOWN
         if subtype_str:
             try:
                 self._subtype = DatabaseSubtype(subtype_str)
-            except ValueError:
-                logger.warning(
-                    f"Unknown database subtype '{subtype_str}', using UNKNOWN"
-                )
+            except ValueError as exc:
+                valid = ", ".join(s.value for s in DatabaseSubtype)
+                raise ValueError(
+                    f"Unknown database subtype '{subtype_str}'. "
+                    f"Valid values: {valid}. "
+                    "Omit `subtype` to auto-detect from the connection URL."
+                ) from exc
 
         # Set initial meta — updated with detected subtype in prerequisites_callable
         self.meta = {"type": "database", "subtype": self._subtype.value}
