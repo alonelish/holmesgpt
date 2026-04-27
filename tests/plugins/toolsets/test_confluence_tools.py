@@ -383,12 +383,13 @@ class TestVariantFieldRequirements:
             )
 
     def test_dc_pat_does_not_require_user(self):
-        # Should not raise.
-        cfg = ConfluenceDataCenterPATConfig(
+        # Should not raise — DC PAT doesn't declare `user` at all (the PAT
+        # itself identifies the owning user server-side).
+        ConfluenceDataCenterPATConfig(
             api_url="https://confluence.x.com",
             api_key="pat",
         )
-        assert cfg.user is None
+        assert "user" not in ConfluenceDataCenterPATConfig.model_fields
 
 
 class TestVariantSchema:
@@ -416,7 +417,7 @@ class TestVariantSchema:
         assert "auth_type" not in props
         assert "api_path_prefix" not in props
         assert "cloud_id" not in props  # not declared at all on DC
-        assert "user" not in props  # in _hidden_fields for DC PAT
+        assert "user" not in props  # not declared on DC PAT (PAT carries the identity)
         assert {"api_url", "api_key"}.issubset(props)
 
     def test_dc_basic_schema_omits_classvars(self):

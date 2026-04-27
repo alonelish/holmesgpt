@@ -54,7 +54,6 @@ class ConfluenceConfig(ToolsetConfig):
     """
 
     api_url: str
-    user: Optional[str] = None
     api_key: str
 
 
@@ -84,7 +83,7 @@ class ConfluenceCloudConfig(ConfluenceConfig):
         description="Your Confluence Cloud URL",
         examples=["https://yourcompany.atlassian.net"],
     )
-    user: str = Field(  # type: ignore[assignment]
+    user: str = Field(
         title="User Email",
         description="Email address of the Atlassian user whose API token you're using",
         examples=["you@yourcompany.com"],
@@ -121,7 +120,6 @@ class ConfluenceDataCenterPATConfig(ConfluenceConfig):
     _icon_url: ClassVar[Optional[str]] = CONFLUENCE_ICON_URL
     _docs_anchor: ClassVar[Optional[str]] = "confluence-data-center-personal-access-token"
     _subtype: ClassVar[Optional[str]] = ConfluenceSubtype.DC_PAT.value
-    _hidden_fields: ClassVar[List[str]] = ["user"]
 
     # Variant-fixed runtime values: DC PAT always uses bearer auth, no path prefix.
     auth_type: ClassVar[Literal["basic", "bearer"]] = "bearer"
@@ -163,7 +161,7 @@ class ConfluenceDataCenterBasicConfig(ConfluenceConfig):
         description="Base URL of your self-hosted Confluence instance",
         examples=["https://confluence.yourcompany.com"],
     )
-    user: str = Field(  # type: ignore[assignment]
+    user: str = Field(
         title="Username",
         description="Confluence Data Center username",
         examples=["myuser"],
@@ -311,7 +309,10 @@ class ConfluenceToolset(Toolset):
         if self._conf.auth_type == "bearer" or self._gateway_base_url:
             headers["Authorization"] = f"Bearer {self._conf.api_key}"
         else:
-            auth = (self._conf.user or "", self._conf.api_key)
+            # Basic-auth path only runs for Cloud / DC_Basic, both of which
+            # declare `user`. DC_PAT doesn't, so use getattr to keep the
+            # union type happy.
+            auth = (getattr(self._conf, "user", None) or "", self._conf.api_key)
 
         response = requests.get(url, params=query_params, auth=auth, headers=headers, timeout=30)
         response.raise_for_status()
@@ -372,7 +373,13 @@ class ConfluenceToolset(Toolset):
         if self._conf.auth_type == "bearer" or self._gateway_base_url:
             auth = AuthConfig(type="bearer", token=self._conf.api_key)
         else:
-            auth = AuthConfig(type="basic", username=self._conf.user or "", password=self._conf.api_key)
+            # Basic-auth path only runs for Cloud / DC_Basic; DC_PAT doesn't
+            # declare `user`, so use getattr for the union type.
+            auth = AuthConfig(
+                type="basic",
+                username=getattr(self._conf, "user", None) or "",
+                password=self._conf.api_key,
+            )
 
         return EndpointConfig(
             hosts=[host],
