@@ -55,6 +55,18 @@ class GrafanaConfig(ToolsetConfig):
         title="Verify SSL",
         description="Whether to verify SSL certificates",
     )
+    timeout_seconds: int = Field(
+        default=30,
+        gt=0,
+        title="Timeout Seconds",
+        description="Request timeout in seconds for Grafana API calls",
+    )
+    max_retries: int = Field(
+        default=3,
+        ge=1,
+        title="Max Retries",
+        description="Maximum number of retry attempts for failed Grafana API requests",
+    )
 
 
 def build_headers(api_key: Optional[str], additional_headers: Optional[Dict[str, str]]):
@@ -169,11 +181,27 @@ class GrafanaCloudLokiConfig(GrafanaConfig):
 
 
 class GrafanaTempoLabelsConfig(ToolsetConfig):
-    pod: str = Field(default="k8s.pod.name", title="Pod Label", description="Label for pod name")
-    namespace: str = Field(default="k8s.namespace.name", title="Namespace Label", description="Label for namespace")
-    deployment: str = Field(default="k8s.deployment.name", title="Deployment Label", description="Label for deployment")
-    node: str = Field(default="k8s.node.name", title="Node Label", description="Label for node name")
-    service: str = Field(default="service.name", title="Service Label", description="Label for service name")
+    pod: str = Field(
+        default="k8s.pod.name", title="Pod Label", description="Label for pod name"
+    )
+    namespace: str = Field(
+        default="k8s.namespace.name",
+        title="Namespace Label",
+        description="Label for namespace",
+    )
+    deployment: str = Field(
+        default="k8s.deployment.name",
+        title="Deployment Label",
+        description="Label for deployment",
+    )
+    node: str = Field(
+        default="k8s.node.name", title="Node Label", description="Label for node name"
+    )
+    service: str = Field(
+        default="service.name",
+        title="Service Label",
+        description="Label for service name",
+    )
 
 
 class GrafanaTempoConfig(GrafanaConfig):
