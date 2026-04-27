@@ -35,9 +35,9 @@ You'll need two keys and your site URL from your Datadog account:
     # anchors: is ignored by Holmes — use it to define reusable YAML blocks
     anchors:
       dd_config: &dd_config
-        api_key: "{{ env.DD_API_KEY }}"
-        app_key: "{{ env.DD_APP_KEY }}"
-        api_url: https://app.datadoghq.com  # Change for EU/other regions
+        api_key: "{{ env.DATADOG_API_KEY }}"
+        app_key: "{{ env.DATADOG_APP_KEY }}"
+        api_url: https://api.datadoghq.com  # Change for EU/other regions
 
     toolsets:
       datadog/general:
