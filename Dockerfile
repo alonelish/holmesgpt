@@ -69,7 +69,7 @@ COPY pyproject.toml poetry.lock /
 RUN if [ "${PRIVATE_PACKAGE_REGISTRY}" != "none" ]; then \
     poetry source add --priority=primary artifactory "${PRIVATE_PACKAGE_REGISTRY}"; \
     fi \
-    && poetry install --no-interaction --no-ansi --no-root --with otel
+    && poetry install --no-interaction --no-ansi --no-root --with otel,dev
 
 
 # Final stage
