@@ -1067,62 +1067,15 @@ class Toolset(BaseModel):
         return None
 
     def get_config_schema(self) -> Optional[Dict[str, Any]]:
-        """Returns JSON Schema for the toolset's configuration.
+        """Returns the per-variant JSON Schema map for the toolset's configuration.
 
-        Returns a dict of { config_class_name: { schema, name, description, icon_url, docs_anchor } }
-        (if any), otherwise returns None.
-
-        Fields listed in the config class's `_hidden_fields` ClassVar are stripped from
-        the schema's `properties` and `required` so the frontend doesn't render them.
-        They remain valid at runtime (inherited fields still accept values).
-
-        Fields listed in `_ui_required_fields` are added to the schema's `required`
-        array even when they're Optional at the Pydantic level. Use this when a
-        field MUST be filled via the UI form but the backend needs to accept it
-        missing (env var / managed identity / runtime fallback populates it).
+        Returns `{ config_class_name: <schema entry> }` if `config_classes` is
+        set, otherwise None. Each entry's shape and the rules for hiding /
+        requiring fields are documented on `ToolsetConfig.build_schema_entry`.
         """
         if not self.config_classes:
             return None
-
-        result: Dict[str, Any] = {}
-        for config_cls in self.config_classes:
-            raw_schema = config_cls.model_json_schema()
-            hidden = list(getattr(config_cls, "_hidden_fields", []) or [])
-            if hidden:
-                props = raw_schema.get("properties", {})
-                for name in hidden:
-                    props.pop(name, None)
-                if "required" in raw_schema:
-                    raw_schema["required"] = [
-                        r for r in raw_schema["required"] if r not in hidden
-                    ]
-            ui_required = list(getattr(config_cls, "_ui_required_fields", []) or [])
-            # Don't re-mark fields that were just hidden as required.
-            ui_required = [f for f in ui_required if f not in hidden]
-            if ui_required:
-                existing = list(raw_schema.get("required", []))
-                # Preserve declaration order: keep existing entries first,
-                # then append any ui_required fields that aren't already
-                # required. De-dup while preserving order.
-                seen = set(existing)
-                for name in ui_required:
-                    if name not in seen:
-                        existing.append(name)
-                        seen.add(name)
-                raw_schema["required"] = existing
-            result[config_cls.__name__] = {
-                "schema": raw_schema,
-                "name": getattr(config_cls, "_name", None) or config_cls.__name__,
-                "description": getattr(config_cls, "_description", None),
-                "icon_url": getattr(config_cls, "_icon_url", None),
-                "docs_anchor": getattr(config_cls, "_docs_anchor", None),
-                "recommended": bool(getattr(config_cls, "_recommended", False)),
-                # Stable slug the frontend emits as the top-level `subtype:`
-                # YAML field so the backend can pick this exact variant.
-                # None for toolsets that don't use variants.
-                "subtype": getattr(config_cls, "_subtype", None),
-            }
-        return result
+        return {cls.__name__: cls.build_schema_entry() for cls in self.config_classes}
 
     def _load_llm_instructions(self, jinja_template: str):
         tool_names = [t.name for t in self.tools]
