@@ -42,30 +42,20 @@ class ConfluenceSubtype(str, Enum):
 class ConfluenceConfig(ToolsetConfig):
     """Base configuration shared by all Confluence variants (Cloud and Data Center).
 
-    Only the user-facing fields common to every variant live here. Variant
-    subclasses declare the values that are determined by the variant choice
-    itself (`auth_type`, `api_path_prefix`) as ClassVars rather than fields,
-    and runtime-resolved values (`cloud_id`) live on the variant that needs
-    them. The toolset's runtime accesses these via `self._conf` which is
-    typed as the union of the three variants.
+    The base is never instantiated directly — `config_classes` only exposes
+    the variant subclasses to the UI. Each variant redeclares these fields
+    with variant-specific titles / descriptions / examples for the form, so
+    the base only needs to nail down the runtime types and required-ness.
+
+    Variant-fixed values (`auth_type`, `api_path_prefix`) are declared as
+    ClassVars on each variant; runtime-resolved values (`cloud_id`) live on
+    the variant that needs them. The toolset's runtime accesses these via
+    `self._conf`, typed as the union of the three variants.
     """
 
-    api_url: str = Field(
-        title="URL",
-        description="Confluence base URL",
-        examples=["https://mycompany.atlassian.net"],
-    )
-    user: Optional[str] = Field(
-        default=None,
-        title="User",
-        description="User email (Cloud) or username (Data Center). Required for basic auth.",
-    )
-    api_key: str = Field(
-        title="API Key",
-        description="Atlassian API token (Cloud), Personal Access Token (Data Center), or password",
-        examples=["{{ env.CONFLUENCE_API_KEY }}"],
-        json_schema_extra={"format": "password"},
-    )
+    api_url: str
+    user: Optional[str] = None
+    api_key: str
 
 
 class ConfluenceCloudConfig(ConfluenceConfig):
