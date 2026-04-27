@@ -1,11 +1,11 @@
 import logging
 import re
 from enum import Enum
-from typing import Any, ClassVar, Dict, List, Literal, Optional, Tuple, Type
+from typing import Any, ClassVar, Dict, List, Literal, Optional, Tuple, Type, Union
 from urllib.parse import urlparse
 
 import requests  # type: ignore
-from pydantic import Field, model_validator
+from pydantic import Field
 
 from holmes.core.tools import CallablePrerequisite, Toolset, ToolsetTag
 from holmes.plugins.toolsets.http.http_toolset import (
@@ -42,10 +42,12 @@ class ConfluenceSubtype(str, Enum):
 class ConfluenceConfig(ToolsetConfig):
     """Base configuration shared by all Confluence variants (Cloud and Data Center).
 
-    Holds the full runtime surface. Variant subclasses (`ConfluenceCloudConfig`,
-    `ConfluenceDataCenterPATConfig`, `ConfluenceDataCenterBasicConfig`) narrow
-    and rename the fields shown to the frontend; runtime code keeps reading
-    the same attribute names off whichever subclass was instantiated.
+    Only the user-facing fields common to every variant live here. Variant
+    subclasses declare the values that are determined by the variant choice
+    itself (`auth_type`, `api_path_prefix`) as ClassVars rather than fields,
+    and runtime-resolved values (`cloud_id`) live on the variant that needs
+    them. The toolset's runtime accesses these via `self._conf` which is
+    typed as the union of the three variants.
     """
 
     api_url: str = Field(
@@ -64,29 +66,6 @@ class ConfluenceConfig(ToolsetConfig):
         examples=["{{ env.CONFLUENCE_API_KEY }}"],
         json_schema_extra={"format": "password"},
     )
-    auth_type: Literal["basic", "bearer"] = Field(
-        default="basic",
-        title="Authentication Type",
-        description="'basic' for Cloud or Data Center user+password, 'bearer' for Data Center PATs.",
-    )
-    api_path_prefix: str = Field(
-        default="/wiki",
-        title="API Path Prefix",
-        description="Path prefix before /rest/api. Cloud uses '/wiki', Data Center typically ''.",
-    )
-    cloud_id: Optional[str] = Field(
-        default=None,
-        title="Cloud ID",
-        description="Atlassian Cloud ID for the API gateway. Auto-detected when needed.",
-    )
-
-    @model_validator(mode="after")
-    def validate_auth(self) -> "ConfluenceConfig":
-        if self.auth_type == "basic" and not self.user:
-            raise ValueError(
-                "'user' is required when auth_type is 'basic'. For PATs, set auth_type to 'bearer'."
-            )
-        return self
 
 
 class ConfluenceCloudConfig(ConfluenceConfig):
@@ -99,12 +78,16 @@ class ConfluenceCloudConfig(ConfluenceConfig):
     _icon_url: ClassVar[Optional[str]] = CONFLUENCE_ICON_URL
     _docs_anchor: ClassVar[Optional[str]] = "confluence-cloud"
     _subtype: ClassVar[Optional[str]] = ConfluenceSubtype.CLOUD.value
-    _hidden_fields: ClassVar[List[str]] = [
-        "auth_type",
-        "api_path_prefix",
-        "cloud_id",
-    ]
+    # `cloud_id` is auto-detected at runtime; users can hard-code it (the
+    # pre-subtype field surface allowed this), but it's hidden from the UI
+    # form because the form shouldn't ask users to fill in something the
+    # backend resolves on its own.
+    _hidden_fields: ClassVar[List[str]] = ["cloud_id"]
     _recommended: ClassVar[bool] = True
+
+    # Variant-fixed runtime values: Cloud always uses basic auth at /wiki.
+    auth_type: ClassVar[Literal["basic", "bearer"]] = "basic"
+    api_path_prefix: ClassVar[str] = "/wiki"
 
     api_url: str = Field(  # type: ignore[assignment]
         title="Confluence URL",
@@ -125,6 +108,17 @@ class ConfluenceCloudConfig(ConfluenceConfig):
         examples=["{{ env.CONFLUENCE_API_KEY }}"],
         json_schema_extra={"format": "password"},
     )
+    cloud_id: Optional[str] = Field(
+        default=None,
+        title="Cloud ID",
+        description=(
+            "Atlassian Cloud ID for the API gateway. Only relevant for "
+            "scoped tokens that must route through api.atlassian.com. "
+            "Auto-detected via /_edge/tenant_info when a direct call "
+            "returns 401/403; set explicitly to force gateway routing or "
+            "skip the auto-detect round-trip."
+        ),
+    )
 
 
 class ConfluenceDataCenterPATConfig(ConfluenceConfig):
@@ -137,12 +131,11 @@ class ConfluenceDataCenterPATConfig(ConfluenceConfig):
     _icon_url: ClassVar[Optional[str]] = CONFLUENCE_ICON_URL
     _docs_anchor: ClassVar[Optional[str]] = "confluence-data-center-personal-access-token"
     _subtype: ClassVar[Optional[str]] = ConfluenceSubtype.DC_PAT.value
-    _hidden_fields: ClassVar[List[str]] = [
-        "user",
-        "auth_type",
-        "api_path_prefix",
-        "cloud_id",
-    ]
+    _hidden_fields: ClassVar[List[str]] = ["user"]
+
+    # Variant-fixed runtime values: DC PAT always uses bearer auth, no path prefix.
+    auth_type: ClassVar[Literal["basic", "bearer"]] = "bearer"
+    api_path_prefix: ClassVar[str] = ""
 
     api_url: str = Field(  # type: ignore[assignment]
         title="Confluence URL",
@@ -158,16 +151,6 @@ class ConfluenceDataCenterPATConfig(ConfluenceConfig):
         examples=["{{ env.CONFLUENCE_PAT }}"],
         json_schema_extra={"format": "password"},
     )
-    auth_type: Literal["basic", "bearer"] = Field(  # type: ignore[assignment]
-        default="bearer",
-        title="Authentication Type",
-        description="Always 'bearer' for Personal Access Tokens.",
-    )
-    api_path_prefix: str = Field(  # type: ignore[assignment]
-        default="",
-        title="API Path Prefix",
-        description="Data Center uses an empty path prefix.",
-    )
 
 
 class ConfluenceDataCenterBasicConfig(ConfluenceConfig):
@@ -180,11 +163,10 @@ class ConfluenceDataCenterBasicConfig(ConfluenceConfig):
     _icon_url: ClassVar[Optional[str]] = CONFLUENCE_ICON_URL
     _docs_anchor: ClassVar[Optional[str]] = "confluence-data-center-basic-auth"
     _subtype: ClassVar[Optional[str]] = ConfluenceSubtype.DC_BASIC.value
-    _hidden_fields: ClassVar[List[str]] = [
-        "auth_type",
-        "api_path_prefix",
-        "cloud_id",
-    ]
+
+    # Variant-fixed runtime values: DC Basic uses basic auth, no path prefix.
+    auth_type: ClassVar[Literal["basic", "bearer"]] = "basic"
+    api_path_prefix: ClassVar[str] = ""
 
     api_url: str = Field(  # type: ignore[assignment]
         title="Confluence URL",
@@ -201,11 +183,6 @@ class ConfluenceDataCenterBasicConfig(ConfluenceConfig):
         description="Confluence Data Center password for the user above",
         examples=["{{ env.CONFLUENCE_PASSWORD }}"],
         json_schema_extra={"format": "password"},
-    )
-    api_path_prefix: str = Field(  # type: ignore[assignment]
-        default="",
-        title="API Path Prefix",
-        description="Data Center uses an empty path prefix.",
     )
 
 
@@ -295,7 +272,13 @@ class ConfluenceToolset(Toolset):
             return False, f"Invalid Confluence configuration: {e}"
 
     @property
-    def _conf(self) -> ConfluenceConfig:
+    def _conf(
+        self,
+    ) -> Union[
+        "ConfluenceCloudConfig",
+        "ConfluenceDataCenterPATConfig",
+        "ConfluenceDataCenterBasicConfig",
+    ]:
         return self.config  # type: ignore[return-value]
 
     # ── Cloud detection & gateway ──
@@ -304,8 +287,12 @@ class ConfluenceToolset(Toolset):
         return bool(ATLASSIAN_CLOUD_PATTERN.match(self._conf.api_url))
 
     def _resolve_cloud_id(self) -> Optional[str]:
-        if self._conf.cloud_id:
-            return self._conf.cloud_id
+        # Only ConfluenceCloudConfig declares cloud_id; for DC variants the
+        # attribute simply doesn't exist, but this code path is gated by
+        # _is_cloud_url() at every caller, so the getattr is defensive.
+        configured = getattr(self._conf, "cloud_id", None)
+        if configured:
+            return configured
         try:
             resp = requests.get(f"{self._conf.api_url.rstrip('/')}/_edge/tenant_info", timeout=10)
             resp.raise_for_status()
@@ -341,8 +328,9 @@ class ConfluenceToolset(Toolset):
         return response.json()
 
     def _perform_health_check(self) -> Tuple[bool, str]:
-        if self._conf.cloud_id and self._is_cloud_url():
-            self._activate_gateway(self._conf.cloud_id)
+        configured_cloud_id = getattr(self._conf, "cloud_id", None)
+        if configured_cloud_id and self._is_cloud_url():
+            self._activate_gateway(configured_cloud_id)
 
         try:
             self._probe_request("/rest/api/space", query_params={"limit": "1"})

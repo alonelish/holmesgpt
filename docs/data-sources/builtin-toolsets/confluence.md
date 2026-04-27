@@ -17,7 +17,7 @@ HolmesGPT supports three ways to connect to Confluence. Pick the one that matche
 | [Confluence Data Center - Basic Auth](#confluence-data-center-basic-auth) | `dc-basic` | Self-hosted Confluence Data Center / Server using username + password |
 
 !!! note "About `subtype`"
-    The top-level `subtype:` field in each example tells HolmesGPT which Confluence variant you're connecting to. Setting it is recommended — it picks the correct auth mode automatically (so you don't need to set `auth_type` or `api_path_prefix` by hand) and makes the resulting toolset card light up under the correct integration in the UI. If you omit `subtype`, HolmesGPT will fall back to inferring the variant from the URL and `auth_type` field for backwards compatibility.
+    The top-level `subtype:` field in each example tells HolmesGPT which Confluence variant you're connecting to. Setting it is recommended — each variant fixes its own auth mode and API path prefix internally, and tags the resulting toolset card under the correct integration in the UI. If you omit `subtype`, HolmesGPT will fall back to inferring the variant from the URL and `auth_type` field for backwards compatibility.
 
 ### Confluence Cloud
 
@@ -324,9 +324,10 @@ HolmesGPT authenticates to a self-hosted Confluence Data Center (or Server) inst
 | `api_url` | (required) | Base URL of the Confluence instance |
 | `api_key` | (required) | API token (Cloud), Personal Access Token, or password (Data Center) |
 | `user` | `null` | User email (Cloud) or username (Data Center). Required for `cloud` and `dc-basic`; not used by `dc-pat`. |
-| `auth_type` | per `subtype` | `basic` (for `cloud` and `dc-basic`) or `bearer` (for `dc-pat`). Set automatically by the chosen `subtype` — override only if your deployment needs something non-standard. |
-| `api_path_prefix` | per `subtype` | `/wiki` for `cloud`, `""` for `dc-pat` and `dc-basic`. Set automatically by the chosen `subtype` — override only if your Data Center install uses a custom context path. |
-| `cloud_id` | `null` | Atlassian Cloud ID for the API gateway. Auto-detected for Cloud URLs when needed (scoped tokens / service accounts). |
+| `cloud_id` | `null` | Atlassian Cloud ID for the API gateway. Only relevant for `cloud` with scoped tokens or service accounts that must route through `api.atlassian.com`. Auto-detected when a direct call returns 401/403; set explicitly to skip the auto-detect round-trip or force gateway routing. |
+
+!!! note "Auth mode and path prefix"
+    The `auth_type` (basic vs. bearer) and `api_path_prefix` (`/wiki` vs. `""`) are determined entirely by the `subtype` you pick — Cloud uses basic auth at `/wiki`, DC PAT uses bearer with no prefix, DC Basic uses basic auth with no prefix. They aren't user-configurable knobs. If you have a non-standard Data Center deployment that needs a different path, please [open an issue](https://github.com/HolmesGPT/holmesgpt/issues).
 
 ## Tools
 
@@ -366,4 +367,4 @@ curl -u "username:password" \
   "https://confluence.yourcompany.com/rest/api/space?limit=1"
 ```
 
-If you get `401 Unauthorized`, verify your credentials. If you get `404 Not Found`, check the `api_path_prefix` — Cloud uses `/wiki` while Data Center typically uses no prefix.
+If you get `401 Unauthorized`, verify your credentials. If you get `404 Not Found`, double-check the `subtype` — Cloud routes to `/wiki/rest/api`, while Data Center routes to `/rest/api`.
