@@ -24,6 +24,10 @@ from fastapi.responses import StreamingResponse, JSONResponse
 from starlette.responses import PlainTextResponse
 
 from holmes.utils.stream import StreamMessage, StreamEvents
+from holmes.core.usage_recorder import (
+    UsageRecorderState,
+    stream_with_usage_recording,
+)
 from holmes.common.env_vars import (
     HOLMES_HOST,
     HOLMES_PORT,
@@ -139,9 +143,40 @@ def agui_chat(input_data: RunAgentInput, request: Request):
                     run_id=input_data.run_id,
                 )
             )
-            hgpt_chat_stream_response: StreamMessage = ai.call_stream(
-                msgs=message_history,
-                enable_tool_approval=chat_request.enable_tool_approval or False,
+            # Build the AI usage recorder state. AG-UI clients pass FE flags
+            # via input_data.context if they want to populate them; otherwise
+            # request_source / source_ref / user_id stay NULL.
+            ctx = input_data.context or {}
+            agui_user_id = None
+            try:
+                agui_user_id = getattr(input_data, "user_id", None) or ctx.get("user_id")
+            except Exception:
+                pass
+            ai_model = getattr(ai.llm, "model", None) or chat_request.model or "unknown"
+            try:
+                import litellm as _litellm  # local import: this file is opt-in
+                ai_provider = _litellm.get_llm_provider(ai_model)[1] or "unknown"
+            except Exception:
+                ai_provider = ai_model.split("/")[0] if "/" in ai_model else "unknown"
+            recorder_state = UsageRecorderState(
+                dal=dal,
+                request_type="agui_chat",
+                request_source=ctx.get("request_source") if isinstance(ctx, dict) else None,
+                source_ref=ctx.get("source_ref") if isinstance(ctx, dict) else None,
+                conversation_id=getattr(input_data, "thread_id", None),
+                conversation_source=None,  # AG-UI doesn't write Conversations or ChatHistory
+                user_id=agui_user_id,
+                is_streaming=True,
+                model=ai_model,
+                provider=ai_provider,
+                is_robusta_model=getattr(ai.llm, "is_robusta_model", False),
+            )
+            hgpt_chat_stream_response: StreamMessage = stream_with_usage_recording(
+                ai.call_stream(
+                    msgs=message_history,
+                    enable_tool_approval=chat_request.enable_tool_approval or False,
+                ),
+                recorder_state,
             )
             for chunk in hgpt_chat_stream_response:
                 if hasattr(chunk, "event"):

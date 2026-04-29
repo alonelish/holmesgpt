@@ -27,6 +27,7 @@ import uvicorn
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import StreamingResponse
 from litellm.exceptions import AuthenticationError
+from pydantic import BaseModel
 
 from holmes import get_version, is_official_release
 from holmes.common.env_vars import (
@@ -67,7 +68,62 @@ from holmes.core.tools_utils.filesystem_result_storage import tool_result_storag
 from holmes.core.models import FrontendToolMode
 from holmes.core.tools_utils.frontend_tools import build_frontend_noop_tool, build_frontend_pause_tool
 from holmes.core.tracing import TracingFactory
+from holmes.core.usage_recorder import (
+    UsageRecorderState,
+    record_error,
+    record_from_llm_result,
+    stream_with_usage_recording,
+)
 from holmes.utils.stream import stream_chat_formatter
+
+
+def _resolve_provider(model: Optional[str]) -> str:
+    """Best-effort: return the canonical litellm provider for `model`.
+
+    Falls back to splitting on the litellm prefix (`openai/...`,
+    `anthropic/...`) if the helper raises (e.g. for unrecognized models).
+    """
+    if not model:
+        return "unknown"
+    try:
+        # litellm.get_llm_provider returns (model, provider, api_key, api_base).
+        return litellm.get_llm_provider(model)[1] or "unknown"
+    except Exception:
+        return model.split("/")[0] if "/" in model else "unknown"
+
+
+def _build_chat_recorder_state(
+    chat_request: ChatRequest,
+    request_ai,
+    is_streaming: bool,
+) -> UsageRecorderState:
+    """Construct a UsageRecorderState for /api/chat. All entry points (direct,
+    worker, scheduled, agui) flow through chat() — request_type, request_source,
+    source_ref, conversation_id, conversation_source, user_id are read off
+    chat_request (set by whoever called chat()).
+    """
+    # Default conversation_source to 'chat_history' when conversation_id is set
+    # but the caller didn't override (i.e. direct /api/chat).
+    conversation_source = chat_request.conversation_source
+    if conversation_source is None and chat_request.conversation_id:
+        conversation_source = "chat_history"
+
+    model_name = getattr(request_ai.llm, "model", None) or chat_request.model or "unknown"
+
+    return UsageRecorderState(
+        dal=dal,
+        request_type=chat_request.request_type or "user_chat",
+        request_source=chat_request.request_source,
+        source_ref=chat_request.source_ref,
+        conversation_id=chat_request.conversation_id,
+        conversation_source=conversation_source,
+        user_id=chat_request.user_id,
+        is_streaming=is_streaming,
+        model=model_name,
+        provider=_resolve_provider(model_name),
+        is_robusta_model=getattr(request_ai.llm, "is_robusta_model", False),
+        meta=dict(chat_request.meta or {}),
+    )
 
 
 def init_logging():
@@ -504,7 +560,10 @@ def chat(chat_request: ChatRequest, http_request: Request):
                 inv_attrs = {"gen_ai_request_model": chat_request.model or config.model or "unknown"}
                 otel_metrics.investigation_count.add(1, inv_attrs)
 
-            stream = stream_chat_formatter(
+            # Build the usage recorder state and wrap the raw stream BEFORE the
+            # SSE formatter so the wrapper sees Holmes' native StreamMessage events.
+            recorder_state = _build_chat_recorder_state(chat_request, request_ai, is_streaming=True)
+            recorded_stream = stream_with_usage_recording(
                 request_ai.call_stream(
                     msgs=messages,
                     enable_tool_approval=chat_request.enable_tool_approval or False,
@@ -514,6 +573,10 @@ def chat(chat_request: ChatRequest, http_request: Request):
                     request_context=request_context,
                     trace_span=trace_span,
                 ),
+                recorder_state,
+            )
+            stream = stream_chat_formatter(
+                recorded_stream,
                 [f.model_dump() for f in follow_up_actions],
                 model=chat_request.model or config.model,
             )
@@ -522,6 +585,7 @@ def chat(chat_request: ChatRequest, http_request: Request):
                 media_type="text/event-stream",
             )
         else:
+            recorder_state = _build_chat_recorder_state(chat_request, request_ai, is_streaming=False)
             try:
                 # Use provided trace_span or create a root investigation span
                 trace_span = chat_request.trace_span
@@ -540,6 +604,9 @@ def chat(chat_request: ChatRequest, http_request: Request):
                     response_format=chat_request.response_format,
                     request_context=request_context,
                 )
+
+                # Record usage event for non-streaming path (fire-and-forget).
+                record_from_llm_result(recorder_state, llm_call)
 
                 # Record investigation metrics
                 otel_metrics = TracingFactory.get_metrics()
@@ -567,6 +634,12 @@ def chat(chat_request: ChatRequest, http_request: Request):
                     metadata=llm_call.metadata,
                 )
                 return response
+            except Exception as e:
+                # Non-streaming path: record the failed event so it shows up in dashboards
+                # with status='error' / 'rate_limited'. Streaming path records via the
+                # wrapper's `finally` automatically.
+                record_error(recorder_state, e)
+                raise
             finally:
                 if trace_span is not None:
                     trace_span.end()
@@ -578,6 +651,42 @@ def chat(chat_request: ChatRequest, http_request: Request):
     except Exception as e:
         logging.error(f"Error in /api/chat: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
+
+
+class FeedbackRequest(BaseModel):
+    """Body for POST /api/feedback. Defined inline to avoid bloating models.py
+    with an endpoint-specific schema."""
+    request_id: str
+    sentiment: str  # 'thumbs_up' | 'thumbs_down'
+    category: Optional[str] = None
+    comment: Optional[str] = None
+
+
+@app.post("/api/feedback")
+def feedback(req: FeedbackRequest, http_request: Request) -> dict:
+    """Record user feedback (thumbs up/down + optional category/comment) on
+    a previously-completed chat call. Looks up the row by request_id and
+    UPDATEs feedback_* columns. Best-effort: returns 200 even if the row
+    isn't found yet (rare network reorder)."""
+    if req.sentiment not in ("thumbs_up", "thumbs_down"):
+        raise HTTPException(status_code=400, detail="invalid sentiment")
+    user_id: Optional[str] = None
+    # Mirror /api/chat's user_id resolution path: prefer header passthrough
+    # (Robusta relay token) but accept a body field if the caller set one.
+    try:
+        body_user_id = http_request.query_params.get("user_id")
+        if body_user_id:
+            user_id = body_user_id
+    except Exception:
+        pass
+    dal.record_feedback(
+        request_id=req.request_id,
+        sentiment=req.sentiment,
+        category=req.category,
+        comment=req.comment,
+        user_id=user_id,
+    )
+    return {"ok": True}
 
 
 scheduled_prompts_executor = ScheduledPromptsExecutor(

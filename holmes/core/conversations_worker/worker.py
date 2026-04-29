@@ -468,6 +468,16 @@ class ConversationWorker:
             frontend_tool_results=data.get("frontend_tool_results"),  # type: ignore[arg-type]
             response_format=data.get("response_format"),
             behavior_controls=data.get("behavior_controls"),
+            # AI usage tracking (HolmesUsageEvents). user_id / request_source /
+            # source_ref / meta come from the FE-supplied user_message blob;
+            # conversation_id matches the Conversations row the worker is processing.
+            user_id=data.get("user_id"),
+            request_type="user_chat",
+            request_source=data.get("request_source"),
+            source_ref=data.get("source_ref"),
+            conversation_id=task.conversation_id,
+            conversation_source="conversations",
+            meta=data.get("meta"),
         )
 
         self._run_chat_and_publish(

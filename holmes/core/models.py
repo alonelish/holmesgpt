@@ -213,6 +213,59 @@ class ChatRequestBaseModel(BaseModel):
     )
     user_id: Optional[str] = None  # User ID from relay session token validation
 
+    # ── AI usage tracking fields (HolmesUsageEvents). All optional / additive;
+    # old clients that don't supply them keep working unchanged. ──
+    request_type: Optional[str] = Field(
+        default=None,
+        description=(
+            "Backend-set classification: 'user_chat' (default for /api/chat), "
+            "'scheduled_prompt' (set by ScheduledPromptsExecutor), 'agui_chat' "
+            "(set by AG-UI handler), 'health_check' (set by /api/checks/execute)."
+        ),
+    )
+    request_source: Optional[str] = Field(
+        default=None,
+        description=(
+            "FE-supplied UI flow label, free-form. Examples: 'freeform', "
+            "'followup_logs', 'alert_investigation', 'resource_chat'."
+        ),
+    )
+    source_ref: Optional[str] = Field(
+        default=None,
+        description=(
+            "FE-supplied opaque pointer to the entity the chat is about "
+            "(e.g. an issue id when request_source='alert_investigation'). "
+            "Meaning is implied by request_source."
+        ),
+    )
+    conversation_id: Optional[str] = Field(
+        default=None,
+        description=(
+            "Stable id grouping multi-turn chats. Soft reference (NOT a FK): "
+            "matches Conversations.conversation_id when worker handles the chat, "
+            "or the FE-owned ChatHistory id for direct /api/chat traffic. NULL for "
+            "single-turn / non-UI flows."
+        ),
+    )
+    conversation_source: Optional[str] = Field(
+        default=None,
+        description=(
+            "Discriminator telling dashboards which table conversation_id targets: "
+            "'conversations' (worker path) or 'chat_history' (direct /api/chat). "
+            "Worker sets it explicitly; chat() defaults to 'chat_history' when "
+            "conversation_id is non-NULL and not already set."
+        ),
+    )
+    meta: Optional[Dict[str, Any]] = Field(
+        default=None,
+        description=(
+            "Forward-compatibility metadata bag. FE-supplied opaque dict; the "
+            "server shallow-merges with backend-derived keys (backend wins on "
+            "collision). Keep small; promote stable keys to real columns over time. "
+            "Do NOT put PII / large strings (prompts, completions, tool outputs) here."
+        ),
+    )
+
     # In our setup with litellm, the first message in conversation_history
     # should follow the structure [{"role": "system", "content": ...}],
     # where the "role" field is expected to be "system".

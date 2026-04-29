@@ -198,6 +198,10 @@ class ScheduledPromptsExecutor:
             stream=False,
             additional_system_prompt=additional_system_prompt,
             trace_span=heartbeat_span,
+            # AI usage tracking — these runs are server-driven, not user-driven.
+            request_type="scheduled_prompt",
+            request_source="scheduler",
+            source_ref=sp.id,
         )
 
         empty_request = Request(scope={"type": "http", "headers": []})

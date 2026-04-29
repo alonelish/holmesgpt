@@ -64,6 +64,8 @@ HOLMES_RESULTS_TABLE = "HolmesResults"
 CONVERSATIONS_TABLE = "Conversations"
 CONVERSATION_EVENTS_TABLE = "ConversationEvents"
 OAUTH_TOKENS_TABLE = "OAuthTokens"
+HOLMES_USAGE_EVENTS_TABLE = "HolmesUsageEvents"
+HOLMES_USAGE_EVENT_CALLS_TABLE = "HolmesUsageEventCalls"
 
 ENRICHMENT_BLACKLIST = ["text_file", "graph", "ai_analysis", "holmes"]
 ENRICHMENT_BLACKLIST_SET = set(ENRICHMENT_BLACKLIST)
@@ -816,6 +818,115 @@ class SupabaseDal:
             logging.exception(
                 f"An error occurred during toolset synchronization: {e}", exc_info=True
             )
+
+    def record_usage_event(
+        self,
+        *,
+        request_type: str,
+        request_source: Optional[str],
+        source_ref: Optional[str],
+        conversation_id: Optional[str],
+        conversation_source: Optional[str],
+        status: str,
+        model: str,
+        provider: str,
+        is_robusta_model: bool,
+        stats,  # holmes.core.llm_usage.RequestStats; not typed to avoid circular import
+        iterations: int,
+        duration_ms: Optional[int],
+        tool_call_count: int,
+        is_streaming: bool,
+        finish_reason: Optional[str],
+        user_id: Optional[str],
+        cluster_id: Optional[str] = None,
+        request_id: Optional[str] = None,
+        meta: Optional[Dict] = None,
+    ) -> None:
+        """Record one HolmesUsageEvents row. Best-effort: swallows DB errors.
+
+        Called from holmes.core.usage_recorder._fire on a daemon thread, so
+        errors here only affect the telemetry row, never the request response.
+        """
+        if not self.enabled:
+            return
+        try:
+            self.client.table(HOLMES_USAGE_EVENTS_TABLE).insert({
+                "account_id": self.account_id,
+                "cluster_id": cluster_id or self.cluster,
+                "user_id": user_id,
+                "conversation_id": conversation_id,
+                "conversation_source": conversation_source,
+                "request_id": request_id,
+                "request_type": request_type,
+                "request_source": request_source,
+                "source_ref": source_ref,
+                "status": status,
+                "model": model,
+                "provider": provider,
+                "is_robusta_model": is_robusta_model,
+                "prompt_tokens": getattr(stats, "prompt_tokens", 0) or 0,
+                "completion_tokens": getattr(stats, "completion_tokens", 0) or 0,
+                "cached_tokens": getattr(stats, "cached_tokens", None),
+                "reasoning_tokens": getattr(stats, "reasoning_tokens", 0) or 0,
+                "total_tokens": getattr(stats, "total_tokens", 0) or 0,
+                "total_cost": float(getattr(stats, "total_cost", 0.0) or 0.0),
+                "num_compactions": getattr(stats, "num_compactions", 0) or 0,
+                "iterations": iterations,
+                "max_prompt_tokens_per_call": getattr(
+                    stats, "max_prompt_tokens_per_call", 0
+                ) or 0,
+                "max_completion_tokens_per_call": getattr(
+                    stats, "max_completion_tokens_per_call", 0
+                ) or 0,
+                "tool_call_count": tool_call_count,
+                "duration_ms": duration_ms,
+                "is_streaming": is_streaming,
+                "finish_reason": finish_reason,
+                "meta": meta or {},
+            }).execute()
+        except Exception:
+            logging.exception("Failed to record usage event")
+
+    def record_feedback(
+        self,
+        *,
+        request_id: str,
+        sentiment: str,
+        category: Optional[str],
+        comment: Optional[str],
+        user_id: Optional[str],
+    ) -> None:
+        """Update the feedback_* columns on a HolmesUsageEvents row.
+
+        Best-effort. The UPDATE is account-scoped via WHERE so RLS and an
+        explicit predicate both prevent cross-account writes if request_id
+        ever collides.
+
+        ``user_id`` is accepted for symmetry / future use (e.g. a
+        feedback_user_id column when chats become shareable) but is not
+        currently written, since v1's auth model assumes the rater is the
+        asker (events.user_id == feedback giver).
+        """
+        if not self.enabled:
+            return
+        if sentiment not in ("thumbs_up", "thumbs_down"):
+            logging.warning(
+                "record_feedback: ignoring invalid sentiment %r", sentiment
+            )
+            return
+        try:
+            self.client.table(HOLMES_USAGE_EVENTS_TABLE).update(
+                {
+                    "feedback_sentiment": sentiment,
+                    "feedback_category": category,
+                    "feedback_comment": comment,
+                    "feedback_at": datetime.now().isoformat(),
+                }
+            ).eq("account_id", self.account_id).eq(
+                "request_id", request_id
+            ).execute()
+        except Exception:
+            logging.exception("Failed to record feedback")
 
     def has_scheduled_prompt_definitions(self) -> bool:
         """
