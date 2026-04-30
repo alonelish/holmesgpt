@@ -149,9 +149,20 @@ def agui_chat(input_data: RunAgentInput, request: Request):
             ctx = input_data.context or {}
             agui_user_id = None
             try:
-                agui_user_id = getattr(input_data, "user_id", None) or ctx.get("user_id")
-            except Exception:
-                pass
+                agui_user_id = getattr(input_data, "user_id", None) or (
+                    ctx.get("user_id") if isinstance(ctx, dict) else None
+                )
+            except (AttributeError, TypeError) as e:
+                # Telemetry-only fallback: if input_data shape changed and
+                # neither attribute nor mapping access works, log at debug
+                # so we notice during dev rather than silently dropping
+                # user attribution. Don't break the response path.
+                logging.debug(
+                    "agui_chat: failed to extract user_id (input_data=%r ctx=%r): %s",
+                    type(input_data).__name__,
+                    type(ctx).__name__,
+                    e,
+                )
             ai_model = getattr(ai.llm, "model", None) or chat_request.model or "unknown"
             try:
                 import litellm as _litellm  # local import: this file is opt-in

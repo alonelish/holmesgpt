@@ -157,7 +157,11 @@ def _capture_terminal(state: UsageRecorderState, data: Dict[str, Any]) -> None:
                 "Failed to materialize RequestStats from terminal event costs",
                 exc_info=True,
             )
-    state.iterations = data.get("num_llm_calls", state.iterations) or state.iterations
+    # Explicit None-check rather than `or` so a legitimate 0 (unlikely but
+    # not impossible) is preserved instead of falling back to state.iterations.
+    raw_iterations = data.get("num_llm_calls")
+    if raw_iterations is not None:
+        state.iterations = raw_iterations
     state.finish_reason = (
         metadata.get("finish_reason") or state.finish_reason
     )

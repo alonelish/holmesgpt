@@ -3,6 +3,7 @@ import os
 import time
 from typing import Optional
 
+import litellm
 from fastapi import FastAPI, HTTPException
 from litellm.exceptions import AuthenticationError
 from pydantic import BaseModel, Field
@@ -22,8 +23,6 @@ def _resolve_provider(model: Optional[str]) -> str:
     if not model:
         return "unknown"
     try:
-        import litellm
-
         return litellm.get_llm_provider(model)[1] or "unknown"
     except Exception:
         return model.split("/")[0] if "/" in model else "unknown"

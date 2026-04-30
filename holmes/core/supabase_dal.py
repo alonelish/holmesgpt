@@ -917,16 +917,24 @@ class SupabaseDal:
             )
             return
         try:
-            self.client.table(HOLMES_USAGE_EVENTS_TABLE).update(
+            # Defense in depth: when user_id is provided, scope the UPDATE so
+            # one user can't overwrite another user's feedback within the same
+            # account if a request_id ever leaks. v1's auth model assumes
+            # rater == asker, so the user_id sent on POST /api/feedback
+            # matches HolmesUsageEvents.user_id for normal flows. Skip the
+            # filter when user_id is None (e.g. system / scheduled flows that
+            # might emit feedback in the future) to avoid breaking those.
+            query = self.client.table(HOLMES_USAGE_EVENTS_TABLE).update(
                 {
                     "feedback_sentiment": sentiment,
                     "feedback_category": category,
                     "feedback_comment": comment,
                     "feedback_at": datetime.now().isoformat(),
                 }
-            ).eq("account_id", self.account_id).eq(
-                "request_id", request_id
-            ).execute()
+            ).eq("account_id", self.account_id).eq("request_id", request_id)
+            if user_id:
+                query = query.eq("user_id", user_id)
+            query.execute()
         except Exception:
             logging.exception("Failed to record feedback")
 

@@ -688,15 +688,10 @@ def feedback(req: FeedbackRequest, http_request: Request) -> dict:
     isn't found yet (rare network reorder)."""
     if req.sentiment not in ("thumbs_up", "thumbs_down"):
         raise HTTPException(status_code=400, detail="invalid sentiment")
-    user_id: Optional[str] = None
-    # Mirror /api/chat's user_id resolution path: prefer header passthrough
-    # (Robusta relay token) but accept a body field if the caller set one.
-    try:
-        body_user_id = http_request.query_params.get("user_id")
-        if body_user_id:
-            user_id = body_user_id
-    except Exception:
-        pass
+    # Mirror /api/chat's user_id resolution: pull from the request's query
+    # params (e.g. when posted by the Robusta relay). `.get()` returns None
+    # for missing keys without raising, so no try/except needed.
+    user_id: Optional[str] = http_request.query_params.get("user_id")
     dal.record_feedback(
         request_id=req.request_id,
         sentiment=req.sentiment,
