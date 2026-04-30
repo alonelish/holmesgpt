@@ -97,6 +97,11 @@ def stream_with_usage_recording(
     counts TOOL_RESULT events along the way, and fires the recorder in
     a `finally` block so the row is written even on exceptions or
     client disconnects.
+
+    Also injects ``state.request_id`` into the terminal event's
+    ``metadata`` dict so the SSE formatter ships it back to the FE. The
+    FE saves it from ``ai_answer_end`` and posts it back to
+    ``POST /api/feedback`` when the user clicks thumbs up/down.
     """
     saw_terminal = False
     try:
@@ -105,14 +110,17 @@ def stream_with_usage_recording(
                 state.tool_call_count += 1
             elif msg.event == StreamEvents.ANSWER_END:
                 _capture_terminal(state, msg.data)
+                _inject_request_id(msg.data, state.request_id)
                 state.status = "success"
                 saw_terminal = True
             elif msg.event == StreamEvents.APPROVAL_REQUIRED:
                 _capture_terminal(state, msg.data)
+                _inject_request_id(msg.data, state.request_id)
                 state.status = "approval_required"
                 saw_terminal = True
             elif msg.event == StreamEvents.ERROR:
                 _capture_terminal(state, msg.data)
+                _inject_request_id(msg.data, state.request_id)
                 state.status = "error"
                 saw_terminal = True
             yield msg
@@ -122,6 +130,17 @@ def stream_with_usage_recording(
         raise
     finally:
         _fire(state)
+
+
+def _inject_request_id(data: Dict[str, Any], request_id: str) -> None:
+    """Drop request_id into data['metadata'] so the SSE formatter ships it
+    to the FE. Creates the metadata dict if missing or non-dict-shaped.
+    """
+    md = data.get("metadata")
+    if not isinstance(md, dict):
+        md = {}
+        data["metadata"] = md
+    md["request_id"] = request_id
 
 
 def _capture_terminal(state: UsageRecorderState, data: Dict[str, Any]) -> None:

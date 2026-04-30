@@ -626,12 +626,17 @@ def chat(chat_request: ChatRequest, http_request: Request):
                     )
                 else:
                     logging.info(f"Completed {req_info}")
+                # Surface request_id in the response metadata so the FE has a
+                # handle for POST /api/feedback later. Streaming path does the
+                # same via _inject_request_id in the stream wrapper.
+                response_metadata = dict(llm_call.metadata or {})
+                response_metadata["request_id"] = recorder_state.request_id
                 response = ChatResponse(
                     analysis=llm_call.result,
                     tool_calls=llm_call.tool_calls,
                     conversation_history=llm_call.messages,
                     follow_up_actions=follow_up_actions,
-                    metadata=llm_call.metadata,
+                    metadata=response_metadata,
                 )
                 return response
             except Exception as e:

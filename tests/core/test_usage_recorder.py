@@ -203,6 +203,66 @@ class TestStreamWithUsageRecording:
         # finally block still fired
         state.dal.record_usage_event.assert_called_once()
 
+    def test_request_id_injected_into_answer_end_metadata(self, monkeypatch):
+        """The FE needs request_id from ai_answer_end so it can post feedback later."""
+        _patch_inline_thread(monkeypatch)
+        state = _make_state()
+        state.request_id = "deadbeef-1234"
+
+        answer_end = StreamMessage(
+            event=StreamEvents.ANSWER_END,
+            data={
+                "content": "ok",
+                "messages": [],
+                "metadata": {"costs": {"total_tokens": 100}},
+                "num_llm_calls": 1,
+            },
+        )
+        consumed = list(stream_with_usage_recording(_stream(answer_end), state))
+
+        # The same StreamMessage flows through; its metadata now has request_id.
+        out = consumed[0]
+        assert out.event == StreamEvents.ANSWER_END
+        assert out.data["metadata"]["request_id"] == "deadbeef-1234"
+        # Existing metadata content (costs) is preserved alongside.
+        assert out.data["metadata"]["costs"] == {"total_tokens": 100}
+
+    def test_request_id_injected_when_metadata_missing(self, monkeypatch):
+        """If the upstream event has no metadata key, _inject_request_id creates it."""
+        _patch_inline_thread(monkeypatch)
+        state = _make_state()
+        state.request_id = "uuid-xyz"
+
+        answer_end = StreamMessage(
+            event=StreamEvents.ANSWER_END,
+            data={"content": "ok", "messages": [], "num_llm_calls": 1},  # no metadata key
+        )
+        consumed = list(stream_with_usage_recording(_stream(answer_end), state))
+        assert consumed[0].data["metadata"] == {"request_id": "uuid-xyz"}
+
+    def test_request_id_injected_into_approval_required(self, monkeypatch):
+        """Feedback should be possible on paused turns too — request_id must be there."""
+        _patch_inline_thread(monkeypatch)
+        state = _make_state()
+        state.request_id = "rid-paused"
+
+        approval = StreamMessage(
+            event=StreamEvents.APPROVAL_REQUIRED,
+            data={"metadata": {}, "pending_approvals": []},
+        )
+        consumed = list(stream_with_usage_recording(_stream(approval), state))
+        assert consumed[0].data["metadata"]["request_id"] == "rid-paused"
+
+    def test_request_id_injected_into_error_event(self, monkeypatch):
+        """Surface request_id even on ERROR so the FE can report 'this request failed'."""
+        _patch_inline_thread(monkeypatch)
+        state = _make_state()
+        state.request_id = "rid-err"
+
+        err = StreamMessage(event=StreamEvents.ERROR, data={"metadata": {}})
+        consumed = list(stream_with_usage_recording(_stream(err), state))
+        assert consumed[0].data["metadata"]["request_id"] == "rid-err"
+
 
 # ──────────────────────────────────────────────────────────────────
 # record_from_llm_result (non-streaming)
