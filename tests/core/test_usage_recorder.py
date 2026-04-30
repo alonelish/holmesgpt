@@ -116,6 +116,15 @@ class TestToKwargs:
         kwargs = state.to_kwargs()
         assert kwargs["duration_ms"] >= 1000
 
+    def test_is_internal_defaults_to_false(self):
+        state = _make_state()
+        assert state.is_internal is False
+        assert state.to_kwargs()["is_internal"] is False
+
+    def test_is_internal_true_round_trips(self):
+        state = _make_state(is_internal=True)
+        assert state.to_kwargs()["is_internal"] is True
+
 
 # ──────────────────────────────────────────────────────────────────
 # stream_with_usage_recording

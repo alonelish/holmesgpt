@@ -841,6 +841,7 @@ class SupabaseDal:
         cluster_id: Optional[str] = None,
         request_id: Optional[str] = None,
         meta: Optional[Dict] = None,
+        is_internal: bool = False,
     ) -> None:
         """Record one HolmesUsageEvents row. Best-effort: swallows DB errors.
 
@@ -881,6 +882,7 @@ class SupabaseDal:
                 "tool_call_count": tool_call_count,
                 "duration_ms": duration_ms,
                 "is_streaming": is_streaming,
+                "is_internal": is_internal,
                 "finish_reason": finish_reason,
                 "meta": meta or {},
             }).execute()

@@ -110,6 +110,18 @@ def _build_chat_recorder_state(
 
     model_name = getattr(request_ai.llm, "model", None) or chat_request.model or "unknown"
 
+    # Internal calls (title generation, classification, summarization, etc.)
+    # get filtered out of user-facing dashboards. FE sets is_internal=True
+    # explicitly for those. Backwards compat: if FE didn't set it, fall back
+    # to detecting the legacy 'internal_' prefix on request_source.
+    if chat_request.is_internal is None:
+        is_internal = bool(
+            chat_request.request_source
+            and chat_request.request_source.startswith("internal_")
+        )
+    else:
+        is_internal = bool(chat_request.is_internal)
+
     return UsageRecorderState(
         dal=dal,
         request_type=chat_request.request_type or "user_chat",
@@ -119,6 +131,7 @@ def _build_chat_recorder_state(
         conversation_source=conversation_source,
         user_id=chat_request.user_id,
         is_streaming=is_streaming,
+        is_internal=is_internal,
         model=model_name,
         provider=_resolve_provider(model_name),
         is_robusta_model=getattr(request_ai.llm, "is_robusta_model", False),

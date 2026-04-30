@@ -265,6 +265,16 @@ class ChatRequestBaseModel(BaseModel):
             "Do NOT put PII / large strings (prompts, completions, tool outputs) here."
         ),
     )
+    is_internal: Optional[bool] = Field(
+        default=None,
+        description=(
+            "Marks server-internal calls (title generation, classification, "
+            "summarization, etc.) so dashboards can filter them out of user-facing "
+            "metrics. FE sets True for those. When unset, the server defaults it "
+            "to True if request_source starts with 'internal_' (backwards compat "
+            "with the prefix convention) — otherwise False."
+        ),
+    )
 
     # In our setup with litellm, the first message in conversation_history
     # should follow the structure [{"role": "system", "content": ...}],

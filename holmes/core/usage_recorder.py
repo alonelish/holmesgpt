@@ -51,6 +51,7 @@ class UsageRecorderState:
     cluster_id: Optional[str] = None
     request_id: str = field(default_factory=lambda: str(uuid.uuid4()))
     is_streaming: bool = False
+    is_internal: bool = False
     meta: Dict[str, Any] = field(default_factory=dict)
 
     # mutable — filled during the call by the wrapper or recorder
@@ -78,6 +79,7 @@ class UsageRecorderState:
             "duration_ms": int((time.monotonic() - self.t_start) * 1000),
             "tool_call_count": self.tool_call_count,
             "is_streaming": self.is_streaming,
+            "is_internal": self.is_internal,
             "finish_reason": self.finish_reason,
             "user_id": self.user_id,
             "cluster_id": self.cluster_id,
