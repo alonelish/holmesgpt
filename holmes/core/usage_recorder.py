@@ -131,6 +131,13 @@ def stream_with_usage_recording(
             state.status = "error"
         raise
     finally:
+        # If the inner stream ended without yielding any terminal event
+        # (client disconnected mid-stream, generator exhausted abnormally),
+        # `state.status` would still be the constructor default "success".
+        # That's wrong — mark such cases as "aborted" so dashboards can
+        # filter incomplete runs out of "successful chat" metrics.
+        if not saw_terminal and state.status == "success":
+            state.status = "aborted"
         _fire(state)
 
 

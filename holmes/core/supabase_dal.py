@@ -904,10 +904,14 @@ class SupabaseDal:
         explicit predicate both prevent cross-account writes if request_id
         ever collides.
 
-        ``user_id`` is accepted for symmetry / future use (e.g. a
-        feedback_user_id column when chats become shareable) but is not
-        currently written, since v1's auth model assumes the rater is the
-        asker (events.user_id == feedback giver).
+        ``user_id`` is optional. When provided, the UPDATE is additionally
+        scoped by ``.eq("user_id", user_id)`` as defense in depth — even
+        though v1's auth model assumes rater == asker (so events.user_id
+        already matches the user posting the thumb), the extra predicate
+        prevents cross-user overwrites if a request_id ever leaks. When
+        omitted, no user filter is applied, leaving room for future
+        system / scheduled flows that might emit feedback without a
+        specific human user.
         """
         if not self.enabled:
             return

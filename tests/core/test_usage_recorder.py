@@ -199,7 +199,7 @@ class TestStreamWithUsageRecording:
         # And the tool we saw before the exception was counted
         assert state.dal.record_usage_event.call_args.kwargs["tool_call_count"] == 1
 
-    def test_stream_without_terminal_event_still_records(self, monkeypatch):
+    def test_stream_without_terminal_event_still_records_as_aborted(self, monkeypatch):
         _patch_inline_thread(monkeypatch)
         state = _make_state()
 
@@ -209,8 +209,25 @@ class TestStreamWithUsageRecording:
             state,
         ))
 
-        # finally block still fired
+        # finally block still fired, but status downgraded from default
+        # "success" to "aborted" because no terminal event was seen.
         state.dal.record_usage_event.assert_called_once()
+        assert state.dal.record_usage_event.call_args.kwargs["status"] == "aborted"
+
+    def test_terminal_event_keeps_its_explicit_status(self, monkeypatch):
+        """Sanity: the abort downgrade only applies when no terminal was seen."""
+        _patch_inline_thread(monkeypatch)
+        state = _make_state()
+
+        list(stream_with_usage_recording(
+            _stream(StreamMessage(
+                event=StreamEvents.ANSWER_END,
+                data={"metadata": {}, "num_llm_calls": 1},
+            )),
+            state,
+        ))
+
+        assert state.dal.record_usage_event.call_args.kwargs["status"] == "success"
 
     def test_request_id_injected_into_answer_end_metadata(self, monkeypatch):
         """The FE needs request_id from ai_answer_end so it can post feedback later."""
