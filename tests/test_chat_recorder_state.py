@@ -119,6 +119,11 @@ class TestSlackAutoDetect:
         state = build_chat_recorder_state(req, _make_request_ai(), is_streaming=True)
         assert state.request_type == "slack_chat"
 
+    def test_slack_prefix_sets_request_source_to_slack(self, build_chat_recorder_state):
+        req = _chat_request(ask=SLACK_ASK)
+        state = build_chat_recorder_state(req, _make_request_ai(), is_streaming=True)
+        assert state.request_source == "slack"
+
     def test_slack_prefix_captures_user_id_and_ts_in_meta(self, build_chat_recorder_state):
         req = _chat_request(ask=SLACK_ASK)
         state = build_chat_recorder_state(req, _make_request_ai(), is_streaming=True)
@@ -139,10 +144,25 @@ class TestSlackAutoDetect:
         # because the type was overridden.
         assert state.meta.get("slack", {}).get("slack_user_id") == "U0AKMP2CZ97"
 
-    def test_no_slack_prefix_uses_default_request_type(self, build_chat_recorder_state):
+    def test_explicit_request_source_wins_over_slack_default(
+        self, build_chat_recorder_state
+    ):
+        # Same caller-wins semantic for request_source: if the runner ever
+        # ships finer values like 'slack_mention' / 'slack_alert_investigation',
+        # those should not be clobbered by the auto-detected default.
+        req = _chat_request(ask=SLACK_ASK, request_source="slack_mention")
+        state = build_chat_recorder_state(req, _make_request_ai(), is_streaming=True)
+        assert state.request_source == "slack_mention"
+        # request_type still auto-set since it wasn't explicitly provided.
+        assert state.request_type == "slack_chat"
+
+    def test_no_slack_prefix_uses_default_request_type_and_no_source(
+        self, build_chat_recorder_state
+    ):
         req = _chat_request(ask="why is my-service crashing?")
         state = build_chat_recorder_state(req, _make_request_ai(), is_streaming=False)
         assert state.request_type == "user_chat"
+        assert state.request_source is None
         assert "slack" not in state.meta
 
     def test_slack_meta_merges_with_fe_meta(self, build_chat_recorder_state):
@@ -162,4 +182,5 @@ class TestSlackAutoDetect:
         req = _chat_request(ask="**@user_U0AKMP2CZ97** asked: why is my pod down?")
         state = build_chat_recorder_state(req, _make_request_ai(), is_streaming=False)
         assert state.request_type == "user_chat"
+        assert state.request_source is None
         assert "slack" not in state.meta

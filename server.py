@@ -162,10 +162,14 @@ def _build_chat_recorder_state(
         is_internal = bool(chat_request.is_internal)
 
     # Slack auto-detection: the Robusta runner's Slack handler doesn't yet
-    # populate request_type / user_id / conversation_id structurally — instead
-    # it prepends a '**@user_X** • <ts>\n\n' marker to `ask`. Detect that and
-    # tag the row as request_type='slack_chat' so dashboards group Slack
-    # traffic separately. Caller's explicit request_type still wins.
+    # populate request_type / request_source / user_id / conversation_id
+    # structurally — instead it prepends a '**@user_X** • <ts>\n\n' marker to
+    # `ask`. Detect that and tag both request_type='slack_chat' (matches the
+    # _chat suffix of user_chat / agui_chat) and request_source='slack'
+    # (default UI flow label) so dashboards group Slack traffic on either
+    # axis. Caller-supplied values for either field still win — the runner
+    # can later override with finer values like 'slack_mention' /
+    # 'slack_alert_investigation' without code changes here.
     slack_info = _detect_slack_origin(chat_request.ask)
     if chat_request.request_type:
         request_type = chat_request.request_type
@@ -173,6 +177,10 @@ def _build_chat_recorder_state(
         request_type = "slack_chat"
     else:
         request_type = "user_chat"
+
+    request_source = chat_request.request_source
+    if request_source is None and slack_info is not None:
+        request_source = "slack"
 
     # Merge meta: FE-supplied keys, then backend-derived keys (backend wins
     # on collision). Slack info goes under a 'slack' sub-key so it doesn't
@@ -184,7 +192,7 @@ def _build_chat_recorder_state(
     return UsageRecorderState(
         dal=dal,
         request_type=request_type,
-        request_source=chat_request.request_source,
+        request_source=request_source,
         source_ref=chat_request.source_ref,
         conversation_id=chat_request.conversation_id,
         conversation_source=conversation_source,
