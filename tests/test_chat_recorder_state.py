@@ -105,3 +105,61 @@ class TestRecorderStateSmoke:
         assert state.is_internal is False
         assert state.model == "anthropic/claude-sonnet-4-5"
         assert state.meta == {"experiment_id": "x"}
+
+
+# Sample of the prefix the Robusta runner's Slack handler prepends to `ask`.
+SLACK_ASK = (
+    "**@user_U0AKMP2CZ97** • 2026-05-04T05:10:04Z\n\nhigh cpu in pod alert"
+)
+
+
+class TestSlackAutoDetect:
+    def test_slack_prefix_sets_request_type_to_slack_chat(self, build_chat_recorder_state):
+        req = _chat_request(ask=SLACK_ASK)
+        state = build_chat_recorder_state(req, _make_request_ai(), is_streaming=True)
+        assert state.request_type == "slack_chat"
+
+    def test_slack_prefix_captures_user_id_and_ts_in_meta(self, build_chat_recorder_state):
+        req = _chat_request(ask=SLACK_ASK)
+        state = build_chat_recorder_state(req, _make_request_ai(), is_streaming=True)
+        assert state.meta.get("slack") == {
+            "slack_user_id": "U0AKMP2CZ97",
+            "slack_triggered_at": "2026-05-04T05:10:04Z",
+        }
+
+    def test_explicit_request_type_wins_over_slack_detection(
+        self, build_chat_recorder_state
+    ):
+        # Even with the Slack-shaped prefix, an explicit request_type must win
+        # (e.g. a future caller that overrides for some reason).
+        req = _chat_request(ask=SLACK_ASK, request_type="user_chat")
+        state = build_chat_recorder_state(req, _make_request_ai(), is_streaming=True)
+        assert state.request_type == "user_chat"
+        # Slack metadata is still extracted — we don't drop the signal just
+        # because the type was overridden.
+        assert state.meta.get("slack", {}).get("slack_user_id") == "U0AKMP2CZ97"
+
+    def test_no_slack_prefix_uses_default_request_type(self, build_chat_recorder_state):
+        req = _chat_request(ask="why is my-service crashing?")
+        state = build_chat_recorder_state(req, _make_request_ai(), is_streaming=False)
+        assert state.request_type == "user_chat"
+        assert "slack" not in state.meta
+
+    def test_slack_meta_merges_with_fe_meta(self, build_chat_recorder_state):
+        req = _chat_request(ask=SLACK_ASK, meta={"experiment_id": "abc"})
+        state = build_chat_recorder_state(req, _make_request_ai(), is_streaming=True)
+        # Both keys preserved; backend doesn't clobber FE meta.
+        assert state.meta == {
+            "experiment_id": "abc",
+            "slack": {
+                "slack_user_id": "U0AKMP2CZ97",
+                "slack_triggered_at": "2026-05-04T05:10:04Z",
+            },
+        }
+
+    def test_partial_slack_prefix_does_not_match(self, build_chat_recorder_state):
+        # Just a markdown bold, no • or timestamp — must not falsely match.
+        req = _chat_request(ask="**@user_U0AKMP2CZ97** asked: why is my pod down?")
+        state = build_chat_recorder_state(req, _make_request_ai(), is_streaming=False)
+        assert state.request_type == "user_chat"
+        assert "slack" not in state.meta
