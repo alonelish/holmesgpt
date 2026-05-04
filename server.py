@@ -768,15 +768,11 @@ def feedback(req: FeedbackRequest, http_request: Request) -> dict:
     isn't found yet (rare network reorder)."""
     if req.sentiment not in ("thumbs_up", "thumbs_down"):
         raise HTTPException(status_code=400, detail="invalid sentiment")
-    # Mirror /api/chat's user_id resolution: pull from the request's query
-    # params (e.g. when posted by the Robusta relay). `.get()` returns None
-    # for missing keys without raising. Require it so the user-scoping in
-    # record_feedback's WHERE clause is always applied — without user_id
-    # the UPDATE would fall back to (account_id, request_id) only, which
-    # weakens the cross-user defense.
+    # user_id is optional — when supplied via query param (mirrors /api/chat's
+    # resolution path), the DAL adds it as defense-in-depth on the UPDATE.
+    # When absent, account_id RLS + (account_id, request_id) WHERE is enough
+    # to prevent cross-account writes.
     user_id: Optional[str] = http_request.query_params.get("user_id")
-    if not user_id:
-        raise HTTPException(status_code=400, detail="missing user_id")
     dal.record_feedback(
         request_id=req.request_id,
         sentiment=req.sentiment,
