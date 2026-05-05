@@ -487,6 +487,11 @@ class ConversationWorker:
                 request_sequence=int(conv.get("request_sequence", 1)),
                 metadata=conv.get("metadata") or {},
                 title=conv.get("title"),
+                # Conversations.user_id (set by the FE when it created the row)
+                # — surfaced on the task so per-turn ChatRequest construction
+                # can use it as a fallback when the user_message event's data
+                # doesn't carry user_id explicitly.
+                user_id=conv.get("user_id"),
             )
         except Exception:
             logging.exception(
@@ -621,6 +626,20 @@ class ConversationWorker:
         if data.get("tool_decisions"):
             enable_tool_approval = True
 
+        # AI usage tracking (HolmesUsageEvents) — resolve user_id and
+        # request_source with row-level fallbacks. The FE writes both onto
+        # the Conversations row when it creates the chat (user_id as a
+        # column, request_source under metadata) but doesn't necessarily
+        # repeat them in every user_message event's data. Without this
+        # fallback, follow-up turns produce HolmesUsageEvents rows with
+        # NULL user_id / request_source even though the values are known.
+        # Per-event data still wins so the FE can override per-turn (e.g.
+        # an alert-investigation chat that pivots to a freeform question).
+        resolved_user_id = data.get("user_id") or task.user_id
+        resolved_request_source = data.get("request_source") or (
+            task.metadata.get("request_source") if task.metadata else None
+        )
+
         chat_request = ChatRequest(
             ask=ask,
             images=data.get("images"),
@@ -634,16 +653,14 @@ class ConversationWorker:
             frontend_tool_results=data.get("frontend_tool_results"),  # type: ignore[arg-type]
             response_format=data.get("response_format"),
             behavior_controls=data.get("behavior_controls"),
-            # AI usage tracking (HolmesUsageEvents). user_id / request_source /
-            # source_ref / meta / is_internal come from the FE-supplied
-            # user_message blob; conversation_id matches the Conversations row
-            # the worker is processing. Note: upstream/master added
-            # `user_id=data.get("user_id")` independently for its own purposes
-            # (frontend tools / approval flow); our block already includes it,
-            # so the merge is a clean superset.
-            user_id=data.get("user_id"),
+            # source_ref / meta / is_internal still come from the per-event
+            # blob only — they're per-turn signals (which alert this
+            # follow-up question was about, etc.), not Conversation-level
+            # state. user_id / request_source fall back to the Conversations
+            # row when the FE didn't repeat them in the event.
+            user_id=resolved_user_id,
             request_type="user_chat",
-            request_source=data.get("request_source"),
+            request_source=resolved_request_source,
             source_ref=data.get("source_ref"),
             conversation_id=task.conversation_id,
             conversation_source="conversations",

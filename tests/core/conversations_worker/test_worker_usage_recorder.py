@@ -183,3 +183,128 @@ def test_recorder_state_uses_workers_dal_and_streaming_flag():
     assert build_call.kwargs.get("is_streaming") is True
     # Positional args are (chat_request, request_ai).
     assert build_call.args[1] is ai
+
+
+# --------------------------------------------------------------------------
+# user_id / request_source fallback into Conversations row + metadata.
+#
+# The FE writes user_id (column) and request_source (under metadata) onto
+# the Conversations row when it creates a chat. It does NOT necessarily
+# repeat them in every per-turn user_message event's data. Without these
+# fallbacks, follow-up turns produce HolmesUsageEvents rows with NULL
+# user_id and request_source even though the values are sitting on the
+# Conversations row the worker already loaded. These tests pin the
+# fallback behavior so a future refactor can't silently re-introduce the
+# NULL-row bug the user reported.
+# --------------------------------------------------------------------------
+
+def _capture_chat_request_from_process(task, user_message_data):
+    """Drive _process_conversation just far enough to capture the
+    ChatRequest it constructs. Patches _run_chat_and_publish so the
+    LLM pipeline never runs."""
+    worker, _ = _bare_worker()
+    worker.dal.get_conversation_events = MagicMock(
+        return_value=[{"event": "user_message", "data": user_message_data, "ts": "1"}]
+    )
+
+    captured = {}
+
+    def capture(self, t, chat_request, publisher, resume_only=False):
+        captured["chat_request"] = chat_request
+
+    with patch.object(ConversationWorker, "_run_chat_and_publish", capture):
+        worker._process_conversation(task)
+
+    return captured.get("chat_request")
+
+
+def test_user_id_falls_back_to_conversations_row_when_event_omits_it():
+    # FE wrote user_id onto the Conversations row but didn't repeat it in
+    # the per-turn user_message data — exactly the symptom the user
+    # reported (HolmesUsageEvents.user_id NULL despite the value being
+    # known to the worker).
+    task = ConversationTask(
+        conversation_id="c1",
+        account_id="a1",
+        cluster_id="cl1",
+        origin="chat",
+        request_sequence=1,
+        user_id="u-conversations-row",
+    )
+    cr = _capture_chat_request_from_process(task, {"ask": "follow-up?"})
+    assert cr is not None
+    assert cr.user_id == "u-conversations-row"
+
+
+def test_event_user_id_wins_over_conversations_row():
+    # If the FE DOES repeat user_id in the event data, that value wins —
+    # so a future flow that lets users hand-off a chat could still record
+    # the per-turn rater. The Conversations-row value is a fallback, not
+    # an override.
+    task = ConversationTask(
+        conversation_id="c1",
+        account_id="a1",
+        cluster_id="cl1",
+        origin="chat",
+        request_sequence=1,
+        user_id="u-conversations-row",
+    )
+    cr = _capture_chat_request_from_process(
+        task, {"ask": "q", "user_id": "u-from-event"}
+    )
+    assert cr is not None
+    assert cr.user_id == "u-from-event"
+
+
+def test_request_source_falls_back_to_conversations_metadata():
+    # FE puts request_source under Conversations.metadata when it creates
+    # the row. Per-turn events typically don't repeat it. Worker should
+    # pull from metadata so dashboards can slice by request_source even
+    # for follow-up turns.
+    task = ConversationTask(
+        conversation_id="c1",
+        account_id="a1",
+        cluster_id="cl1",
+        origin="chat",
+        request_sequence=1,
+        metadata={"request_source": "alert_investigation", "other": "x"},
+    )
+    cr = _capture_chat_request_from_process(task, {"ask": "follow-up?"})
+    assert cr is not None
+    assert cr.request_source == "alert_investigation"
+
+
+def test_event_request_source_wins_over_conversations_metadata():
+    # Same caller-wins semantic as user_id. The conversation may have been
+    # created from one surface ('alert_investigation') but a follow-up
+    # turn could legitimately re-classify itself ('freeform').
+    task = ConversationTask(
+        conversation_id="c1",
+        account_id="a1",
+        cluster_id="cl1",
+        origin="chat",
+        request_sequence=1,
+        metadata={"request_source": "alert_investigation"},
+    )
+    cr = _capture_chat_request_from_process(
+        task, {"ask": "q", "request_source": "freeform"}
+    )
+    assert cr is not None
+    assert cr.request_source == "freeform"
+
+
+def test_no_fallback_values_anywhere_yields_null():
+    # Defense: if neither the row nor the event carries either field, the
+    # ChatRequest must still build (just with NULLs that the recorder
+    # writes through to the row).
+    task = ConversationTask(
+        conversation_id="c1",
+        account_id="a1",
+        cluster_id="cl1",
+        origin="chat",
+        request_sequence=1,
+    )
+    cr = _capture_chat_request_from_process(task, {"ask": "q"})
+    assert cr is not None
+    assert cr.user_id is None
+    assert cr.request_source is None
