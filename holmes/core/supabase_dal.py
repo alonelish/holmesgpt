@@ -5,7 +5,7 @@ import json
 import logging
 import os
 import threading
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from enum import Enum
 from typing import Dict, List, Optional, Tuple
 from uuid import uuid4
@@ -936,7 +936,14 @@ class SupabaseDal:
                     "feedback_sentiment": sentiment,
                     "feedback_category": category,
                     "feedback_comment": comment,
-                    "feedback_at": datetime.now().isoformat(),
+                    # Use UTC explicitly. datetime.now() (no tz) returns the
+                    # Holmes pod's local time and produces a naive ISO string;
+                    # Postgres timestamptz then interprets it relative to the
+                    # *server*'s timezone, which differs from the pod's. Both
+                    # cases produce shifted timestamps. Always pass an aware
+                    # UTC datetime so the column stores the actual feedback
+                    # moment regardless of pod / DB timezone settings.
+                    "feedback_at": datetime.now(timezone.utc).isoformat(),
                 }
             ).eq("account_id", self.account_id).eq("request_id", request_id)
             if user_id:

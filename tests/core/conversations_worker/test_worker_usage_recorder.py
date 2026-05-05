@@ -308,3 +308,79 @@ def test_no_fallback_values_anywhere_yields_null():
     assert cr is not None
     assert cr.user_id is None
     assert cr.request_source is None
+
+
+# --------------------------------------------------------------------------
+# request_type passthrough.
+#
+# The worker used to hard-code request_type='user_chat' on the ChatRequest
+# it constructed. That defeated build_chat_recorder_state's auto-detection
+# logic: the helper only auto-classifies (Slack-prefix etc.) when
+# chat_request.request_type is falsy, so a hard-coded value short-circuited
+# every detection path. These tests pin the passthrough behavior so future
+# refactors can't silently re-introduce that bug.
+# --------------------------------------------------------------------------
+
+
+def test_request_type_passes_through_from_event_data():
+    # FE-supplied request_type wins. Today only /api/chat sees this, but
+    # the runner could write request_type into the user_message blob at
+    # any time without code changes here.
+    task = ConversationTask(
+        conversation_id="c1",
+        account_id="a1",
+        cluster_id="cl1",
+        origin="chat",
+        request_sequence=1,
+    )
+    cr = _capture_chat_request_from_process(
+        task, {"ask": "q", "request_type": "scheduled_prompt"}
+    )
+    assert cr is not None
+    assert cr.request_type == "scheduled_prompt"
+
+
+def test_request_type_unset_when_event_omits_it():
+    # Critical: when the event doesn't supply request_type, the worker
+    # MUST leave it None on the ChatRequest so build_chat_recorder_state's
+    # auto-detection (Slack prefix, fallback default) gets to run. If the
+    # worker hard-codes 'user_chat' here, Slack rows get mis-tagged.
+    task = ConversationTask(
+        conversation_id="c1",
+        account_id="a1",
+        cluster_id="cl1",
+        origin="chat",
+        request_sequence=1,
+    )
+    cr = _capture_chat_request_from_process(task, {"ask": "q"})
+    assert cr is not None
+    assert cr.request_type is None, (
+        "Worker must leave request_type=None so build_chat_recorder_state "
+        "can auto-detect (e.g. Slack prefix → 'slack_chat'). Hard-coding "
+        "'user_chat' defeats the helper's detection path."
+    )
+
+
+def test_slack_prefix_in_event_ask_routes_to_slack_chat_via_helper():
+    # End-to-end check: an ask carrying the runner's Slack prefix must
+    # arrive at build_chat_recorder_state with request_type=None so the
+    # helper tags it as 'slack_chat'. We don't call the helper here —
+    # that's covered in tests/test_chat_recorder_state.py — we only
+    # assert the worker passes the right inputs into it.
+    task = ConversationTask(
+        conversation_id="c1",
+        account_id="a1",
+        cluster_id="cl1",
+        origin="chat",
+        request_sequence=1,
+    )
+    slack_ask = (
+        "**@user_U0AKMP2CZ97** • 2026-05-04T05:10:04Z\n\n"
+        "high cpu in pod alert"
+    )
+    cr = _capture_chat_request_from_process(task, {"ask": slack_ask})
+    assert cr is not None
+    # ChatRequest.ask carries the original prefix (helper inspects this).
+    assert cr.ask.startswith("**@user_U0AKMP2CZ97**")
+    # And request_type is None so the helper's auto-detect runs.
+    assert cr.request_type is None

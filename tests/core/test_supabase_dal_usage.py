@@ -307,7 +307,17 @@ class TestRecordFeedback:
         assert update_payload["feedback_sentiment"] == "thumbs_down"
         assert update_payload["feedback_category"] == "wrong_answer"
         assert update_payload["feedback_comment"] == "missed the OOM"
-        assert "feedback_at" in update_payload  # an ISO timestamp string
+        # feedback_at must be a UTC ISO timestamp — without an explicit
+        # timezone, Postgres timestamptz interprets the value relative to
+        # the *server*'s local time which differs from the Holmes pod's,
+        # producing shifted timestamps. Assert a UTC offset is present.
+        feedback_at = update_payload["feedback_at"]
+        assert isinstance(feedback_at, str)
+        # Python's datetime.isoformat() with timezone.utc produces
+        # '2026-01-02T03:04:05.678+00:00' — accept either '+00:00' or 'Z'.
+        assert feedback_at.endswith("+00:00") or feedback_at.endswith("Z"), (
+            f"feedback_at must include a UTC offset, got {feedback_at!r}"
+        )
 
         # Account-scoped + request_id WHERE clauses
         eq_calls = update_mock.return_value.eq.call_args_list

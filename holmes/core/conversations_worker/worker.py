@@ -659,7 +659,15 @@ class ConversationWorker:
             # state. user_id / request_source fall back to the Conversations
             # row when the FE didn't repeat them in the event.
             user_id=resolved_user_id,
-            request_type="user_chat",
+            # request_type: pass through whatever the FE sent (None if absent)
+            # rather than hard-coding 'user_chat' here. The recorder helper
+            # (build_chat_recorder_state) handles the default and runs Slack
+            # auto-detection — hard-coding 'user_chat' would defeat the
+            # auto-detection because the helper bails out if request_type is
+            # already truthy. Today only /api/chat hits the Slack-prefix
+            # path, but the runner could route Slack through Conversations
+            # at any time without a code change here.
+            request_type=data.get("request_type"),
             request_source=resolved_request_source,
             source_ref=data.get("source_ref"),
             conversation_id=task.conversation_id,
