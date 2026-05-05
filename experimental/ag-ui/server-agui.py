@@ -26,6 +26,7 @@ from starlette.responses import PlainTextResponse
 from holmes.utils.stream import StreamMessage, StreamEvents
 from holmes.core.usage_recorder import (
     UsageRecorderState,
+    resolve_provider,
     stream_with_usage_recording,
 )
 from holmes.common.env_vars import (
@@ -164,11 +165,7 @@ def agui_chat(input_data: RunAgentInput, request: Request):
                     e,
                 )
             ai_model = getattr(ai.llm, "model", None) or chat_request.model or "unknown"
-            try:
-                import litellm as _litellm  # local import: this file is opt-in
-                ai_provider = _litellm.get_llm_provider(ai_model)[1] or "unknown"
-            except Exception:
-                ai_provider = ai_model.split("/")[0] if "/" in ai_model else "unknown"
+            ai_provider = resolve_provider(ai_model)
             recorder_state = UsageRecorderState(
                 dal=dal,
                 request_type="agui_chat",
