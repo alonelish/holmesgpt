@@ -11,12 +11,11 @@ if add_custom_certificate(ADDITIONAL_CERTIFICATE):
 # IMPORTING ABOVE MIGHT INITIALIZE AN HTTPS CLIENT THAT DOESN'T TRUST THE CUSTOM CERTIFICATE
 import json
 import logging
-import re
 import threading
 import time
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import List, Optional
 
 import colorlog
 import litellm
@@ -73,137 +72,12 @@ from holmes.core.tools_utils.frontend_tools import (
 )
 from holmes.core.tracing import TracingFactory
 from holmes.core.usage_recorder import (
-    UsageRecorderState,
+    build_chat_recorder_state,
     record_error,
     record_from_llm_result,
     stream_with_usage_recording,
 )
 from holmes.utils.stream import stream_chat_formatter
-
-
-def _resolve_provider(model: Optional[str]) -> str:
-    """Best-effort: return the canonical litellm provider for `model`.
-
-    Falls back to splitting on the litellm prefix (`openai/...`,
-    `anthropic/...`) if the helper raises (e.g. for unrecognized models).
-    """
-    if not model:
-        return "unknown"
-    try:
-        # litellm.get_llm_provider returns (model, provider, api_key, api_base).
-        return litellm.get_llm_provider(model)[1] or "unknown"
-    except Exception:
-        return model.split("/")[0] if "/" in model else "unknown"
-
-
-# The Robusta runner's Slack handler currently prepends a fixed prefix to the
-# user's message before POSTing /api/chat. Example:
-#   "**@user_U0AKMP2CZ97** • 2026-05-04T05:10:04Z\n\nhigh cpu in pod alert"
-# This regex matches that prefix so we can tag Slack-driven rows in
-# HolmesUsageEvents without requiring the runner to populate request_type
-# explicitly. Heuristic — fragile if the runner format changes; the proper
-# long-term fix is the runner sending request_type/user_id/conversation_id
-# itself. Captured groups also let us stash the slack user id and timestamp
-# in `meta.slack` for dashboards, since they aren't (yet) sent as structured
-# fields.
-_SLACK_ASK_PREFIX_RE = re.compile(
-    r"^\*\*@user_(?P<slack_user_id>U[A-Z0-9]+)\*\*\s*•\s*"
-    r"(?P<slack_triggered_at>\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z)",
-)
-
-
-def _detect_slack_origin(ask: Optional[str]) -> Optional[Dict[str, Any]]:
-    """If `ask` matches the runner's Slack-prefix shape, return parsed
-    metadata (slack_user_id + slack_triggered_at). Otherwise None.
-
-    Used as a heuristic in _build_chat_recorder_state to auto-classify
-    Slack-driven calls until the runner is updated to send request_type
-    and user_id explicitly.
-    """
-    if not ask:
-        return None
-    m = _SLACK_ASK_PREFIX_RE.match(ask)
-    if not m:
-        return None
-    return {
-        "slack_user_id": m.group("slack_user_id"),
-        "slack_triggered_at": m.group("slack_triggered_at"),
-    }
-
-
-def _build_chat_recorder_state(
-    chat_request: ChatRequest,
-    request_ai,
-    is_streaming: bool,
-) -> UsageRecorderState:
-    """Construct a UsageRecorderState for /api/chat. All entry points (direct,
-    worker, scheduled, agui) flow through chat() — request_type, request_source,
-    source_ref, conversation_id, conversation_source, user_id are read off
-    chat_request (set by whoever called chat()).
-    """
-    # Default conversation_source to 'chat_history' when conversation_id is set
-    # but the caller didn't override (i.e. direct /api/chat).
-    conversation_source = chat_request.conversation_source
-    if conversation_source is None and chat_request.conversation_id:
-        conversation_source = "chat_history"
-
-    model_name = getattr(request_ai.llm, "model", None) or chat_request.model or "unknown"
-
-    # Internal calls (title generation, classification, summarization, etc.)
-    # get filtered out of user-facing dashboards. FE sets is_internal=True
-    # explicitly for those. Backwards compat: if FE didn't set it, fall back
-    # to detecting the legacy 'internal_' prefix on request_source.
-    if chat_request.is_internal is None:
-        is_internal = bool(
-            chat_request.request_source
-            and chat_request.request_source.startswith("internal_")
-        )
-    else:
-        is_internal = bool(chat_request.is_internal)
-
-    # Slack auto-detection: the Robusta runner's Slack handler doesn't yet
-    # populate request_type / request_source / user_id / conversation_id
-    # structurally — instead it prepends a '**@user_X** • <ts>\n\n' marker to
-    # `ask`. Detect that and tag both request_type='slack_chat' (matches the
-    # _chat suffix of user_chat / agui_chat) and request_source='slack'
-    # (default UI flow label) so dashboards group Slack traffic on either
-    # axis. Caller-supplied values for either field still win — the runner
-    # can later override with finer values like 'slack_mention' /
-    # 'slack_alert_investigation' without code changes here.
-    slack_info = _detect_slack_origin(chat_request.ask)
-    if chat_request.request_type:
-        request_type = chat_request.request_type
-    elif slack_info is not None:
-        request_type = "slack_chat"
-    else:
-        request_type = "user_chat"
-
-    request_source = chat_request.request_source
-    if request_source is None and slack_info is not None:
-        request_source = "slack"
-
-    # Merge meta: FE-supplied keys, then backend-derived keys (backend wins
-    # on collision). Slack info goes under a 'slack' sub-key so it doesn't
-    # clutter the top level.
-    merged_meta: Dict[str, Any] = dict(chat_request.meta or {})
-    if slack_info is not None:
-        merged_meta["slack"] = slack_info
-
-    return UsageRecorderState(
-        dal=dal,
-        request_type=request_type,
-        request_source=request_source,
-        source_ref=chat_request.source_ref,
-        conversation_id=chat_request.conversation_id,
-        conversation_source=conversation_source,
-        user_id=chat_request.user_id,
-        is_streaming=is_streaming,
-        is_internal=is_internal,
-        model=model_name,
-        provider=_resolve_provider(model_name),
-        is_robusta_model=getattr(request_ai.llm, "is_robusta_model", False),
-        meta=merged_meta,
-    )
 
 
 def init_logging():
@@ -652,7 +526,9 @@ def chat(chat_request: ChatRequest, http_request: Request):
 
             # Build the usage recorder state and wrap the raw stream BEFORE the
             # SSE formatter so the wrapper sees Holmes' native StreamMessage events.
-            recorder_state = _build_chat_recorder_state(chat_request, request_ai, is_streaming=True)
+            recorder_state = build_chat_recorder_state(
+                chat_request, request_ai, dal=dal, is_streaming=True
+            )
             recorded_stream = stream_with_usage_recording(
                 request_ai.call_stream(
                     msgs=messages,
@@ -675,7 +551,9 @@ def chat(chat_request: ChatRequest, http_request: Request):
                 media_type="text/event-stream",
             )
         else:
-            recorder_state = _build_chat_recorder_state(chat_request, request_ai, is_streaming=False)
+            recorder_state = build_chat_recorder_state(
+                chat_request, request_ai, dal=dal, is_streaming=False
+            )
             try:
                 # Use provided trace_span or create a root investigation span
                 trace_span = chat_request.trace_span

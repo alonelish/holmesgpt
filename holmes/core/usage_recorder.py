@@ -11,6 +11,7 @@ the DB write. Telemetry must never block or break the response path.
 from __future__ import annotations
 
 import logging
+import re
 import threading
 import time
 import uuid
@@ -21,8 +22,130 @@ from holmes.core.llm_usage import RequestStats
 from holmes.utils.stream import StreamEvents, StreamMessage
 
 if TYPE_CHECKING:
+    from holmes.core.models import ChatRequest
     from holmes.core.supabase_dal import SupabaseDal
     from holmes.core.tool_calling_llm import LLMResult
+
+
+# Slack auto-detection: the Robusta runner's Slack handler currently prepends
+# a fixed prefix to the user's message before POSTing /api/chat. Example:
+#   "**@user_U0AKMP2CZ97** • 2026-05-04T05:10:04Z\n\nhigh cpu in pod alert"
+# Extracted into a shared regex so both the direct /api/chat path (server.py)
+# and the worker path (conversations_worker/worker.py) can run the same
+# detection. Heuristic — fragile if the runner format changes.
+_SLACK_ASK_PREFIX_RE = re.compile(
+    r"^\*\*@user_(?P<slack_user_id>U[A-Z0-9]+)\*\*\s*•\s*"
+    r"(?P<slack_triggered_at>\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z)",
+)
+
+
+def detect_slack_origin(ask: Optional[str]) -> Optional[Dict[str, Any]]:
+    """If `ask` matches the runner's Slack-prefix shape, return parsed
+    metadata (slack_user_id + slack_triggered_at). Otherwise None.
+    """
+    if not ask:
+        return None
+    m = _SLACK_ASK_PREFIX_RE.match(ask)
+    if not m:
+        return None
+    return {
+        "slack_user_id": m.group("slack_user_id"),
+        "slack_triggered_at": m.group("slack_triggered_at"),
+    }
+
+
+def resolve_provider(model: Optional[str]) -> str:
+    """Best-effort: return the canonical litellm provider for `model`.
+
+    Falls back to splitting on the litellm prefix (`openai/...`,
+    `anthropic/...`) if the helper raises (e.g. for unrecognized models).
+    Importing litellm is deferred so this module stays import-light for
+    consumers that only want the dataclass.
+    """
+    if not model:
+        return "unknown"
+    try:
+        import litellm  # local import — keep usage_recorder cheap to import
+        return litellm.get_llm_provider(model)[1] or "unknown"
+    except Exception:
+        return model.split("/")[0] if "/" in model else "unknown"
+
+
+def build_chat_recorder_state(
+    chat_request: "ChatRequest",
+    request_ai: Any,
+    *,
+    dal: Any,
+    is_streaming: bool,
+) -> "UsageRecorderState":
+    """Construct a UsageRecorderState from a ChatRequest.
+
+    Used by every code path that consumes a ChatRequest and wraps a stream:
+    server.py:chat() (direct /api/chat) and ConversationWorker._run_chat_and_publish
+    (worker path). Centralizes the request_type / request_source / is_internal
+    / Slack auto-detection logic so all entry points get identical behavior.
+    """
+    # Default conversation_source to 'chat_history' when conversation_id is set
+    # but the caller didn't override (i.e. direct /api/chat). The worker passes
+    # 'conversations' explicitly.
+    conversation_source = chat_request.conversation_source
+    if conversation_source is None and chat_request.conversation_id:
+        conversation_source = "chat_history"
+
+    model_name = (
+        getattr(request_ai.llm, "model", None)
+        or chat_request.model
+        or "unknown"
+    )
+
+    # Internal calls (title generation, classification, summarization, etc.)
+    # get filtered out of user-facing dashboards. FE sets is_internal=True
+    # explicitly for those. Backwards compat: if FE didn't set it, fall back
+    # to detecting the legacy 'internal_' prefix on request_source.
+    if chat_request.is_internal is None:
+        is_internal = bool(
+            chat_request.request_source
+            and chat_request.request_source.startswith("internal_")
+        )
+    else:
+        is_internal = bool(chat_request.is_internal)
+
+    # Slack auto-detection: tag both request_type='slack_chat' and
+    # request_source='slack' as defaults that the caller can still override.
+    slack_info = detect_slack_origin(chat_request.ask)
+    if chat_request.request_type:
+        request_type = chat_request.request_type
+    elif slack_info is not None:
+        request_type = "slack_chat"
+    else:
+        request_type = "user_chat"
+
+    request_source = chat_request.request_source
+    if request_source is None and slack_info is not None:
+        request_source = "slack"
+
+    # Merge meta: FE-supplied keys, then backend-derived keys (backend wins
+    # on collision). Slack info goes under a 'slack' sub-key so it doesn't
+    # clutter the top level.
+    merged_meta: Dict[str, Any] = dict(chat_request.meta or {})
+    if slack_info is not None:
+        merged_meta["slack"] = slack_info
+
+    return UsageRecorderState(
+        dal=dal,
+        request_type=request_type,
+        request_source=request_source,
+        source_ref=chat_request.source_ref,
+        conversation_id=chat_request.conversation_id,
+        conversation_source=conversation_source,
+        user_id=chat_request.user_id,
+        is_streaming=is_streaming,
+        is_internal=is_internal,
+        model=model_name,
+        provider=resolve_provider(model_name),
+        is_robusta_model=getattr(request_ai.llm, "is_robusta_model", False),
+        meta=merged_meta,
+    )
 
 
 @dataclass
@@ -243,7 +366,10 @@ def _fire(state: UsageRecorderState) -> None:
 
 __all__ = [
     "UsageRecorderState",
-    "stream_with_usage_recording",
-    "record_from_llm_result",
+    "build_chat_recorder_state",
+    "detect_slack_origin",
     "record_error",
+    "record_from_llm_result",
+    "resolve_provider",
+    "stream_with_usage_recording",
 ]

@@ -41,6 +41,10 @@ from holmes.core.tools_utils.frontend_tools import (
     inject_frontend_tools,
 )
 from holmes.core.tracing import TracingFactory
+from holmes.core.usage_recorder import (
+    build_chat_recorder_state,
+    stream_with_usage_recording,
+)
 from holmes.utils.holmes_status import update_holmes_status_in_db
 from holmes.utils.stream import StreamEvents
 
@@ -801,7 +805,19 @@ class ConversationWorker:
                 request_context = {"user_id": chat_request.user_id}
 
             try:
-                stream = request_ai.call_stream(
+                # Wrap the raw stream with the usage recorder BEFORE the
+                # publisher consumes it, so the recorder sees Holmes' native
+                # StreamMessage events (TOOL_RESULT / ANSWER_END / etc.) and
+                # can fire one HolmesUsageEvents row per worker-driven turn.
+                # Mirrors the wiring in server.py::chat() for the streaming
+                # path; without this the worker bypasses the recorder entirely.
+                recorder_state = build_chat_recorder_state(
+                    chat_request,
+                    request_ai,
+                    dal=self.dal,
+                    is_streaming=True,
+                )
+                raw_stream = request_ai.call_stream(
                     msgs=messages,
                     enable_tool_approval=chat_request.enable_tool_approval or False,
                     tool_decisions=chat_request.tool_decisions,
@@ -810,6 +826,7 @@ class ConversationWorker:
                     request_context=request_context,
                     trace_span=trace_span,
                 )
+                stream = stream_with_usage_recording(raw_stream, recorder_state)
 
                 terminal = publisher.consume(stream)
                 if terminal is None:
