@@ -9,6 +9,12 @@ record_usage_event is best-effort: it swallows Supabase errors so the
 response path can never be broken by a telemetry write. The tests verify
 both the happy path (correct payload sent to .insert) and the failure path
 (exceptions are absorbed).
+
+The DAL takes a ``UsageRecorderState`` positional arg (Moshe's review on
+PR #1969 — single-object signature avoids drift between the recorder and
+DAL when fields are added). Tests construct a real UsageRecorderState via
+the ``_make_state`` helper below; mock_dal is duck-typed so any object
+with the same attributes would also work.
 """
 
 from unittest.mock import MagicMock, patch
@@ -20,6 +26,7 @@ from holmes.core.supabase_dal import (
     HOLMES_USAGE_EVENTS_TABLE,
     SupabaseDal,
 )
+from holmes.core.usage_recorder import UsageRecorderState
 
 
 @pytest.fixture
@@ -48,6 +55,23 @@ def _stats() -> RequestStats:
     )
 
 
+def _make_state(**overrides) -> UsageRecorderState:
+    """Build a minimal UsageRecorderState. record_usage_event ignores
+    ``dal`` (it's the DAL itself being called), so we leave it None.
+    Override any field via kwargs."""
+    defaults = dict(
+        dal=None,
+        request_type="user_chat",
+        model="m",
+        provider="p",
+        is_robusta_model=False,
+        stats=_stats(),
+        iterations=1,
+    )
+    defaults.update(overrides)
+    return UsageRecorderState(**defaults)  # type: ignore[arg-type]
+
+
 # ──────────────────────────────────────────────────────────────────
 # record_usage_event
 # ──────────────────────────────────────────────────────────────────
@@ -56,48 +80,28 @@ def _stats() -> RequestStats:
 class TestRecordUsageEvent:
     def test_no_op_when_dal_disabled(self, mock_dal):
         mock_dal.enabled = False
-        mock_dal.record_usage_event(
-            request_type="user_chat",
-            request_source=None,
-            source_ref=None,
-            conversation_id=None,
-            conversation_source=None,
-            status="success",
-            model="openai/gpt-4",
-            provider="openai",
-            is_robusta_model=False,
-            stats=_stats(),
-            iterations=1,
-            duration_ms=42,
-            tool_call_count=0,
-            is_streaming=False,
-            finish_reason=None,
-            user_id=None,
-        )
+        mock_dal.record_usage_event(_make_state())
         # No client interaction at all when disabled.
         mock_dal.client.table.assert_not_called()
 
     def test_inserts_row_with_correct_payload(self, mock_dal):
-        mock_dal.record_usage_event(
+        mock_dal.record_usage_event(_make_state(
             request_type="user_chat",
             request_source="freeform",
             source_ref="issue-42",
             conversation_id="conv-abc",
             conversation_source="chat_history",
-            status="success",
             model="anthropic/claude-sonnet-4-5",
             provider="anthropic",
             is_robusta_model=False,
-            stats=_stats(),
             iterations=3,
-            duration_ms=1500,
             tool_call_count=5,
             is_streaming=True,
             finish_reason="stop",
             user_id="user-xyz",
             request_id="req-uuid-123",
             meta={"experiment_id": "abc"},
-        )
+        ))
 
         # client.table(<table>).insert(<payload>).execute()
         mock_dal.client.table.assert_called_once_with(HOLMES_USAGE_EVENTS_TABLE)
@@ -118,7 +122,7 @@ class TestRecordUsageEvent:
         assert payload["request_type"] == "user_chat"
         assert payload["request_source"] == "freeform"
         assert payload["source_ref"] == "issue-42"
-        assert payload["status"] == "success"
+        assert payload["status"] == "success"   # default on the state
         assert payload["model"] == "anthropic/claude-sonnet-4-5"
         assert payload["provider"] == "anthropic"
         assert payload["is_robusta_model"] is False
@@ -137,76 +141,27 @@ class TestRecordUsageEvent:
 
         # Outcome
         assert payload["tool_call_count"] == 5
-        assert payload["duration_ms"] == 1500
+        # duration_ms is computed from state.t_start at write time, so we
+        # don't pin a value — just assert the type contract.
+        assert isinstance(payload["duration_ms"], int)
+        assert payload["duration_ms"] >= 0
         assert payload["is_streaming"] is True
         assert payload["finish_reason"] == "stop"
         assert payload["meta"] == {"experiment_id": "abc"}
 
     def test_falls_back_to_dal_cluster_when_cluster_id_not_supplied(self, mock_dal):
-        mock_dal.record_usage_event(
-            request_type="user_chat",
-            request_source=None,
-            source_ref=None,
-            conversation_id=None,
-            conversation_source=None,
-            status="success",
-            model="m",
-            provider="p",
-            is_robusta_model=False,
-            stats=_stats(),
-            iterations=1,
-            duration_ms=10,
-            tool_call_count=0,
-            is_streaming=False,
-            finish_reason=None,
-            user_id=None,
-        )
+        mock_dal.record_usage_event(_make_state())   # cluster_id left None
         payload = mock_dal.client.table.return_value.insert.call_args.args[0]
         assert payload["cluster_id"] == "test-cluster"
 
     def test_explicit_cluster_id_overrides_dal_default(self, mock_dal):
-        mock_dal.record_usage_event(
-            request_type="user_chat",
-            request_source=None,
-            source_ref=None,
-            conversation_id=None,
-            conversation_source=None,
-            status="success",
-            model="m",
-            provider="p",
-            is_robusta_model=False,
-            stats=_stats(),
-            iterations=1,
-            duration_ms=10,
-            tool_call_count=0,
-            is_streaming=False,
-            finish_reason=None,
-            user_id=None,
-            cluster_id="other-cluster",
-        )
+        mock_dal.record_usage_event(_make_state(cluster_id="other-cluster"))
         payload = mock_dal.client.table.return_value.insert.call_args.args[0]
         assert payload["cluster_id"] == "other-cluster"
 
     def test_meta_defaults_to_empty_dict_when_none(self, mock_dal):
-        mock_dal.record_usage_event(
-            request_type="user_chat",
-            request_source=None,
-            source_ref=None,
-            conversation_id=None,
-            conversation_source=None,
-            status="success",
-            model="m",
-            provider="p",
-            is_robusta_model=False,
-            stats=_stats(),
-            iterations=1,
-            duration_ms=10,
-            tool_call_count=0,
-            is_streaming=False,
-            finish_reason=None,
-            user_id=None,
-            meta=None,
-        )
+        # The state defaults meta to {}, so the column should be {} too.
+        mock_dal.record_usage_event(_make_state())
         payload = mock_dal.client.table.return_value.insert.call_args.args[0]
         assert payload["meta"] == {}
 
@@ -216,24 +171,7 @@ class TestRecordUsageEvent:
             RuntimeError("supabase down")
         )
         # Should not raise.
-        mock_dal.record_usage_event(
-            request_type="user_chat",
-            request_source=None,
-            source_ref=None,
-            conversation_id=None,
-            conversation_source=None,
-            status="success",
-            model="m",
-            provider="p",
-            is_robusta_model=False,
-            stats=_stats(),
-            iterations=1,
-            duration_ms=10,
-            tool_call_count=0,
-            is_streaming=False,
-            finish_reason=None,
-            user_id=None,
-        )
+        mock_dal.record_usage_event(_make_state())
 
     def test_handles_stats_with_none_cached_tokens(self, mock_dal):
         # Some providers don't report cached_tokens — should land as NULL.
@@ -245,25 +183,21 @@ class TestRecordUsageEvent:
             cached_tokens=None,
             reasoning_tokens=0,
         )
-        mock_dal.record_usage_event(
-            request_type="user_chat",
-            request_source=None,
-            source_ref=None,
-            conversation_id=None,
-            conversation_source=None,
-            status="success",
-            model="m",
-            provider="p",
-            is_robusta_model=False,
-            stats=stats,
-            iterations=1,
-            duration_ms=10,
-            tool_call_count=0,
-            is_streaming=False,
-            finish_reason=None,
-            user_id=None,
-        )
+        mock_dal.record_usage_event(_make_state(stats=stats))
         payload = mock_dal.client.table.return_value.insert.call_args.args[0]
+        assert payload["cached_tokens"] is None
+
+    def test_handles_state_with_no_stats(self, mock_dal):
+        # state.stats is None when the request never reached a terminal
+        # event with cost data (aborted / pre-LLM error). The DAL must
+        # still write a row with zero/NULL token columns.
+        mock_dal.record_usage_event(_make_state(stats=None, status="aborted"))
+        payload = mock_dal.client.table.return_value.insert.call_args.args[0]
+        assert payload["status"] == "aborted"
+        assert payload["prompt_tokens"] == 0
+        assert payload["completion_tokens"] == 0
+        assert payload["total_tokens"] == 0
+        assert payload["total_cost"] == 0.0
         assert payload["cached_tokens"] is None
 
 

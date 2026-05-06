@@ -193,9 +193,11 @@ class UsageRecorderState:
 
     # ── Group 1: required identity / classification ─────────────────────
 
-    # SupabaseDal handle. The recorder calls dal.record_usage_event(...)
-    # on a daemon thread when the request finishes. Typed Any to avoid
-    # importing SupabaseDal at runtime (circular import via ChatRequest).
+    # SupabaseDal handle. The recorder calls dal.record_usage_event(state)
+    # on a daemon thread when the request finishes — passing this entire
+    # state object positionally; the DAL reads the fields it needs.
+    # Typed Any to avoid importing SupabaseDal at runtime (circular import
+    # via ChatRequest).
     dal: Any
 
     # Backend taxonomy of which call surface initiated this chat. Stable
@@ -343,30 +345,15 @@ class UsageRecorderState:
     # terminal event was ever observed.
     status: RequestStatus = RequestStatus.SUCCESS
 
-    def to_kwargs(self) -> Dict[str, Any]:
-        """Pack the state into the kwargs `SupabaseDal.record_usage_event` expects."""
-        return {
-            "request_type": self.request_type,
-            "request_source": self.request_source,
-            "source_ref": self.source_ref,
-            "conversation_id": self.conversation_id,
-            "conversation_source": self.conversation_source,
-            "status": self.status,
-            "model": self.model,
-            "provider": self.provider,
-            "is_robusta_model": self.is_robusta_model,
-            "stats": self.stats or RequestStats(),
-            "iterations": self.iterations,
-            "duration_ms": int((time.monotonic() - self.t_start) * 1000),
-            "tool_call_count": self.tool_call_count,
-            "is_streaming": self.is_streaming,
-            "is_internal": self.is_internal,
-            "finish_reason": self.finish_reason,
-            "user_id": self.user_id,
-            "cluster_id": self.cluster_id,
-            "request_id": self.request_id,
-            "meta": self.meta,
-        }
+    @property
+    def duration_ms(self) -> int:
+        """Wall-clock milliseconds since ``t_start``.
+
+        Computed on read so the value reflects "now minus when the request
+        started" at the moment the row is written. Used by
+        ``SupabaseDal.record_usage_event`` to populate the duration column.
+        """
+        return int((time.monotonic() - self.t_start) * 1000)
 
 
 def stream_with_usage_recording(
@@ -514,7 +501,7 @@ def _fire(state: UsageRecorderState) -> None:
     try:
         threading.Thread(
             target=state.dal.record_usage_event,
-            kwargs=state.to_kwargs(),
+            args=(state,),
             daemon=True,
             name="usage-recorder",
         ).start()

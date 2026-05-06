@@ -2,11 +2,19 @@
 
 The recorder is fire-and-forget — it spawns a daemon thread to write the row.
 For deterministic tests we patch threading.Thread so the target runs inline,
-which lets us assert against the exact kwargs passed to dal.record_usage_event.
+which lets us assert against the exact UsageRecorderState passed to
+dal.record_usage_event.
+
+Per Moshe's review on PR #1969, ``record_usage_event`` now takes the entire
+``UsageRecorderState`` positionally instead of ~20 individual kwargs (drops
+the old ``to_kwargs()`` indirection — the DAL is the single place that
+knows the column shape). Tests assert on
+``state.dal.record_usage_event.call_args.args[0]``, which is the live state
+object the recorder passed in.
 """
 
 from typing import List
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 
 import pytest
 
@@ -59,71 +67,84 @@ def _terminal_data(costs: dict, num_llm_calls: int = 1, finish_reason: str = "st
 
 
 def _patch_inline_thread(monkeypatch):
-    """Replace threading.Thread inside usage_recorder so target() runs inline."""
+    """Replace threading.Thread inside usage_recorder so target() runs inline.
+
+    _fire spawns the recorder thread with ``args=(state,)`` (positional
+    state arg, since the DAL takes a single state object now). Mirror that
+    exactly — pass through both args and kwargs to be tolerant of either.
+    """
     import holmes.core.usage_recorder as mod
 
     class _InlineThread:
-        def __init__(self, target=None, kwargs=None, daemon=None, name=None):
+        def __init__(self, target=None, args=None, kwargs=None, daemon=None, name=None):
             self._target = target
+            self._args = args or ()
             self._kwargs = kwargs or {}
 
         def start(self):
-            self._target(**self._kwargs)
+            self._target(*self._args, **self._kwargs)
 
     monkeypatch.setattr(mod.threading, "Thread", _InlineThread)
 
 
+def _state_arg(state: UsageRecorderState) -> UsageRecorderState:
+    """Pull the state object out of the recorded dal.record_usage_event call.
+
+    The recorder fires it positionally — args[0]. Centralized so test bodies
+    don't repeat the indexing ceremony.
+    """
+    return state.dal.record_usage_event.call_args.args[0]
+
+
 # ──────────────────────────────────────────────────────────────────
-# UsageRecorderState.to_kwargs
+# UsageRecorderState basics — direct attribute access + duration_ms property
+# (Replaces the old TestToKwargs class; to_kwargs() no longer exists.)
 # ──────────────────────────────────────────────────────────────────
 
 
-class TestToKwargs:
-    def test_packs_all_required_fields(self):
+class TestStateBasics:
+    def test_default_values_match_spec(self):
         state = _make_state()
-        kwargs = state.to_kwargs()
-
         # Identity
-        assert kwargs["request_type"] == "user_chat"
-        assert kwargs["request_source"] == "freeform"
-        assert kwargs["conversation_id"] == "conv-123"
-        assert kwargs["conversation_source"] == "chat_history"
-        assert kwargs["user_id"] == "user-abc"
-        assert "request_id" in kwargs and kwargs["request_id"]
+        assert state.request_type == "user_chat"
+        assert state.request_source == "freeform"
+        assert state.conversation_id == "conv-123"
+        assert state.conversation_source == "chat_history"
+        assert state.user_id == "user-abc"
+        assert state.request_id  # auto-generated UUID
 
         # Classification
-        assert kwargs["model"] == "openai/gpt-4"
-        assert kwargs["provider"] == "openai"
-        assert kwargs["is_robusta_model"] is False
-        assert kwargs["is_streaming"] is True
+        assert state.model == "openai/gpt-4"
+        assert state.provider == "openai"
+        assert state.is_robusta_model is False
+        assert state.is_streaming is True
 
-        # Mutable defaults
-        assert kwargs["status"] == "success"
-        assert kwargs["iterations"] == 0
-        assert kwargs["tool_call_count"] == 0
-        assert kwargs["finish_reason"] is None
-        assert kwargs["meta"] == {}
+        # Mutable defaults — these get filled by the wrapper at runtime
+        assert state.status == "success"  # RequestStatus.SUCCESS == "success"
+        assert state.iterations == 0
+        assert state.tool_call_count == 0
+        assert state.finish_reason is None
+        assert state.meta == {}
+        assert state.stats is None  # not pre-populated
 
-        # Stats default to an empty RequestStats, not None
-        assert kwargs["stats"] is not None
-        assert kwargs["stats"].total_tokens == 0
-        assert kwargs["stats"].total_cost == 0.0
-
-    def test_duration_ms_is_computed_from_t_start(self):
+    def test_duration_ms_property_grows_with_time(self):
         state = _make_state()
         # Force t_start to be in the past so duration_ms > 0
         state.t_start -= 1.0
-        kwargs = state.to_kwargs()
-        assert kwargs["duration_ms"] >= 1000
+        assert state.duration_ms >= 1000
+
+    def test_duration_ms_is_an_int(self):
+        # The DB column is `int`; the property must always return an int.
+        state = _make_state()
+        assert isinstance(state.duration_ms, int)
 
     def test_is_internal_defaults_to_false(self):
         state = _make_state()
         assert state.is_internal is False
-        assert state.to_kwargs()["is_internal"] is False
 
-    def test_is_internal_true_round_trips(self):
+    def test_is_internal_round_trips(self):
         state = _make_state(is_internal=True)
-        assert state.to_kwargs()["is_internal"] is True
+        assert state.is_internal is True
 
 
 # ──────────────────────────────────────────────────────────────────
@@ -151,13 +172,13 @@ class TestStreamWithUsageRecording:
 
         assert len(consumed) == 4
         state.dal.record_usage_event.assert_called_once()
-        kw = state.dal.record_usage_event.call_args.kwargs
-        assert kw["status"] == "success"
-        assert kw["tool_call_count"] == 2
-        assert kw["iterations"] == 3
-        assert kw["finish_reason"] == "stop"
-        assert kw["stats"].prompt_tokens == 100
-        assert kw["stats"].total_tokens == 150
+        s = _state_arg(state)
+        assert s.status == "success"
+        assert s.tool_call_count == 2
+        assert s.iterations == 3
+        assert s.finish_reason == "stop"
+        assert s.stats.prompt_tokens == 100
+        assert s.stats.total_tokens == 150
 
     def test_error_event_marks_status_error(self, monkeypatch):
         _patch_inline_thread(monkeypatch)
@@ -169,9 +190,9 @@ class TestStreamWithUsageRecording:
         ]
         list(stream_with_usage_recording(_stream(*events), state))
 
-        kw = state.dal.record_usage_event.call_args.kwargs
-        assert kw["status"] == "error"
-        assert kw["tool_call_count"] == 1
+        s = _state_arg(state)
+        assert s.status == "error"
+        assert s.tool_call_count == 1
 
     def test_approval_required_marks_status_approval_required(self, monkeypatch):
         _patch_inline_thread(monkeypatch)
@@ -180,7 +201,7 @@ class TestStreamWithUsageRecording:
             _stream(StreamMessage(event=StreamEvents.APPROVAL_REQUIRED, data={"metadata": {}})),
             state,
         ))
-        assert state.dal.record_usage_event.call_args.kwargs["status"] == "approval_required"
+        assert _state_arg(state).status == "approval_required"
 
     def test_exception_in_inner_stream_still_fires_recorder_with_error_status(self, monkeypatch):
         _patch_inline_thread(monkeypatch)
@@ -195,9 +216,10 @@ class TestStreamWithUsageRecording:
 
         # Recorder still fires from the finally
         state.dal.record_usage_event.assert_called_once()
-        assert state.dal.record_usage_event.call_args.kwargs["status"] == "error"
+        s = _state_arg(state)
+        assert s.status == "error"
         # And the tool we saw before the exception was counted
-        assert state.dal.record_usage_event.call_args.kwargs["tool_call_count"] == 1
+        assert s.tool_call_count == 1
 
     def test_stream_without_terminal_event_still_records_as_aborted(self, monkeypatch):
         _patch_inline_thread(monkeypatch)
@@ -212,7 +234,7 @@ class TestStreamWithUsageRecording:
         # finally block still fired, but status downgraded from default
         # "success" to "aborted" because no terminal event was seen.
         state.dal.record_usage_event.assert_called_once()
-        assert state.dal.record_usage_event.call_args.kwargs["status"] == "aborted"
+        assert _state_arg(state).status == "aborted"
 
     def test_terminal_event_keeps_its_explicit_status(self, monkeypatch):
         """Sanity: the abort downgrade only applies when no terminal was seen."""
@@ -227,7 +249,7 @@ class TestStreamWithUsageRecording:
             state,
         ))
 
-        assert state.dal.record_usage_event.call_args.kwargs["status"] == "success"
+        assert _state_arg(state).status == "success"
 
     def test_request_id_injected_into_answer_end_metadata(self, monkeypatch):
         """The FE needs request_id from ai_answer_end so it can post feedback later."""
@@ -320,13 +342,13 @@ class TestRecordFromLlmResult:
 
         record_from_llm_result(state, fake_result)
 
-        kw = state.dal.record_usage_event.call_args.kwargs
-        assert kw["status"] == "success"
-        assert kw["iterations"] == 4
-        assert kw["tool_call_count"] == 3
-        assert kw["finish_reason"] == "stop"
-        assert kw["stats"].total_tokens == 250
-        assert kw["stats"].total_cost == 0.005
+        s = _state_arg(state)
+        assert s.status == "success"
+        assert s.iterations == 4
+        assert s.tool_call_count == 3
+        assert s.finish_reason == "stop"
+        assert s.stats.total_tokens == 250
+        assert s.stats.total_cost == 0.005
 
     def test_handles_missing_attrs_gracefully(self, monkeypatch):
         _patch_inline_thread(monkeypatch)
@@ -341,10 +363,10 @@ class TestRecordFromLlmResult:
 
         record_from_llm_result(state, bare)
 
-        kw = state.dal.record_usage_event.call_args.kwargs
+        s = _state_arg(state)
         # iterations falls back to 1 when num_llm_calls is None
-        assert kw["iterations"] == 1
-        assert kw["tool_call_count"] == 0
+        assert s.iterations == 1
+        assert s.tool_call_count == 0
 
 
 # ──────────────────────────────────────────────────────────────────
@@ -357,15 +379,13 @@ class TestRecordError:
         _patch_inline_thread(monkeypatch)
         state = _make_state()
         record_error(state, RuntimeError("rate limit exceeded for model"))
-        kw = state.dal.record_usage_event.call_args.kwargs
-        assert kw["status"] == "rate_limited"
+        assert _state_arg(state).status == "rate_limited"
 
     def test_marks_error_for_other_exceptions(self, monkeypatch):
         _patch_inline_thread(monkeypatch)
         state = _make_state()
         record_error(state, ValueError("invalid model"))
-        kw = state.dal.record_usage_event.call_args.kwargs
-        assert kw["status"] == "error"
+        assert _state_arg(state).status == "error"
 
 
 # ──────────────────────────────────────────────────────────────────
@@ -400,7 +420,9 @@ class TestFireAndForgetThreadMode:
 
         called = threading.Event()
 
-        def slow_record(**kwargs):
+        # Real thread → state arrives positionally (one arg). Match the
+        # production call signature.
+        def slow_record(state):
             time.sleep(0.05)
             called.set()
 
