@@ -70,7 +70,6 @@ CONVERSATIONS_TABLE = "Conversations"
 CONVERSATION_EVENTS_TABLE = "ConversationEvents"
 OAUTH_TOKENS_TABLE = "OAuthTokens"
 HOLMES_USAGE_EVENTS_TABLE = "HolmesUsageEvents"
-HOLMES_USAGE_EVENT_CALLS_TABLE = "HolmesUsageEventCalls"
 
 ENRICHMENT_BLACKLIST = ["text_file", "graph", "ai_analysis", "holmes"]
 ENRICHMENT_BLACKLIST_SET = set(ENRICHMENT_BLACKLIST)

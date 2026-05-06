@@ -16,6 +16,7 @@ import threading
 import time
 import uuid
 from dataclasses import dataclass, field
+from enum import Enum
 from typing import TYPE_CHECKING, Any, Dict, Generator, Optional
 
 from holmes.core.llm_usage import RequestStats
@@ -146,6 +147,24 @@ def build_chat_recorder_state(
         is_robusta_model=getattr(request_ai.llm, "is_robusta_model", False),
         meta=merged_meta,
     )
+
+
+class RequestStatus(str, Enum):
+    """Final outcome of a request, written to HolmesUsageEvents.status.
+
+    Subclassing both ``str`` and ``Enum`` keeps the values transparent to
+    JSON serializers (supabase-py sends them as plain strings) and
+    backwards-compatible with anything that compares against the old
+    string literals. Add a new variant here whenever the recorder needs
+    to surface a new outcome — the DB column is plain ``text`` so no
+    migration is required to widen the set.
+    """
+
+    SUCCESS = "success"  # terminal ANSWER_END event seen
+    APPROVAL_REQUIRED = "approval_required"  # terminal APPROVAL_REQUIRED seen
+    ERROR = "error"  # terminal ERROR event or unhandled exception
+    RATE_LIMITED = "rate_limited"  # provider rate-limit detected by record_error
+    ABORTED = "aborted"  # stream ended without any terminal event
 
 
 @dataclass
@@ -318,16 +337,11 @@ class UsageRecorderState:
     finish_reason: Optional[str] = None
 
     # Final outcome of the request. Filled by the wrapper or the
-    # record_error helper:
-    #   'success'           — terminal ANSWER_END event seen
-    #   'approval_required' — terminal APPROVAL_REQUIRED event seen
-    #   'error'             — terminal ERROR event or exception
-    #   'rate_limited'      — record_error detected a rate-limit message
-    #   'aborted'           — stream ended without any terminal event
-    #                         (client disconnect / generator exhaustion)
-    # Default 'success' is overwritten by the wrapper's finally-block
-    # to 'aborted' if no terminal event was ever observed.
-    status: str = "success"
+    # record_error helper. See ``RequestStatus`` above for the full
+    # set of values and their meanings. The default ``SUCCESS`` is
+    # overwritten by the wrapper's finally-block to ``ABORTED`` if no
+    # terminal event was ever observed.
+    status: RequestStatus = RequestStatus.SUCCESS
 
     def to_kwargs(self) -> Dict[str, Any]:
         """Pack the state into the kwargs `SupabaseDal.record_usage_event` expects."""
@@ -381,31 +395,31 @@ def stream_with_usage_recording(
             elif msg.event == StreamEvents.ANSWER_END:
                 _capture_terminal(state, msg.data)
                 _inject_request_id(msg.data, state.request_id)
-                state.status = "success"
+                state.status = RequestStatus.SUCCESS
                 saw_terminal = True
             elif msg.event == StreamEvents.APPROVAL_REQUIRED:
                 _capture_terminal(state, msg.data)
                 _inject_request_id(msg.data, state.request_id)
-                state.status = "approval_required"
+                state.status = RequestStatus.APPROVAL_REQUIRED
                 saw_terminal = True
             elif msg.event == StreamEvents.ERROR:
                 _capture_terminal(state, msg.data)
                 _inject_request_id(msg.data, state.request_id)
-                state.status = "error"
+                state.status = RequestStatus.ERROR
                 saw_terminal = True
             yield msg
     except Exception:
         if not saw_terminal:
-            state.status = "error"
+            state.status = RequestStatus.ERROR
         raise
     finally:
         # If the inner stream ended without yielding any terminal event
         # (client disconnected mid-stream, generator exhausted abnormally),
-        # `state.status` would still be the constructor default "success".
-        # That's wrong — mark such cases as "aborted" so dashboards can
+        # `state.status` would still be the constructor default SUCCESS.
+        # That's wrong — mark such cases as ABORTED so dashboards can
         # filter incomplete runs out of "successful chat" metrics.
-        if not saw_terminal and state.status == "success":
-            state.status = "aborted"
+        if not saw_terminal and state.status == RequestStatus.SUCCESS:
+            state.status = RequestStatus.ABORTED
         _fire(state)
 
 
@@ -479,7 +493,7 @@ def record_from_llm_result(
     state.iterations = getattr(llm_result, "num_llm_calls", None) or 1
     state.tool_call_count = len(getattr(llm_result, "tool_calls", None) or [])
     state.finish_reason = getattr(llm_result, "finish_reason", None)
-    state.status = "success"
+    state.status = RequestStatus.SUCCESS
     _fire(state)
 
 
@@ -487,9 +501,9 @@ def record_error(state: UsageRecorderState, exc: Exception) -> None:
     """Record a failed call where an exception bubbled before getting a result."""
     msg = str(exc).lower()
     if "rate" in msg and "limit" in msg:
-        state.status = "rate_limited"
+        state.status = RequestStatus.RATE_LIMITED
     else:
-        state.status = "error"
+        state.status = RequestStatus.ERROR
     _fire(state)
 
 
@@ -510,6 +524,7 @@ def _fire(state: UsageRecorderState) -> None:
 
 
 __all__ = [
+    "RequestStatus",
     "UsageRecorderState",
     "build_chat_recorder_state",
     "detect_slack_origin",
