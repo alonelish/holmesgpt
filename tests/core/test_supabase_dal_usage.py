@@ -1,8 +1,13 @@
-"""Unit tests for SupabaseDal.record_usage_event and SupabaseDal.record_feedback.
+"""Unit tests for SupabaseDal.record_usage_event.
 
-These methods are best-effort: they swallow Supabase errors so the response
-path can never be broken by a telemetry write. The tests verify both the
-happy path (correct payload sent to .insert / .update) and the failure path
+Feedback writes are not handled by Holmes (the FE calls the
+public.record_feedback() Postgres RPC directly via supabase.rpc), so there
+are no Holmes-side feedback unit tests here — coverage lives in the
+migration's integration verification.
+
+record_usage_event is best-effort: it swallows Supabase errors so the
+response path can never be broken by a telemetry write. The tests verify
+both the happy path (correct payload sent to .insert) and the failure path
 (exceptions are absorbed).
 """
 
@@ -262,82 +267,8 @@ class TestRecordUsageEvent:
         assert payload["cached_tokens"] is None
 
 
-# ──────────────────────────────────────────────────────────────────
-# record_feedback
-# ──────────────────────────────────────────────────────────────────
-
-
-class TestRecordFeedback:
-    def test_no_op_when_dal_disabled(self, mock_dal):
-        mock_dal.enabled = False
-        mock_dal.record_feedback(
-            request_id="r-1",
-            sentiment="thumbs_up",
-            category=None,
-            comment=None,
-            user_id=None,
-        )
-        mock_dal.client.table.assert_not_called()
-
-    def test_invalid_sentiment_logs_and_returns(self, mock_dal):
-        # Should not raise, should not call .update.
-        mock_dal.record_feedback(
-            request_id="r-1",
-            sentiment="meh",  # not allowed
-            category=None,
-            comment=None,
-            user_id=None,
-        )
-        mock_dal.client.table.assert_not_called()
-
-    def test_updates_correct_columns_with_account_and_request_id_filter(self, mock_dal):
-        mock_dal.record_feedback(
-            request_id="req-uuid-123",
-            sentiment="thumbs_down",
-            category="wrong_answer",
-            comment="missed the OOM",
-            user_id="user-xyz",
-        )
-
-        # Chain: client.table(...).update({...}).eq("account_id", ...).eq("request_id", ...).execute()
-        mock_dal.client.table.assert_called_once_with(HOLMES_USAGE_EVENTS_TABLE)
-        update_mock = mock_dal.client.table.return_value.update
-        update_mock.assert_called_once()
-        update_payload = update_mock.call_args.args[0]
-        assert update_payload["feedback_sentiment"] == "thumbs_down"
-        assert update_payload["feedback_category"] == "wrong_answer"
-        assert update_payload["feedback_comment"] == "missed the OOM"
-        # feedback_at must be a UTC ISO timestamp — without an explicit
-        # timezone, Postgres timestamptz interprets the value relative to
-        # the *server*'s local time which differs from the Holmes pod's,
-        # producing shifted timestamps. Assert a UTC offset is present.
-        feedback_at = update_payload["feedback_at"]
-        assert isinstance(feedback_at, str)
-        # Python's datetime.isoformat() with timezone.utc produces
-        # '2026-01-02T03:04:05.678+00:00' — accept either '+00:00' or 'Z'.
-        assert feedback_at.endswith("+00:00") or feedback_at.endswith("Z"), (
-            f"feedback_at must include a UTC offset, got {feedback_at!r}"
-        )
-
-        # Account-scoped + request_id WHERE clauses
-        eq_calls = update_mock.return_value.eq.call_args_list
-        # First .eq is account_id, second is request_id (chained on the return value)
-        assert eq_calls[0].args == ("account_id", mock_dal.account_id)
-        # The second .eq is on the result of the first, but with our MagicMock chain
-        # it's also captured here. In any case, both account_id and request_id
-        # must be in the predicate chain.
-        first_eq_return = update_mock.return_value.eq.return_value
-        first_eq_return.eq.assert_called_with("request_id", "req-uuid-123")
-
-    def test_swallows_supabase_errors(self, mock_dal):
-        mock_dal.client.table.return_value.update.return_value.eq.return_value.eq.return_value.execute.side_effect = (
-            RuntimeError("update failed")
-        )
-        # Should not raise.
-        mock_dal.record_feedback(
-            request_id="r-1",
-            sentiment="thumbs_up",
-            category=None,
-            comment=None,
-            user_id=None,
-        )
+# Feedback writes are no longer Holmes' responsibility — the FE calls the
+# public.record_feedback() Postgres function directly via supabase.rpc(...).
+# That function lives in the migration script and is verified against a real
+# Postgres in the integration suite. There is no Holmes-side code path to
+# unit-test here.

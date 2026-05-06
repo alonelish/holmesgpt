@@ -27,8 +27,6 @@ import uvicorn
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import JSONResponse, StreamingResponse
 from litellm.exceptions import AuthenticationError
-from pydantic import BaseModel
-
 from holmes import get_version, is_official_release
 from holmes.common.env_vars import (
     DEVELOPMENT_MODE,
@@ -595,8 +593,8 @@ def chat(chat_request: ChatRequest, http_request: Request):
                 else:
                     logging.info(f"Completed {req_info}")
                 # Surface request_id in the response metadata so the FE has a
-                # handle for POST /api/feedback later. Streaming path does the
-                # same via _inject_request_id in the stream wrapper.
+                # handle for the public.record_feedback() RPC later. Streaming
+                # path does the same via _inject_request_id in the stream wrapper.
                 response_metadata = dict(llm_call.metadata or {})
                 response_metadata["request_id"] = recorder_state.request_id
                 response = ChatResponse(
@@ -627,38 +625,6 @@ def chat(chat_request: ChatRequest, http_request: Request):
     except Exception as e:
         logging.error(f"Error in /api/chat: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
-
-
-class FeedbackRequest(BaseModel):
-    """Body for POST /api/feedback. Defined inline to avoid bloating models.py
-    with an endpoint-specific schema."""
-    request_id: str
-    sentiment: str  # 'thumbs_up' | 'thumbs_down'
-    category: Optional[str] = None
-    comment: Optional[str] = None
-
-
-@app.post("/api/feedback")
-def feedback(req: FeedbackRequest, http_request: Request) -> dict:
-    """Record user feedback (thumbs up/down + optional category/comment) on
-    a previously-completed chat call. Looks up the row by request_id and
-    UPDATEs feedback_* columns. Best-effort: returns 200 even if the row
-    isn't found yet (rare network reorder)."""
-    if req.sentiment not in ("thumbs_up", "thumbs_down"):
-        raise HTTPException(status_code=400, detail="invalid sentiment")
-    # user_id is optional — when supplied via query param (mirrors /api/chat's
-    # resolution path), the DAL adds it as defense-in-depth on the UPDATE.
-    # When absent, account_id RLS + (account_id, request_id) WHERE is enough
-    # to prevent cross-account writes.
-    user_id: Optional[str] = http_request.query_params.get("user_id")
-    dal.record_feedback(
-        request_id=req.request_id,
-        sentiment=req.sentiment,
-        category=req.category,
-        comment=req.comment,
-        user_id=user_id,
-    )
-    return {"ok": True}
 
 
 scheduled_prompts_executor = ScheduledPromptsExecutor(

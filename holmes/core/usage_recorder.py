@@ -225,8 +225,9 @@ def stream_with_usage_recording(
 
     Also injects ``state.request_id`` into the terminal event's
     ``metadata`` dict so the SSE formatter ships it back to the FE. The
-    FE saves it from ``ai_answer_end`` and posts it back to
-    ``POST /api/feedback`` when the user clicks thumbs up/down.
+    FE saves it from ``ai_answer_end`` and passes it to the
+    ``public.record_feedback()`` Supabase RPC when the user clicks
+    thumbs up/down.
     """
     saw_terminal = False
     try:

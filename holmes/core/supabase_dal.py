@@ -5,7 +5,7 @@ import json
 import logging
 import os
 import threading
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta
 from enum import Enum
 from typing import Dict, List, Optional, Tuple
 from uuid import uuid4
@@ -892,65 +892,12 @@ class SupabaseDal:
         except Exception:
             logging.exception("Failed to record usage event")
 
-    def record_feedback(
-        self,
-        *,
-        request_id: str,
-        sentiment: str,
-        category: Optional[str],
-        comment: Optional[str],
-        user_id: Optional[str],
-    ) -> None:
-        """Update the feedback_* columns on a HolmesUsageEvents row.
-
-        Best-effort. The UPDATE is account-scoped via WHERE so RLS and an
-        explicit predicate both prevent cross-account writes if request_id
-        ever collides.
-
-        ``user_id`` is optional. When provided, the UPDATE is additionally
-        scoped by ``.eq("user_id", user_id)`` as defense in depth — even
-        though v1's auth model assumes rater == asker (so events.user_id
-        already matches the user posting the thumb), the extra predicate
-        prevents cross-user overwrites if a request_id ever leaks. When
-        omitted, no user filter is applied, leaving room for future
-        system / scheduled flows that might emit feedback without a
-        specific human user.
-        """
-        if not self.enabled:
-            return
-        if sentiment not in ("thumbs_up", "thumbs_down"):
-            logging.warning(
-                "record_feedback: ignoring invalid sentiment %r", sentiment
-            )
-            return
-        try:
-            # Defense in depth: when user_id is provided, scope the UPDATE so
-            # one user can't overwrite another user's feedback within the same
-            # account if a request_id ever leaks. v1's auth model assumes
-            # rater == asker, so the user_id sent on POST /api/feedback
-            # matches HolmesUsageEvents.user_id for normal flows. Skip the
-            # filter when user_id is None (e.g. system / scheduled flows that
-            # might emit feedback in the future) to avoid breaking those.
-            query = self.client.table(HOLMES_USAGE_EVENTS_TABLE).update(
-                {
-                    "feedback_sentiment": sentiment,
-                    "feedback_category": category,
-                    "feedback_comment": comment,
-                    # Use UTC explicitly. datetime.now() (no tz) returns the
-                    # Holmes pod's local time and produces a naive ISO string;
-                    # Postgres timestamptz then interprets it relative to the
-                    # *server*'s timezone, which differs from the pod's. Both
-                    # cases produce shifted timestamps. Always pass an aware
-                    # UTC datetime so the column stores the actual feedback
-                    # moment regardless of pod / DB timezone settings.
-                    "feedback_at": datetime.now(timezone.utc).isoformat(),
-                }
-            ).eq("account_id", self.account_id).eq("request_id", request_id)
-            if user_id:
-                query = query.eq("user_id", user_id)
-            query.execute()
-        except Exception:
-            logging.exception("Failed to record feedback")
+    # NOTE: feedback writes (thumbs up/down + category + comment) do NOT go
+    # through Holmes. The frontend calls the public.record_feedback() Postgres
+    # function directly via supabase.rpc('record_feedback', ...). The function
+    # runs `security invoker` and scopes by `auth.uid()`, which is a stricter
+    # user-scoping than any FE-supplied user_id we could pass through here.
+    # See plan section G and the migration script for the function body.
 
     def has_scheduled_prompt_definitions(self) -> bool:
         """
