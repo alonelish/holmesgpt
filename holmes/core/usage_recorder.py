@@ -152,37 +152,181 @@ def build_chat_recorder_state(
 class UsageRecorderState:
     """All the data needed to write one HolmesUsageEvents row.
 
-    Identity / classification fields are set by the entry point at
-    construction time. Mutable runtime fields (`stats`, `iterations`,
-    `tool_call_count`, `finish_reason`, `status`) are filled by the
-    stream wrapper or by `record_from_llm_result` before firing.
+    Fields fall into three groups:
+
+    1. **Required identity / classification** — set at construction time
+       by the entry point (server.chat, the worker, AG-UI, scheduled
+       prompts, health checks). The recorder cannot run without these.
+
+    2. **Optional identity / classification** — also set at construction.
+       NULL/default values are written through to the DB column as-is.
+
+    3. **Mutable runtime fields** — left at their defaults at construction
+       and filled in by ``stream_with_usage_recording`` (streaming path)
+       or ``record_from_llm_result`` / ``record_error`` (non-streaming
+       path) just before the row is fired. Don't set these on the entry
+       point side; they get clobbered.
+
+    For each field below: the comment lists where the value comes from,
+    what it means, and what gets written if the field is left at its
+    default.
     """
 
-    # required identity / classification — set by the entry point
-    dal: Any  # SupabaseDal; typed Any to avoid circular import at runtime
+    # ── Group 1: required identity / classification ─────────────────────
+
+    # SupabaseDal handle. The recorder calls dal.record_usage_event(...)
+    # on a daemon thread when the request finishes. Typed Any to avoid
+    # importing SupabaseDal at runtime (circular import via ChatRequest).
+    dal: Any
+
+    # Backend taxonomy of which call surface initiated this chat. Stable
+    # values dashboards group by:
+    #   'user_chat'         — direct POST /api/chat (default)
+    #   'slack_chat'        — auto-detected from the runner's Slack prefix
+    #                         in chat_request.ask, OR set explicitly by a
+    #                         future runner-side change
+    #   'agui_chat'         — set by the AG-UI handler
+    #   'scheduled_prompt'  — set by ScheduledPromptsExecutor
+    #   'health_check'      — set by /api/checks/execute
     request_type: str
+
+    # LLM model string after Holmes' model routing. Whatever litellm
+    # accepts: 'anthropic/claude-sonnet-4-5', 'openai/gpt-4o', etc.
+    # Sourced from request_ai.llm.model in build_chat_recorder_state.
     model: str
+
+    # Canonical litellm provider derived from `model`. Use the helper
+    # `resolve_provider(model)`. Examples: 'anthropic', 'openai', 'azure',
+    # 'bedrock'. Falls back to 'unknown' if litellm can't classify.
     provider: str
+
+    # True when the LLM call hit a Robusta-managed model (Robusta paid
+    # the token bill). Read from request_ai.llm.is_robusta_model. SaaS
+    # dashboards filter on this column to hide cost / show only input
+    # tokens for managed-model rows.
     is_robusta_model: bool
 
-    # optional identity / classification
+    # ── Group 2: optional identity / classification ─────────────────────
+
+    # FE/runner-supplied finer UI flow label. Free-form text — adding new
+    # values doesn't need a Holmes migration. Examples:
+    #   'freeform'              — user typed a question in the FE
+    #   'alert_investigation'   — chat opened from an alert
+    #   'followup_logs'         — user clicked a follow-up action button
+    #   'resource_chat'         — chat opened from a Kubernetes resource
+    #   'slack' / 'teams'       — auto-detected for messaging-platform
+    #                             chats; runner can override with finer
+    #                             values like 'slack_alert_investigation'
+    #   'scheduler' / 'operator' — set by scheduled-prompt / health-check
     request_source: Optional[str] = None
+
+    # Opaque pointer to the entity the chat is *about*. Meaning is
+    # implied by `request_source`. Examples:
+    #   request_source='alert_investigation' → source_ref=<issue id>
+    #   request_source='resource_chat'       → source_ref=<deployment id>
+    #   request_source='operator' (checks)   → source_ref=<check name>
+    # Free-form text; not a foreign key — the table this points to varies.
     source_ref: Optional[str] = None
+
+    # Stable id grouping multi-turn chats so dashboards can show per-
+    # conversation cost / token totals. Soft reference (NOT a FK).
+    # Either matches Conversations.conversation_id (worker path) or the
+    # FE-owned ChatHistory id (legacy /api/chat path); the discriminator
+    # below tells dashboards which table to LEFT JOIN. NULL for single-
+    # turn / non-UI flows (CLI, scheduled prompts, health checks).
     conversation_id: Optional[str] = None
+
+    # Discriminator telling dashboards which table `conversation_id`
+    # targets when it's non-NULL:
+    #   'conversations' — worker path (set explicitly by the worker)
+    #   'chat_history'  — direct /api/chat path (defaulted by chat() when
+    #                     conversation_id is set and no override given)
+    #   None            — no conversation context
     conversation_source: Optional[str] = None
+
+    # UUID of the human who started the chat. Sourced from the auth-
+    # validated session token (server.chat) or the Conversations row
+    # (worker fallback). NULL for system / scheduled flows where there
+    # is no human user. Used for per-user analytics and (today) by the
+    # feedback RPC's auth.uid() check.
     user_id: Optional[str] = None
+
+    # Holmes' cluster id (env-var string, e.g. 'production-east'). Falls
+    # back to dal.cluster inside record_usage_event when left at None
+    # here. NULL for CLI / ad-hoc flows that have no cluster context.
     cluster_id: Optional[str] = None
+
+    # Per-request UUID. Auto-generated; you don't set this manually. The
+    # stream wrapper injects it into the terminal event's `metadata` so
+    # the FE can read it from `ai_answer_end` and pass it to the
+    # `record_feedback` Supabase RPC later when the user clicks 👍/👎.
     request_id: str = field(default_factory=lambda: str(uuid.uuid4()))
+
+    # True for streaming responses (SSE), False for non-streaming. The
+    # worker is always streaming; /api/chat respects chat_request.stream;
+    # health checks are always non-streaming. Set by the entry point.
     is_streaming: bool = False
+
+    # Marks server-internal calls (title generation, classifier prompts,
+    # summarization, etc.) so user-facing dashboards can filter them out
+    # of activity / cost metrics. Defaults False; set True at the entry
+    # point for those flows. build_chat_recorder_state also auto-sets
+    # True when request_source starts with 'internal_' (legacy convention).
     is_internal: bool = False
+
+    # Forward-compatibility metadata bag. JSONB-serializable dict that
+    # gets shallow-merged with backend-derived keys (backend wins on
+    # collision) and stored as-is in the row's `meta` column.
+    # Conventions:
+    #   - Slack auto-detect populates meta['slack'] with slack_user_id /
+    #     slack_triggered_at when the regex matches.
+    #   - FE can add provisional fields (experiment_id, etc.) that
+    #     haven't earned a real column yet.
+    #   - Don't put PII or large strings (prompts, completions, tool
+    #     output) here — that's out of scope for v1.
     meta: Dict[str, Any] = field(default_factory=dict)
 
-    # mutable — filled during the call by the wrapper or recorder
+    # ── Group 3: mutable runtime fields — DO NOT set at construction ────
+
+    # Wall-clock start of the request (time.monotonic seconds). Used to
+    # compute `duration_ms` when the row is written. Defaults to
+    # construction time, which is when the entry point starts the work.
     t_start: float = field(default_factory=time.monotonic)
+
+    # Aggregate token / cost counters. Filled by `stream_with_usage_recording`
+    # from the ANSWER_END event's `metadata.costs`, or by
+    # `record_from_llm_result` from the LLMResult's RequestStats fields.
+    # None means the request didn't reach a terminal event with stats —
+    # the recorder still writes a zero-stats row with status='aborted'/'error'.
     stats: Optional[RequestStats] = None
+
+    # Number of LLM round-trips in this request (1 for a simple chat, N
+    # for an agentic loop with N-1 tool turns). Filled by the wrapper
+    # from the terminal event's `num_llm_calls`. 0 means no LLM call
+    # completed (aborted / errored before the first response).
     iterations: int = 0
+
+    # Number of TOOL_RESULT events the wrapper saw flow past during the
+    # stream. Filled by the wrapper. The non-streaming path
+    # (record_from_llm_result) instead reads len(llm_result.tool_calls).
     tool_call_count: int = 0
+
+    # Last LLM iteration's finish reason: 'stop', 'length', 'tool_calls',
+    # 'content_filter', etc. Filled by the wrapper from the terminal
+    # event's `metadata.finish_reason`. Earlier iterations always end in
+    # 'tool_calls'; only the final iteration carries a meaningful value.
     finish_reason: Optional[str] = None
+
+    # Final outcome of the request. Filled by the wrapper or the
+    # record_error helper:
+    #   'success'           — terminal ANSWER_END event seen
+    #   'approval_required' — terminal APPROVAL_REQUIRED event seen
+    #   'error'             — terminal ERROR event or exception
+    #   'rate_limited'      — record_error detected a rate-limit message
+    #   'aborted'           — stream ended without any terminal event
+    #                         (client disconnect / generator exhaustion)
+    # Default 'success' is overwritten by the wrapper's finally-block
+    # to 'aborted' if no terminal event was ever observed.
     status: str = "success"
 
     def to_kwargs(self) -> Dict[str, Any]:
