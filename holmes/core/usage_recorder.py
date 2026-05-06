@@ -455,24 +455,14 @@ def record_from_llm_result(
     model_dump.
     """
     try:
-        # LLMResult inherits from RequestStats, so dump the stats fields out.
-        stats_fields = {
-            k: v
-            for k, v in llm_result.model_dump().items()
-            if k
-            in {
-                "total_cost",
-                "total_tokens",
-                "prompt_tokens",
-                "completion_tokens",
-                "cached_tokens",
-                "reasoning_tokens",
-                "max_completion_tokens_per_call",
-                "max_prompt_tokens_per_call",
-                "num_compactions",
-            }
-        }
-        state.stats = RequestStats(**stats_fields)
+        # LLMResult inherits from RequestStats and adds extra fields
+        # (tool_calls, messages, finish_reason, ...). Ask Pydantic to filter
+        # the dump down to RequestStats's own model_fields so the extras get
+        # dropped without us hardcoding the stats field set here — when
+        # RequestStats grows a new column, this stays correct automatically.
+        state.stats = RequestStats(
+            **llm_result.model_dump(include=set(RequestStats.model_fields))
+        )
     except Exception:
         logging.debug("Failed to extract stats from LLMResult", exc_info=True)
         state.stats = RequestStats()
