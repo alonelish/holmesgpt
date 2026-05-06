@@ -830,7 +830,7 @@ class SupabaseDal:
     def record_usage_event(self, state: "UsageRecorderState") -> None:
         """Record one HolmesUsageEvents row. Best-effort: swallows DB errors.
 
-        Called from holmes.core.usage_recorder._fire on a daemon thread, so
+        Called from UsageRecorderState._fire on a daemon thread, so
         errors here only affect the telemetry row, never the request
         response. Takes a ``UsageRecorderState`` and reads only the fields
         that map to columns — this is the single place that knows the

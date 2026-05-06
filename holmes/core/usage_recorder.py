@@ -355,6 +355,49 @@ class UsageRecorderState:
         """
         return int((time.monotonic() - self.t_start) * 1000)
 
+    # ── private helpers — kept on the class because they only operate on
+    # this state. The public entry points (stream_with_usage_recording,
+    # record_from_llm_result, record_error) stay as module-level functions
+    # — the stream wrapper in particular has the stream as its primary
+    # input, so a "method on state" shape would invert its natural reading.
+
+    def _capture_terminal(self, data: Dict[str, Any]) -> None:
+        """Pull cost/iterations/finish_reason from a terminal event's data."""
+        metadata = data.get("metadata") or {}
+        costs = metadata.get("costs") or {}
+        if costs:
+            try:
+                self.stats = RequestStats(**costs)
+            except Exception:
+                logging.debug(
+                    "Failed to materialize RequestStats from terminal event costs",
+                    exc_info=True,
+                )
+        # Explicit None-check rather than `or` so a legitimate 0 (unlikely
+        # but not impossible) is preserved instead of falling back to
+        # self.iterations.
+        raw_iterations = data.get("num_llm_calls")
+        if raw_iterations is not None:
+            self.iterations = raw_iterations
+        self.finish_reason = (
+            metadata.get("finish_reason") or self.finish_reason
+        )
+
+    def _fire(self) -> None:
+        """Background-thread the dal write so the response path never blocks."""
+        if self.dal is None or not getattr(self.dal, "enabled", False):
+            return
+        try:
+            threading.Thread(
+                target=self.dal.record_usage_event,
+                args=(self,),
+                daemon=True,
+                name="usage-recorder",
+            ).start()
+        except Exception:
+            # Defense in depth — record_usage_event has its own try/except too.
+            logging.exception("Failed to spawn usage recorder thread")
+
 
 def stream_with_usage_recording(
     stream: Generator[StreamMessage, None, None],
@@ -380,17 +423,17 @@ def stream_with_usage_recording(
             if msg.event == StreamEvents.TOOL_RESULT:
                 state.tool_call_count += 1
             elif msg.event == StreamEvents.ANSWER_END:
-                _capture_terminal(state, msg.data)
+                state._capture_terminal(msg.data)
                 _inject_request_id(msg.data, state.request_id)
                 state.status = RequestStatus.SUCCESS
                 saw_terminal = True
             elif msg.event == StreamEvents.APPROVAL_REQUIRED:
-                _capture_terminal(state, msg.data)
+                state._capture_terminal(msg.data)
                 _inject_request_id(msg.data, state.request_id)
                 state.status = RequestStatus.APPROVAL_REQUIRED
                 saw_terminal = True
             elif msg.event == StreamEvents.ERROR:
-                _capture_terminal(state, msg.data)
+                state._capture_terminal(msg.data)
                 _inject_request_id(msg.data, state.request_id)
                 state.status = RequestStatus.ERROR
                 saw_terminal = True
@@ -407,40 +450,22 @@ def stream_with_usage_recording(
         # filter incomplete runs out of "successful chat" metrics.
         if not saw_terminal and state.status == RequestStatus.SUCCESS:
             state.status = RequestStatus.ABORTED
-        _fire(state)
+        state._fire()
 
 
 def _inject_request_id(data: Dict[str, Any], request_id: str) -> None:
     """Drop request_id into data['metadata'] so the SSE formatter ships it
     to the FE. Creates the metadata dict if missing or non-dict-shaped.
+
+    Stays a module-level function (not a method on UsageRecorderState)
+    because it operates on the stream event's data dict, not on state —
+    the only state field it reads is request_id, which it takes as an arg.
     """
     md = data.get("metadata")
     if not isinstance(md, dict):
         md = {}
         data["metadata"] = md
     md["request_id"] = request_id
-
-
-def _capture_terminal(state: UsageRecorderState, data: Dict[str, Any]) -> None:
-    """Pull cost/iterations/finish_reason from a terminal event's data."""
-    metadata = data.get("metadata") or {}
-    costs = metadata.get("costs") or {}
-    if costs:
-        try:
-            state.stats = RequestStats(**costs)
-        except Exception:
-            logging.debug(
-                "Failed to materialize RequestStats from terminal event costs",
-                exc_info=True,
-            )
-    # Explicit None-check rather than `or` so a legitimate 0 (unlikely but
-    # not impossible) is preserved instead of falling back to state.iterations.
-    raw_iterations = data.get("num_llm_calls")
-    if raw_iterations is not None:
-        state.iterations = raw_iterations
-    state.finish_reason = (
-        metadata.get("finish_reason") or state.finish_reason
-    )
 
 
 def record_from_llm_result(
@@ -471,7 +496,7 @@ def record_from_llm_result(
     state.tool_call_count = len(getattr(llm_result, "tool_calls", None) or [])
     state.finish_reason = getattr(llm_result, "finish_reason", None)
     state.status = RequestStatus.SUCCESS
-    _fire(state)
+    state._fire()
 
 
 def record_error(state: UsageRecorderState, exc: Exception) -> None:
@@ -481,23 +506,7 @@ def record_error(state: UsageRecorderState, exc: Exception) -> None:
         state.status = RequestStatus.RATE_LIMITED
     else:
         state.status = RequestStatus.ERROR
-    _fire(state)
-
-
-def _fire(state: UsageRecorderState) -> None:
-    """Background-thread the dal write so the response path never blocks."""
-    if state.dal is None or not getattr(state.dal, "enabled", False):
-        return
-    try:
-        threading.Thread(
-            target=state.dal.record_usage_event,
-            args=(state,),
-            daemon=True,
-            name="usage-recorder",
-        ).start()
-    except Exception:
-        # Defense in depth — record_usage_event has its own try/except too.
-        logging.exception("Failed to spawn usage recorder thread")
+    state._fire()
 
 
 __all__ = [
