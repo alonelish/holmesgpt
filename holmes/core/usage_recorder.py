@@ -361,24 +361,44 @@ class UsageRecorderState:
     # — the stream wrapper in particular has the stream as its primary
     # input, so a "method on state" shape would invert its natural reading.
 
-    def _capture_terminal(self, data: Dict[str, Any]) -> None:
-        """Pull cost/iterations/finish_reason from a terminal event's data."""
+    def _capture_costs(self, data: Dict[str, Any]) -> None:
+        """Replace ``self.stats`` from an event's ``metadata.costs``.
+
+        Called for both terminal events (ANSWER_END / APPROVAL_REQUIRED /
+        ERROR) and mid-stream TOKEN_COUNT events. Each event carries the
+        cumulative cost up to that point, so the latest one always wins —
+        which is what we want: ANSWER_END's costs == final TOKEN_COUNT's
+        costs in the success case, and the last seen TOKEN_COUNT gives
+        partial cost in the mid-loop-exception case.
+        """
         metadata = data.get("metadata") or {}
         costs = metadata.get("costs") or {}
-        if costs:
-            try:
-                self.stats = RequestStats(**costs)
-            except Exception:
-                logging.debug(
-                    "Failed to materialize RequestStats from terminal event costs",
-                    exc_info=True,
-                )
+        if not costs:
+            return
+        try:
+            self.stats = RequestStats(**costs)
+        except Exception:
+            logging.debug(
+                "Failed to materialize RequestStats from event costs",
+                exc_info=True,
+            )
+
+    def _capture_terminal(self, data: Dict[str, Any]) -> None:
+        """Pull cost/iterations/finish_reason from a terminal event's data.
+
+        Terminal events (ANSWER_END / APPROVAL_REQUIRED / ERROR) carry the
+        full picture: costs, iteration count, finish reason. Mid-stream
+        TOKEN_COUNT events carry only costs — those go through
+        ``_capture_costs`` directly.
+        """
+        self._capture_costs(data)
         # Explicit None-check rather than `or` so a legitimate 0 (unlikely
         # but not impossible) is preserved instead of falling back to
         # self.iterations.
         raw_iterations = data.get("num_llm_calls")
         if raw_iterations is not None:
             self.iterations = raw_iterations
+        metadata = data.get("metadata") or {}
         self.finish_reason = (
             metadata.get("finish_reason") or self.finish_reason
         )
@@ -422,6 +442,17 @@ def stream_with_usage_recording(
         for msg in stream:
             if msg.event == StreamEvents.TOOL_RESULT:
                 state.tool_call_count += 1
+            elif msg.event == StreamEvents.TOKEN_COUNT:
+                # Cumulative cost broadcast after each successful LLM iteration
+                # (and after compaction). Capturing it here is the only way to
+                # record partial cost when the agentic loop raises mid-loop —
+                # call_stream's local `stats` accumulator gets GC'd along with
+                # the function frame on exception, so we'd otherwise write a
+                # zero-stats row even though earlier iterations burned real
+                # tokens. Each TOKEN_COUNT carries the running total, so the
+                # last one we see before the error tells us exactly how much
+                # the failed turn cost up to that point.
+                state._capture_costs(msg.data)
             elif msg.event == StreamEvents.ANSWER_END:
                 state._capture_terminal(msg.data)
                 _inject_request_id(msg.data, state.request_id)

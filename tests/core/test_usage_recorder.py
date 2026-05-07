@@ -221,6 +221,102 @@ class TestStreamWithUsageRecording:
         # And the tool we saw before the exception was counted
         assert s.tool_call_count == 1
 
+    def test_token_count_event_captures_cumulative_costs(self, monkeypatch):
+        """TOKEN_COUNT events broadcast the running cost after each
+        successful LLM iteration. The wrapper must capture them so partial
+        spend is recorded even when the agentic loop raises mid-loop
+        (call_stream's local stats accumulator gets GC'd on exception)."""
+        _patch_inline_thread(monkeypatch)
+        state = _make_state()
+
+        # Two successful iterations broadcast their cumulative cost...
+        iter1_costs = {"prompt_tokens": 100, "completion_tokens": 20, "total_tokens": 120, "total_cost": 0.001}
+        iter2_costs = {"prompt_tokens": 250, "completion_tokens": 50, "total_tokens": 300, "total_cost": 0.003}
+
+        events = [
+            StreamMessage(event=StreamEvents.TOKEN_COUNT, data={"metadata": {"costs": iter1_costs}}),
+            StreamMessage(event=StreamEvents.TOOL_RESULT, data={"tool_name": "k"}),
+            StreamMessage(event=StreamEvents.TOKEN_COUNT, data={"metadata": {"costs": iter2_costs}}),
+            StreamMessage(event=StreamEvents.ANSWER_END, data=_terminal_data(iter2_costs, num_llm_calls=2)),
+        ]
+        list(stream_with_usage_recording(_stream(*events), state))
+
+        s = _state_arg(state)
+        # Last cumulative wins — ANSWER_END's costs override the earlier
+        # TOKEN_COUNT (in this case they're identical, mirroring real flow).
+        assert s.stats.total_tokens == 300
+        assert s.stats.prompt_tokens == 250
+        assert s.stats.total_cost == pytest.approx(0.003)
+
+    def test_partial_costs_captured_when_loop_raises_mid_iteration(self, monkeypatch):
+        """The whole point of listening to TOKEN_COUNT: when the agentic
+        loop hits an exception in iteration 3 after iterations 1 and 2
+        succeeded, the recorder should still record the cost of iters 1+2.
+        Without TOKEN_COUNT capture this row would have status=error and
+        zero tokens, even though real spend already happened."""
+        _patch_inline_thread(monkeypatch)
+        state = _make_state()
+
+        # Cumulative costs after iterations 1 and 2 succeeded.
+        partial_costs = {
+            "prompt_tokens": 1500,
+            "completion_tokens": 200,
+            "total_tokens": 1700,
+            "total_cost": 0.012,
+        }
+
+        def failing_stream():
+            # Iteration 1 succeeds.
+            yield StreamMessage(event=StreamEvents.TOKEN_COUNT, data={"metadata": {"costs": {"prompt_tokens": 800, "total_tokens": 850, "total_cost": 0.005}}})
+            yield StreamMessage(event=StreamEvents.TOOL_RESULT, data={"tool_name": "kubectl"})
+            # Iteration 2 succeeds.
+            yield StreamMessage(event=StreamEvents.TOKEN_COUNT, data={"metadata": {"costs": partial_costs}})
+            yield StreamMessage(event=StreamEvents.TOOL_RESULT, data={"tool_name": "prom"})
+            # Iteration 3's LLM call raises — TOKEN_COUNT for iter 3 is
+            # never emitted; the exception unwinds call_stream's frame.
+            raise RuntimeError("rate limit hit")
+
+        with pytest.raises(RuntimeError, match="rate limit"):
+            list(stream_with_usage_recording(failing_stream(), state))
+
+        s = _state_arg(state)
+        # Partial spend from iterations 1+2 was captured — NOT zero.
+        assert s.stats is not None
+        assert s.stats.total_tokens == 1700
+        assert s.stats.prompt_tokens == 1500
+        assert s.stats.total_cost == pytest.approx(0.012)
+        # Status correctly marked as error.
+        assert s.status == "error"
+        # Tool calls before the exception were counted.
+        assert s.tool_call_count == 2
+
+    def test_partial_costs_captured_on_client_disconnect(self, monkeypatch):
+        """Client-disconnect case: stream ends cleanly without a terminal
+        event after some TOKEN_COUNT events. Recorder marks 'aborted' but
+        still captures the partial spend so the row reflects real cost."""
+        _patch_inline_thread(monkeypatch)
+        state = _make_state()
+
+        partial_costs = {
+            "prompt_tokens": 600,
+            "completion_tokens": 100,
+            "total_tokens": 700,
+            "total_cost": 0.004,
+        }
+        events = [
+            StreamMessage(event=StreamEvents.TOKEN_COUNT, data={"metadata": {"costs": partial_costs}}),
+            StreamMessage(event=StreamEvents.TOOL_RESULT, data={"tool_name": "k"}),
+            # Stream just ends — no terminal event (client closed the tab).
+        ]
+        list(stream_with_usage_recording(_stream(*events), state))
+
+        s = _state_arg(state)
+        # Aborted, but with the real partial cost.
+        assert s.status == "aborted"
+        assert s.stats is not None
+        assert s.stats.total_tokens == 700
+        assert s.stats.total_cost == pytest.approx(0.004)
+
     def test_stream_without_terminal_event_still_records_as_aborted(self, monkeypatch):
         _patch_inline_thread(monkeypatch)
         state = _make_state()
