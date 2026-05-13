@@ -177,6 +177,16 @@ class ChatRequest(ChatRequestBaseModel):
         default=None,
         description="Override prompt components (e.g., {'todowrite_instructions': false}). Env var ENABLED_PROMPTS takes precedence.",
     )
+    runtime_secrets: Optional[Dict[str, str]] = Field(
+        default=None,
+        description=(
+            "Per-request secret values made available to toolsets at "
+            "tool-call time via ToolInvokeContext.request_context"
+            "['runtime_secrets']. Use this for per-tenant credentials "
+            "(e.g. a Slack bot token) that cannot live in static config. "
+            "Never logged or sent to the LLM."
+        ),
+    )
 
 
 class FollowUpAction(BaseModel):
